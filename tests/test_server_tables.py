@@ -1,3 +1,6 @@
+from pathlib import Path
+
+from hearts_ai.engine.record import replay_jsonl
 from hearts_ai.engine.rules import legal_moves
 from hearts_ai.server.state_views import table_snapshot
 from hearts_ai.server.tables import TableManager
@@ -74,3 +77,27 @@ def test_human_plus_bots_game_reaches_game_over_without_bot_legal_move_crash() -
             continue
 
     assert manager.get_table(table.table_code).phase == "game_over"
+
+
+def test_persistence_writes_replay_and_summary(tmp_path: Path) -> None:
+    manager = TableManager.with_persistence(records_dir=tmp_path)
+    table, _ = manager.create_table(display_name="Host", target_score=20, seed=13)
+    manager.add_bot(table.table_code, seat=0)
+    manager.add_bot(table.table_code, seat=1)
+    manager.add_bot(table.table_code, seat=2)
+    manager.add_bot(table.table_code, seat=3)
+
+    finished = manager.get_table(table.table_code)
+    assert finished.phase == "game_over"
+    assert finished.record_path is not None
+    assert finished.record_path.exists()
+    assert finished.summary_path is not None
+    assert finished.summary_path.exists()
+
+    replayed = replay_jsonl(finished.record_path)
+    assert len(replayed) == 1
+    _, replayed_state = replayed[0]
+    assert replayed_state.scores == finished.state.scores
+
+    summary_lines = finished.summary_path.read_text(encoding="utf-8").strip().splitlines()
+    assert len(summary_lines) == 1

@@ -4,13 +4,16 @@ import random
 import secrets
 import string
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Literal
 
 from hearts_ai.bots.random_bot import RandomBot
 from hearts_ai.engine.cards import Card, Rank, Suit
 from hearts_ai.engine.game import apply_pass, deal, is_game_over, is_hand_over, new_game, play_card
+from hearts_ai.engine.record import GameRecorder
 from hearts_ai.engine.state import GameConfig, GameState
 from hearts_ai.engine.types import PLAYER_IDS, PlayerId, to_player_id
+from hearts_ai.server.persistence import RecordStore
 
 TablePhase = Literal["lobby", "passing", "playing", "hand_scoring", "game_over"]
 
@@ -60,6 +63,10 @@ def _empty_seat_secrets() -> dict[PlayerId, str | None]:
     return {player_id: None for player_id in PLAYER_IDS}
 
 
+def _zero_scores() -> dict[PlayerId, int]:
+    return {player_id: 0 for player_id in PLAYER_IDS}
+
+
 @dataclass(slots=True)
 class Table:
     table_code: str
@@ -73,6 +80,14 @@ class Table:
     bot_seats: set[PlayerId] = field(default_factory=set)
     pending_passes: dict[PlayerId, list[Card]] = field(default_factory=dict)
     version: int = 0
+    recorder: GameRecorder | None = None
+    game_id: str | None = None
+    record_path: Path | None = None
+    summary_path: Path | None = None
+    hand_score_start: dict[PlayerId, int] = field(default_factory=_zero_scores)
+    last_recorded_scored_hand: int = 0
+    game_end_recorded: bool = False
+    summary_written: bool = False
 
     def join(self, display_name: str) -> str:
         if not display_name.strip():
@@ -128,7 +143,9 @@ class Table:
             raise InvalidTableActionError(
                 f"It is player {int(self.state.turn) if self.state.turn is not None else 'none'}'s turn."
             )
-        play_card(state=self.state, player_id=player_id, card=_card_from_code(card_code))
+        card = _card_from_code(card_code)
+        play_card(state=self.state, player_id=player_id, card=card)
+        self._record_card_played(player_id=player_id, card=card)
         self.version += 1
         self._advance_to_next_human_action()
 
@@ -171,7 +188,9 @@ class Table:
                         progressed = True
 
                 if len(self.pending_passes) == len(PLAYER_IDS):
-                    apply_pass(state=self.state, pass_map=dict(self.pending_passes))
+                    pass_map = dict(self.pending_passes)
+                    apply_pass(state=self.state, pass_map=pass_map)
+                    self._record_pass_applied(pass_map=pass_map)
                     self.pending_passes.clear()
                     self.phase = "playing"
                     progressed = True
@@ -201,6 +220,7 @@ class Table:
                     bot = RandomBot(player_id=bot_player)
                     card = bot.choose_play(state=self.state, rng=self.rng)
                     play_card(state=self.state, player_id=bot_player, card=card)
+                    self._record_card_played(player_id=bot_player, card=card)
                     progressed = True
                     self.version += 1
 
@@ -216,6 +236,7 @@ class Table:
             if self.phase == "hand_scoring":
                 if not self.state.hand_scored or not is_hand_over(self.state):
                     raise InvalidTableActionError("Cannot transition from hand_scoring before hand completion.")
+                self._record_hand_scored_if_needed()
 
                 if is_game_over(self.state):
                     self.phase = "game_over"
@@ -223,8 +244,11 @@ class Table:
                     break
 
                 deal(state=self.state, rng=self.rng)
+                if self.recorder is not None:
+                    self.recorder.record_hand_dealt(self.state)
                 self.pending_passes.clear()
                 self.phase = "playing" if self.state.pass_applied else "passing"
+                self.hand_score_start = dict(self.state.scores)
                 self.version += 1
                 progressed = True
                 continue
@@ -251,10 +275,45 @@ class Table:
             raise UnauthorizedError("Player secret does not control this seat.")
         return participant.seat
 
+    def _record_pass_applied(self, *, pass_map: dict[PlayerId, list[Card]]) -> None:
+        if self.recorder is None:
+            return
+        self.recorder.record_pass_applied(hand_index=self.state.hand_number, pass_map=pass_map)
+
+    def _record_card_played(self, *, player_id: PlayerId, card: Card) -> None:
+        if self.recorder is None:
+            return
+        self.recorder.record_card_played(
+            hand_index=self.state.hand_number,
+            player_id=player_id,
+            card=card,
+        )
+
+    def _record_hand_scored_if_needed(self) -> None:
+        if self.last_recorded_scored_hand == self.state.hand_number:
+            return
+        delta_scores = {
+            player_id: self.state.scores[player_id] - self.hand_score_start[player_id]
+            for player_id in PLAYER_IDS
+        }
+        if self.recorder is not None:
+            self.recorder.record_hand_scored(
+                hand_index=self.state.hand_number,
+                delta_scores=delta_scores,
+                total_scores=self.state.scores,
+            )
+        self.hand_score_start = dict(self.state.scores)
+        self.last_recorded_scored_hand = self.state.hand_number
+
 
 @dataclass(slots=True)
 class TableManager:
     tables: dict[str, Table] = field(default_factory=dict)
+    record_store: RecordStore | None = None
+
+    @classmethod
+    def with_persistence(cls, records_dir: Path | str = "records") -> TableManager:
+        return cls(record_store=RecordStore(records_dir=records_dir))
 
     def create_table(
         self,
@@ -275,6 +334,19 @@ class TableManager:
             rng=rng,
             state=state,
         )
+        if self.record_store is not None:
+            recorder, record_path, game_id = self.record_store.create_game_recorder(
+                table_code=table_code,
+                seed=table_seed,
+                config=config,
+            )
+            recorder.record_hand_dealt(state)
+            table.recorder = recorder
+            table.record_path = record_path
+            table.summary_path = self.record_store.summary_path
+            table.game_id = game_id
+            table.hand_score_start = dict(state.scores)
+
         creator_secret = table.join(display_name=display_name)
         self.tables[table_code] = table
         return table, creator_secret
@@ -292,24 +364,56 @@ class TableManager:
     def claim_seat(self, table_code: str, *, player_secret: str, seat: int) -> None:
         table = self.get_table(table_code)
         table.claim_seat(player_secret=player_secret, seat=seat)
+        self._post_action(table)
 
     def add_bot(self, table_code: str, *, seat: int) -> None:
         table = self.get_table(table_code)
         table.add_bot(seat=seat)
+        self._post_action(table)
 
     def submit_pass(self, table_code: str, *, player_secret: str, cards: list[str]) -> None:
         table = self.get_table(table_code)
         table.submit_pass(player_secret=player_secret, cards=cards)
+        self._post_action(table)
 
     def play_card(self, table_code: str, *, player_secret: str, card: str) -> None:
         table = self.get_table(table_code)
         table.play(player_secret=player_secret, card_code=card)
+        self._post_action(table)
+
+    def _post_action(self, table: Table) -> None:
+        if table.phase != "game_over":
+            return
+
+        if table.recorder is not None and not table.game_end_recorded:
+            table.recorder.record_game_ended(final_scores=table.state.scores)
+            table.game_end_recorded = True
+
+        if self.record_store is None or table.summary_written:
+            return
+
+        self.record_store.write_game_summary(
+            table_code=table.table_code,
+            game_id=table.game_id or table.table_code,
+            seed=table.seed,
+            target_score=table.config.target_score,
+            hands_played=table.state.hand_number,
+            final_scores={str(int(player_id)): table.state.scores[player_id] for player_id in PLAYER_IDS},
+            winner_ids=_winner_ids(table.state.scores),
+            record_path=str(table.record_path) if table.record_path is not None else None,
+        )
+        table.summary_written = True
 
     def _generate_table_code(self, length: int = 6) -> str:
         while True:
             code = "".join(secrets.choice(_TABLE_CODE_ALPHABET) for _ in range(length))
             if code not in self.tables:
                 return code
+
+
+def _winner_ids(scores: dict[PlayerId, int]) -> list[int]:
+    best_score = min(scores.values())
+    return sorted(int(player_id) for player_id in PLAYER_IDS if scores[player_id] == best_score)
 
 
 def _card_from_code(code: str) -> Card:

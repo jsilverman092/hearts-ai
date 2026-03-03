@@ -38,3 +38,8 @@ Then open:
 
 - `http://127.0.0.1:8000` on desktop.
 - `http://<laptop-lan-ip>:8000` on phone (same network) when using `--host 0.0.0.0`.
+
+Server games are recorded while they run:
+
+- Per-game event log JSONL files in `records/`
+- Game summaries in `records/summaries.jsonl`

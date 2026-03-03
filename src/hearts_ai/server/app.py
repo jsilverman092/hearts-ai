@@ -82,7 +82,7 @@ def create_app(*, table_manager: TableManager | None = None) -> Any:
             'python -m pip install -e ".[server]"'
         ) from _FASTAPI_IMPORT_ERROR
 
-    manager = table_manager or TableManager()
+    manager = table_manager or TableManager.with_persistence("records")
     hub = WebSocketHub()
     app = FastAPI(title="hearts-ai server", version="0.1.0")
     static_dir = Path(__file__).with_name("static")
@@ -115,6 +115,8 @@ def create_app(*, table_manager: TableManager | None = None) -> Any:
             "table_code": table.table_code,
             "player_secret": player_secret,
             "phase": table.phase,
+            "game_id": table.game_id,
+            "record_path": str(table.record_path) if table.record_path is not None else None,
         }
 
     @app.post("/tables/{table_code}/join")
