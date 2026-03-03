@@ -11,6 +11,7 @@ This repo is a Python `src/`-layout project for a Hearts game engine that will l
 - Prefer deterministic behavior in tests: inject `random.Random` or seed explicitly.
 - Do not build UI yet beyond a minimal CLI; avoid network/server frameworks in v0.
 - Avoid premature optimization; prioritize correctness and clear state transitions.
+- Prefer a mutable `GameState` for v0; all state changes should go through explicit functions in `engine/game.py`.
 
 ## Definition Of Done (v0)
 
@@ -18,6 +19,7 @@ This repo is a Python `src/`-layout project for a Hearts game engine that will l
 - A bot interface + at least one baseline bot (random-legal).
 - A CLI to run a full game simulation and print results.
 - Unit tests covering rules/scoring and a smoke test that runs a full game deterministically.
+- Game ends when a player reaches >= 50 points (configurable); lowest score wins.
 
 ## Implementation Plan
 
@@ -38,7 +40,7 @@ Create core types and helpers:
   - Enforce standard Hearts constraints:
     - Must follow suit if possible.
     - Cannot lead hearts until broken (unless only hearts remain).
-    - First trick: no hearts or Queen of Spades may be played (and typically no point cards) unless forced.
+    - First trick: no point cards may be played unless forced.
     - First trick lead is 2 of Clubs (standard).
   - Provide `legal_moves(state, player_id) -> list[Card]`.
 
@@ -47,11 +49,11 @@ Keep rules configurable where it is easy (feature flags), but do not over-genera
 ### 3) Game State And Transitions
 
 - `src/hearts_ai/engine/state.py`
-  - `GameConfig` (pass direction cycle, rules toggles).
+  - `GameConfig` (pass direction cycle, rules toggles, target_score=50).
   - `GameState` (hands, trick-in-progress, taken tricks, scores, hearts_broken, turn).
 - `src/hearts_ai/engine/game.py`
   - `new_game(rng)`, `deal(state, rng)`, `apply_pass(state, pass_map)`.
-  - `play_card(state, player_id, card) -> GameState` (pure, returns new state) OR mutate with clear invariants.
+  - `play_card(state, player_id, card)` (mutates with clear invariants).
   - `is_hand_over(state)`, `is_game_over(state)`.
 
 Prefer a small set of explicit transitions rather than lots of ad-hoc mutation.
@@ -74,7 +76,7 @@ Bots must never return illegal actions; validate in engine and raise on illegal 
 ### 6) CLI (Minimal)
 
 - `src/hearts_ai/cli.py` and `src/hearts_ai/__main__.py`
-  - `python -m hearts_ai play --seed 1 --games 1`
+  - `python -m hearts_ai play --seed 1 --games 1 --target-score 50`
   - Print per-hand and final scores; keep output stable for tests.
 
 Use `argparse` (stdlib). Do not add `typer`/`click` yet.
@@ -101,5 +103,4 @@ Add tests under `tests/`:
 
 - Install dev deps: `python -m pip install -e ".[dev]"`
 - Run tests: `python -m pytest`
-- Run CLI: `python -m hearts_ai play --seed 1`
-
+- Run CLI: `python -m hearts_ai play --seed 1 --games 1 --target-score 50`
