@@ -112,6 +112,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     replay_parser = subparsers.add_parser("replay", help="Replay and verify one or more recorded games.")
     replay_parser.add_argument("path", type=str, help="Path to replay JSONL file.")
 
+    serve_parser = subparsers.add_parser("serve", help="Run local multiplayer server.")
+    serve_parser.add_argument("--host", type=str, default="127.0.0.1", help="Server bind host.")
+    serve_parser.add_argument("--port", type=int, default=8000, help="Server bind port.")
+
     args = parser.parse_args(argv)
     if args.command == "play":
         lines = simulate_games(
@@ -128,6 +132,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         lines = replay_records(path=args.path)
         for line in lines:
             print(line)
+        return 0
+
+    if args.command == "serve":
+        try:
+            from hearts_ai.server.app import run_server
+        except ImportError as exc:
+            parser.error(
+                "Server dependencies are not installed. Install with: "
+                'python -m pip install -e ".[server]"'
+            )
+            raise AssertionError("unreachable") from exc
+        run_server(host=args.host, port=args.port)
         return 0
 
     parser.error(f"Unknown command: {args.command}")
