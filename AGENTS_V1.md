@@ -29,6 +29,8 @@ Keep `AGENTS.md` as the v0 definition of done. This file is the v1 scope and con
 - Tests must pass from repo root: `python -m pytest`.
 - Determinism matters: store seeds / deck order in records; tests should not rely on timing.
 - The server is authoritative: clients send intents; server validates and applies moves.
+- RNG determinism must be explicit: each table/game gets a reproducible RNG seed chain, and bot decisions
+  must be derived from that chain (not global random state).
 
 ## Definition Of Done (v1)
 
@@ -40,6 +42,8 @@ Keep `AGENTS.md` as the v0 definition of done. This file is the v1 scope and con
   - Play legal cards with clear turn indication.
   - Finish a full game to target score.
 - Bot seats auto-play immediately on their turns.
+- Turn timers and disconnect behavior are enforced and visible in the UI.
+- Table lifecycle is explicit and enforced: `lobby -> passing -> playing -> hand_scoring -> game_over`.
 - Every finished hand/game writes a replayable record (JSONL) and a compact summary.
 - `python -m hearts_ai replay <record>` replays the record and verifies invariants.
 - Add at least one integration test that exercises a table end-to-end deterministically (no real network).
@@ -63,6 +67,14 @@ Rules:
 - The server produces events only after validation.
 - Records are deterministic and replayable.
 - Keep events JSON-serializable and stable (version the schema).
+- Every event must include a standard envelope:
+  - `event_id` (monotonic per game)
+  - `ts` (UTC timestamp)
+  - `schema_version`
+  - `table_id`
+  - `game_id`
+  - `hand_index` (where applicable)
+  - `actor` (`server`, `player:<id>`, or `bot:<id>`)
 
 ### 2) Authoritative Server (WebSocket)
 
@@ -80,6 +92,14 @@ Server responsibilities:
 - Broadcast state snapshots or incremental events to all connected clients.
 - Run bot turns synchronously after human actions (and after deal/pass completion).
 - Handle disconnect/reconnect with a simple secret token per player.
+- Enforce table lifecycle transitions so invalid phase actions are rejected.
+- Enforce turn timeout behavior with explicit config:
+  - `play_timeout_seconds`
+  - `pass_timeout_seconds`
+  - Timeout action policy (`auto_play_lowest_legal` or `bot_takeover`)
+- Enforce reconnect grace behavior with explicit config:
+  - `disconnect_grace_seconds`
+  - Action after grace (`bot_takeover` for seated human who has not returned)
 
 ### 3) Web UI (no-build-step v1)
 
@@ -102,6 +122,7 @@ Create a small protocol package:
   - Define `ClientMsg` / `ServerMsg` types and JSON (de)serialization.
   - Include `schema_version`.
   - Keep payloads small and explicit (avoid dumping entire Python objects).
+  - Include explicit table phases and server-declared action availability (what this client can do now).
 
 ### 2) Record/Replay
 
@@ -132,6 +153,8 @@ Important:
 
 - Never send other players' hands to a client.
 - A spectating client gets public info only.
+- `player_secret` is bearer-style seat control for v1 local-hosting; each action must be authorized against
+  seat ownership server-side.
 
 ### 4) UI
 
@@ -161,6 +184,7 @@ Add:
 - Protocol serialization tests.
 - Server integration smoke test using the ASGI test client to open a WebSocket, join a table,
   seat a human, fill remaining seats with bots, and run a deterministic game to completion.
+- Timeout and reconnect policy tests (at least one path each).
 
 Tests should skip with a clear message if server optional deps are not installed.
 
@@ -169,13 +193,14 @@ Tests should skip with a clear message if server optional deps are not installed
 Add optional extras in `pyproject.toml`:
 
 - `server`: `fastapi`, `uvicorn[standard]`
+- `server-test`: `httpx`, `pytest-asyncio`
 
 Do not add server deps to core `project.dependencies`.
 
 ## Commands (v1)
 
 - Install dev + server: `python -m pip install -e ".[dev,server]"`
+- Install dev + server + server-test: `python -m pip install -e ".[dev,server,server-test]"`
 - Run tests: `python -m pytest`
 - Run server: `python -m hearts_ai serve`
 - Replay record: `python -m hearts_ai replay path\\to\\game.jsonl`
-
