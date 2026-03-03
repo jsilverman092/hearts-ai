@@ -55,6 +55,7 @@ class GameState:
     hand_number: int = 0
     pass_direction: str = PASS_DIRECTIONS[0]
     pass_applied: bool = False
+    hand_scored: bool = False
 
 
 __all__ = ["GameConfig", "GameState", "PASS_DIRECTIONS"]

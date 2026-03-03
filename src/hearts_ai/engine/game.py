@@ -5,6 +5,7 @@ import random
 from hearts_ai.engine.cards import Card, Rank, Suit, make_deck
 from hearts_ai.engine.errors import IllegalMoveError, InvalidStateError
 from hearts_ai.engine.rules import trick_winner, validate_move
+from hearts_ai.engine.scoring import hand_points
 from hearts_ai.engine.state import GameConfig, GameState
 from hearts_ai.engine.types import PLAYER_COUNT, PLAYER_IDS, PlayerId
 
@@ -41,6 +42,7 @@ def deal(state: GameState, rng: random.Random) -> None:
         (state.hand_number - 1) % len(state.config.pass_directions)
     ]
     state.pass_applied = state.pass_direction == "hold"
+    state.hand_scored = False
     state.turn = _player_holding_two_of_clubs(state)
 
 
@@ -112,6 +114,8 @@ def play_card(state: GameState, player_id: PlayerId, card: Card) -> None:
     state.trick_in_progress.clear()
     state.trick_number += 1
     state.turn = winner
+    if is_hand_over(state):
+        score_hand(state)
 
 
 def is_hand_over(state: GameState) -> bool:
@@ -121,6 +125,20 @@ def is_hand_over(state: GameState) -> bool:
 def is_game_over(state: GameState) -> bool:
     _validate_player_collections(state)
     return any(score >= state.config.target_score for score in state.scores.values())
+
+
+def score_hand(state: GameState) -> dict[PlayerId, int]:
+    _validate_player_collections(state)
+    if not is_hand_over(state):
+        raise InvalidStateError("Cannot score an incomplete hand.")
+    if state.hand_scored:
+        raise InvalidStateError("Hand has already been scored.")
+
+    points = hand_points(state.taken_tricks)
+    for player_id, delta in points.items():
+        state.scores[player_id] += delta
+    state.hand_scored = True
+    return points
 
 
 def _validate_pass_map(state: GameState, pass_map: dict[PlayerId, list[Card]]) -> None:
@@ -175,4 +193,5 @@ __all__ = [
     "is_hand_over",
     "new_game",
     "play_card",
+    "score_hand",
 ]
