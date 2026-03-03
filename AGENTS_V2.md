@@ -4,6 +4,7 @@ This repo already has a correct v0 engine and a working v1 multiplayer web table
 feel readable, paced, and pleasant, especially for single-player (human vs bots), while keeping multiplayer support.
 
 Keep `AGENTS.md` as v0 scope and `AGENTS_V1.md` as the multiplayer baseline. This file defines v2 priorities.
+When this file conflicts with v1 behavior, this v2 file takes precedence.
 
 ## Product Goals (v2)
 
@@ -30,10 +31,12 @@ Keep `AGENTS.md` as v0 scope and `AGENTS_V1.md` as the multiplayer baseline. Thi
 - Keep single-process local-hosting model.
 - Keep changes incremental and testable.
 - Avoid timing-fragile tests; use deterministic progression controls.
+- In multiplayer tables, pacing control authority is host/seat-0 by default.
 
 ## Definition Of Done (v2)
 
 - A single-player table (1 human + 3 bots) is playable end-to-end with default human pacing.
+- A quick-start solo action exists that claims one human seat and fills remaining seats with bots.
 - UI includes pace controls:
   - Pause/Play autoplay.
   - Step action (advance one server action).
@@ -55,6 +58,7 @@ Keep `AGENTS.md` as v0 scope and `AGENTS_V1.md` as the multiplayer baseline. Thi
 - Primary mode: single-player vs bots.
 - Hand score visibility: show points taken so far in current hand (live update each trick).
 - Default pacing: human pace, configurable by UI controls.
+- Multiplayer pacing authority: host/seat-0 controls pace settings and stepping.
 
 ## Recommended Architecture Changes
 
@@ -73,6 +77,10 @@ Introduce explicit step-based progression in server table flow.
   - game-over transition
 - Keep legal validation and state mutation server-side.
 - Allow client-controlled pace by calling advance on a timer.
+- API contract:
+  - `POST /tables/{table_code}/advance` performs exactly one deterministic action.
+  - Request includes `player_secret` for authorization.
+  - Response includes updated snapshot and whether another immediate advance is available.
 
 ### 2) Table Snapshot Enrichment
 
@@ -83,8 +91,11 @@ Expose minimal extra fields needed by UI playability:
   - trick cards
   - winner
   - trick points
-  - trick sequence/version id for animation resets
+  - `trick_seq` integer for animation resets
 - Existing fields remain stable for backward compatibility where possible.
+- Field contracts:
+  - `seat_hand_points` is `dict[str, int]`, keys `"0"`..`"3"`, resets to zeros on each new hand.
+  - `last_trick` is `null` when no completed trick in current hand; otherwise includes winner, cards, points, and `trick_seq`.
 
 ### 3) UI Rendering Model
 
@@ -93,6 +104,7 @@ Expose minimal extra fields needed by UI playability:
 - Keep trick cards visible after 4th card, then run clear animation.
 - Track transient UI animation state independently from authoritative snapshot state.
 - Render card faces via HTML/CSS components (rank + suit), including backs for hidden cards.
+- On reconnect or any snapshot jump, authoritative snapshot wins and stale client animations are canceled.
 
 ### 4) Pace Controls
 
@@ -103,6 +115,10 @@ Expose minimal extra fields needed by UI playability:
   - fast-forward to human turn toggle
 - Default autoplay enabled at conservative human pace.
 - Spectator mode may use faster defaults but must remain configurable.
+- Default timing values:
+  - default card cadence: `900ms`
+  - slider range: `200ms` to `2000ms`
+  - completed-trick hold before clear: `1500ms`
 
 ## Implementation Plan (v2)
 
@@ -141,6 +157,7 @@ Expose minimal extra fields needed by UI playability:
 - Snapshot tests for new fields (`seat_hand_points`, last trick metadata).
 - Server integration test validating paced progression in single-player setup.
 - Existing multiplayer tests continue to pass.
+- Frontend animation tests are smoke-level only; do not assert fragile frame/timing details.
 
 ## Compatibility + Migration Notes
 
