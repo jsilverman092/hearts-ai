@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hearts AI Live</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="page">
+      <header class="hero">
+        <p class="kicker">HEARTS AI</p>
+        <h1>Live Table</h1>
+        <p class="subtitle">Create a table, claim a seat, and play live against bots or friends.</p>
+      </header>
+
+      <section class="panel controls">
+        <div class="control-block">
+          <h2>Create Table</h2>
+          <label for="displayName">Display Name</label>
+          <input id="displayName" type="text" maxlength="24" placeholder="Your name" />
+          <label for="targetScore">Target Score</label>
+          <input id="targetScore" type="number" min="1" value="50" />
+          <label for="seed">Seed (optional)</label>
+          <input id="seed" type="number" placeholder="Auto" />
+          <button id="createBtn" class="action">Create</button>
+        </div>
+
+        <div class="control-block">
+          <h2>Join Table</h2>
+          <label for="joinCode">Table Code</label>
+          <input id="joinCode" type="text" maxlength="12" placeholder="ABC123" />
+          <button id="joinBtn" class="action alt">Join</button>
+          <button id="reconnectBtn" class="ghost">Reconnect Last Session</button>
+        </div>
+      </section>
+
+      <section class="panel status-line">
+        <div>
+          <span class="label">Connection</span>
+          <span id="connectionStatus" class="badge muted">offline</span>
+        </div>
+        <div>
+          <span class="label">Table</span>
+          <span id="tableCodeValue" class="mono">-</span>
+        </div>
+        <div>
+          <span class="label">Seat</span>
+          <span id="viewerSeatValue" class="mono">spectator</span>
+        </div>
+        <div>
+          <span class="label">Phase</span>
+          <span id="phaseValue" class="mono">-</span>
+        </div>
+      </section>
+
+      <section id="tableSection" class="panel table hidden">
+        <div class="table-grid">
+          <article class="card">
+            <h3>Seats</h3>
+            <div id="seatsGrid" class="seats-grid"></div>
+          </article>
+
+          <article class="card">
+            <h3>Scores</h3>
+            <div id="scoreGrid" class="score-grid"></div>
+          </article>
+
+          <article class="card">
+            <h3>Current Trick</h3>
+            <div id="trickGrid" class="trick-grid"></div>
+          </article>
+        </div>
+
+        <article class="card meta-card">
+          <h3>Hand Status</h3>
+          <p id="metaLine" class="mono">-</p>
+          <p id="infoLine" class="hint">Waiting for table updates.</p>
+        </article>
+
+        <article id="passPanel" class="card hidden">
+          <h3>Pass Cards</h3>
+          <p id="passHint" class="hint">Select cards to pass.</p>
+          <div id="passCards" class="hand-grid"></div>
+          <button id="submitPassBtn" class="action">Submit Pass</button>
+        </article>
+
+        <article class="card">
+          <h3>Your Hand</h3>
+          <div id="handGrid" class="hand-grid"></div>
+        </article>
+      </section>
+    </main>
+
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>
+

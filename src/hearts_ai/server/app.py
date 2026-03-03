@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from hearts_ai.protocol.messages import SCHEMA_VERSION, dumps_message, loads_message
@@ -15,11 +16,16 @@ from hearts_ai.server.tables import (
 
 try:
     from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+    from fastapi.responses import FileResponse, Response
+    from fastapi.staticfiles import StaticFiles
 except ImportError as exc:  # pragma: no cover - exercised only when optional deps missing.
     FastAPI = None  # type: ignore[assignment]
     HTTPException = Exception  # type: ignore[assignment]
     WebSocket = Any  # type: ignore[assignment,misc]
     WebSocketDisconnect = Exception  # type: ignore[assignment]
+    FileResponse = Any  # type: ignore[assignment,misc]
+    Response = Any  # type: ignore[assignment,misc]
+    StaticFiles = Any  # type: ignore[assignment,misc]
     _FASTAPI_IMPORT_ERROR = exc
 else:
     _FASTAPI_IMPORT_ERROR = None
@@ -27,14 +33,16 @@ else:
 
 @dataclass(slots=True)
 class WebSocketHub:
-    table_connections: dict[str, dict[Any, str | None]] = field(default_factory=dict)
+    table_connections: dict[str, dict[WebSocket, str | None]] = field(default_factory=dict)
 
-    async def subscribe(self, *, table_code: str, websocket: Any, viewer_secret: str | None) -> None:
+    async def subscribe(
+        self, *, table_code: str, websocket: WebSocket, viewer_secret: str | None
+    ) -> None:
         table_key = table_code.upper()
         connections = self.table_connections.setdefault(table_key, {})
         connections[websocket] = viewer_secret
 
-    async def unsubscribe(self, *, table_code: str, websocket: Any) -> None:
+    async def unsubscribe(self, *, table_code: str, websocket: WebSocket) -> None:
         table_key = table_code.upper()
         connections = self.table_connections.get(table_key)
         if connections is None:
@@ -47,7 +55,7 @@ class WebSocketHub:
         table_key = table_code.upper()
         table = manager.get_table(table_key)
         connections = self.table_connections.get(table_key, {})
-        stale: list[Any] = []
+        stale: list[WebSocket] = []
 
         for websocket, viewer_secret in list(connections.items()):
             payload = table_snapshot(table, viewer_secret=viewer_secret)
@@ -77,6 +85,16 @@ def create_app(*, table_manager: TableManager | None = None) -> Any:
     manager = table_manager or TableManager()
     hub = WebSocketHub()
     app = FastAPI(title="hearts-ai server", version="0.1.0")
+    static_dir = Path(__file__).with_name("static")
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+    @app.get("/")
+    def root() -> Any:
+        return FileResponse(static_dir / "index.html")
+
+    @app.get("/favicon.ico")
+    def favicon() -> Any:
+        return Response(status_code=204)
 
     @app.get("/health")
     def health() -> dict[str, bool]:
@@ -119,9 +137,11 @@ def create_app(*, table_manager: TableManager | None = None) -> Any:
         return table_snapshot(table, viewer_secret=player_secret)
 
     @app.post("/tables/{table_code}/seats/{seat}")
-    def claim_seat(table_code: str, seat: int, payload: dict[str, Any]) -> dict[str, bool]:
+    async def claim_seat(table_code: str, seat: int, payload: dict[str, Any]) -> dict[str, bool]:
         try:
             manager.claim_seat(table_code, player_secret=str(payload.get("player_secret", "")), seat=seat)
+            table = manager.get_table(table_code)
+            await hub.broadcast_snapshot(table_code=table.table_code, manager=manager)
         except TableNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except UnauthorizedError as exc:
@@ -131,9 +151,11 @@ def create_app(*, table_manager: TableManager | None = None) -> Any:
         return {"ok": True}
 
     @app.post("/tables/{table_code}/bots/{seat}")
-    def add_bot(table_code: str, seat: int) -> dict[str, bool]:
+    async def add_bot(table_code: str, seat: int) -> dict[str, bool]:
         try:
             manager.add_bot(table_code, seat=seat)
+            table = manager.get_table(table_code)
+            await hub.broadcast_snapshot(table_code=table.table_code, manager=manager)
         except TableNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except TableError as exc:
@@ -141,7 +163,7 @@ def create_app(*, table_manager: TableManager | None = None) -> Any:
         return {"ok": True}
 
     @app.post("/tables/{table_code}/pass")
-    def submit_pass(table_code: str, payload: dict[str, Any]) -> dict[str, bool]:
+    async def submit_pass(table_code: str, payload: dict[str, Any]) -> dict[str, bool]:
         cards_raw = payload.get("cards")
         if not isinstance(cards_raw, list) or any(not isinstance(card, str) for card in cards_raw):
             raise HTTPException(status_code=400, detail="Field 'cards' must be a list of card strings.")
@@ -151,6 +173,8 @@ def create_app(*, table_manager: TableManager | None = None) -> Any:
                 player_secret=str(payload.get("player_secret", "")),
                 cards=list(cards_raw),
             )
+            table = manager.get_table(table_code)
+            await hub.broadcast_snapshot(table_code=table.table_code, manager=manager)
         except TableNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except UnauthorizedError as exc:
@@ -160,13 +184,15 @@ def create_app(*, table_manager: TableManager | None = None) -> Any:
         return {"ok": True}
 
     @app.post("/tables/{table_code}/play")
-    def submit_play(table_code: str, payload: dict[str, Any]) -> dict[str, bool]:
+    async def submit_play(table_code: str, payload: dict[str, Any]) -> dict[str, bool]:
         try:
             manager.play_card(
                 table_code,
                 player_secret=str(payload.get("player_secret", "")),
                 card=str(payload.get("card", "")),
             )
+            table = manager.get_table(table_code)
+            await hub.broadcast_snapshot(table_code=table.table_code, manager=manager)
         except TableNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except UnauthorizedError as exc:
@@ -176,7 +202,7 @@ def create_app(*, table_manager: TableManager | None = None) -> Any:
         return {"ok": True}
 
     @app.websocket("/ws")
-    async def websocket_endpoint(websocket: Any) -> None:
+    async def websocket_endpoint(websocket: WebSocket) -> None:
         await websocket.accept()
         table_code: str | None = None
         viewer_secret: str | None = None
@@ -214,15 +240,30 @@ def create_app(*, table_manager: TableManager | None = None) -> Any:
                         continue
 
                     if msg_type == "join_table":
-                        table_code = str(message.get("table_code", "")).upper()
+                        requested_table_code = str(message.get("table_code", "")).upper()
+                        if table_code is not None and table_code != requested_table_code:
+                            await hub.unsubscribe(table_code=table_code, websocket=websocket)
+
+                        table_code = requested_table_code
                         display_name = str(message.get("display_name", "Player"))
-                        viewer_secret = manager.join_table(table_code, display_name=display_name)
+                        table = manager.get_table(table_code)
+                        requested_secret = message.get("player_secret")
+                        if (
+                            isinstance(requested_secret, str)
+                            and requested_secret in table.participants
+                        ):
+                            viewer_secret = requested_secret
+                        else:
+                            viewer_secret = manager.join_table(table_code, display_name=display_name)
+                            table = manager.get_table(table_code)
+
                         await hub.subscribe(
                             table_code=table_code,
                             websocket=websocket,
                             viewer_secret=viewer_secret,
                         )
-                        table = manager.get_table(table_code)
+                        participant = table.participants.get(viewer_secret)
+                        seat = int(participant.seat) if participant is not None and participant.seat is not None else None
                         await websocket.send_text(
                             dumps_message(
                                 {
@@ -230,7 +271,7 @@ def create_app(*, table_manager: TableManager | None = None) -> Any:
                                     "type": "table_joined",
                                     "table_code": table.table_code,
                                     "player_secret": viewer_secret,
-                                    "seat": None,
+                                    "seat": seat,
                                 }
                             )
                         )
@@ -325,4 +366,3 @@ def run_server(*, host: str = "127.0.0.1", port: int = 8000) -> None:
 
 
 __all__ = ["create_app", "run_server"]
-

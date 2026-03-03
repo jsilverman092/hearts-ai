@@ -16,11 +16,15 @@ class CreateTableMsg(TypedDict):
     display_name: str
 
 
-class JoinTableMsg(TypedDict):
+class JoinTableMsgBase(TypedDict):
     schema_version: int
     type: Literal["join_table"]
     table_code: str
     display_name: str
+
+
+class JoinTableMsg(JoinTableMsgBase, total=False):
+    player_secret: str
 
 
 class SitSeatMsg(TypedDict):
@@ -141,4 +145,3 @@ __all__ = [
     "loads_message",
     "validate_schema_version",
 ]
-

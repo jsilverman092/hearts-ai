@@ -55,6 +55,8 @@ def table_snapshot(table: Table, *, viewer_secret: str | None = None) -> dict[st
         "phase": table.phase,
         "version": table.version,
         "seed": table.seed,
+        "target_score": table.config.target_score,
+        "pass_count": table.config.pass_count,
         "hand_number": table.state.hand_number,
         "trick_number": table.state.trick_number,
         "pass_direction": table.state.pass_direction,

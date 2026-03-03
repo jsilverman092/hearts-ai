@@ -1,3 +1,4 @@
+from hearts_ai.engine.rules import legal_moves
 from hearts_ai.server.state_views import table_snapshot
 from hearts_ai.server.tables import TableManager
 
@@ -46,3 +47,30 @@ def test_state_snapshot_hides_other_hands() -> None:
     assert private_snapshot["phase"] == "passing"
     assert len(private_snapshot["viewer_hand"]) == 13
 
+
+def test_human_plus_bots_game_reaches_game_over_without_bot_legal_move_crash() -> None:
+    manager = TableManager()
+    table, player_secret = manager.create_table(display_name="Human", target_score=20, seed=3)
+    manager.claim_seat(table.table_code, player_secret=player_secret, seat=0)
+    manager.add_bot(table.table_code, seat=1)
+    manager.add_bot(table.table_code, seat=2)
+    manager.add_bot(table.table_code, seat=3)
+
+    for _ in range(600):
+        current = manager.get_table(table.table_code)
+        if current.phase == "game_over":
+            break
+        if current.phase == "passing":
+            if 0 in current.pending_passes:
+                continue
+            hand = sorted(current.state.hands[0])
+            cards = [str(card) for card in hand[: current.config.pass_count]]
+            manager.submit_pass(table.table_code, player_secret=player_secret, cards=cards)
+            continue
+        if current.phase == "playing":
+            if current.state.turn == 0:
+                moves = legal_moves(current.state, 0)
+                manager.play_card(table.table_code, player_secret=player_secret, card=str(moves[0]))
+            continue
+
+    assert manager.get_table(table.table_code).phase == "game_over"

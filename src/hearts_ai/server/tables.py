@@ -180,7 +180,18 @@ class Table:
                     break
 
             if self.phase == "playing":
+                if is_hand_over(self.state):
+                    self.phase = "hand_scoring"
+                    progressed = True
+                    self.version += 1
+
                 while self.phase == "playing":
+                    if is_hand_over(self.state):
+                        self.phase = "hand_scoring"
+                        progressed = True
+                        self.version += 1
+                        break
+
                     if self.state.turn is None:
                         raise InvalidTableActionError("Game state turn is unset during playing phase.")
                     if self.state.turn not in self.bot_seats:
