@@ -53,6 +53,7 @@ const dom = {
   targetScore: document.getElementById("targetScore"),
   seed: document.getElementById("seed"),
   joinCode: document.getElementById("joinCode"),
+  quickSoloBtn: document.getElementById("quickSoloBtn"),
   createBtn: document.getElementById("createBtn"),
   joinBtn: document.getElementById("joinBtn"),
   reconnectBtn: document.getElementById("reconnectBtn"),
@@ -363,28 +364,72 @@ async function apiRequest(path, method, body) {
   return payload;
 }
 
-async function createTable() {
+function readCreateOptions() {
   const displayName = dom.displayName.value.trim();
   if (!displayName) {
     setInfo("Enter a display name first.");
-    return;
+    return null;
   }
 
   const targetScore = Number(dom.targetScore.value);
   const seedRaw = dom.seed.value.trim();
-  const payload = { display_name: displayName, target_score: Number.isFinite(targetScore) ? targetScore : 50 };
+  const payload = {
+    display_name: displayName,
+    target_score: Number.isFinite(targetScore) ? targetScore : 50,
+  };
   if (seedRaw) {
-    payload.seed = Number(seedRaw);
+    const seed = Number(seedRaw);
+    if (!Number.isFinite(seed)) {
+      setInfo("Seed must be a valid number.");
+      return null;
+    }
+    payload.seed = seed;
+  }
+  return { displayName, payload };
+}
+
+function applyCreatedTableSession(created, displayName) {
+  appState.tableCode = created.table_code;
+  appState.playerSecret = created.player_secret;
+  appState.displayName = displayName;
+  dom.joinCode.value = created.table_code;
+  appState.selectedPassCards.clear();
+  saveSession();
+}
+
+async function createTable() {
+  const options = readCreateOptions();
+  if (!options) {
+    return;
   }
 
   try {
-    const created = await apiRequest("/tables", "POST", payload);
-    appState.tableCode = created.table_code;
-    appState.playerSecret = created.player_secret;
-    appState.displayName = displayName;
-    dom.joinCode.value = created.table_code;
-    appState.selectedPassCards.clear();
-    saveSession();
+    const created = await apiRequest("/tables", "POST", options.payload);
+    applyCreatedTableSession(created, options.displayName);
+    await fetchSnapshot();
+    connectWebSocket();
+  } catch (error) {
+    setInfo(error.message);
+  }
+}
+
+async function quickStartSolo() {
+  const options = readCreateOptions();
+  if (!options) {
+    return;
+  }
+
+  try {
+    const created = await apiRequest("/tables", "POST", options.payload);
+    applyCreatedTableSession(created, options.displayName);
+
+    await apiRequest(`/tables/${appState.tableCode}/seats/0`, "POST", {
+      player_secret: appState.playerSecret,
+    });
+    for (const seat of [1, 2, 3]) {
+      await apiRequest(`/tables/${appState.tableCode}/bots/${seat}`, "POST");
+    }
+
     await fetchSnapshot();
     connectWebSocket();
   } catch (error) {
@@ -859,6 +904,7 @@ function render(snapshot = appState.snapshot) {
 }
 
 function wireEvents() {
+  dom.quickSoloBtn.addEventListener("click", quickStartSolo);
   dom.createBtn.addEventListener("click", createTable);
   dom.joinBtn.addEventListener("click", joinTable);
   dom.reconnectBtn.addEventListener("click", reconnectSession);

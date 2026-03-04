@@ -84,6 +84,12 @@ body {
   padding: 0.2rem;
 }
 
+.create-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(120px, 1fr));
+  gap: 0.44rem;
+}
+
 h2,
 h3 {
   margin: 0;
@@ -573,6 +579,10 @@ button:hover:not(:disabled) {
   }
 
   .pace-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .create-actions {
     grid-template-columns: 1fr;
   }
 }
