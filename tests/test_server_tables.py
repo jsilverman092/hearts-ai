@@ -142,6 +142,65 @@ def test_advance_requires_host_or_seat_zero() -> None:
         manager.advance_one_action(table.table_code, player_secret=guest_secret)
 
 
+def test_advance_reports_waiting_when_human_action_required() -> None:
+    manager = TableManager()
+    table, host_secret = manager.create_table(display_name="Host", target_score=20, seed=37)
+    manager.claim_seat(table.table_code, player_secret=host_secret, seat=0)
+    manager.add_bot(table.table_code, seat=1)
+    manager.add_bot(table.table_code, seat=2)
+    manager.add_bot(table.table_code, seat=3)
+
+    # Drive bot pass submissions until only the human pass is outstanding.
+    for _ in range(20):
+        current = manager.get_table(table.table_code)
+        if current.phase == "passing" and all(player in current.pending_passes for player in (1, 2, 3)):
+            break
+        result = manager.advance_one_action(table.table_code, player_secret=host_secret)
+        assert result.advanced is True
+    else:
+        raise AssertionError("Did not reach waiting-on-human pass state.")
+
+    current = manager.get_table(table.table_code)
+    assert current.phase == "passing"
+    assert 0 not in current.pending_passes
+    waiting_version = current.version
+
+    waiting_pass = manager.advance_one_action(table.table_code, player_secret=host_secret)
+    assert waiting_pass.advanced is False
+    assert waiting_pass.action is None
+    assert waiting_pass.can_advance is False
+    assert manager.get_table(table.table_code).version == waiting_version
+
+    hand = sorted(current.state.hands[0])
+    cards = [str(card) for card in hand[: current.config.pass_count]]
+    manager.submit_pass(table.table_code, player_secret=host_secret, cards=cards)
+
+    applied = manager.advance_one_action(table.table_code, player_secret=host_secret)
+    assert applied.advanced is True
+    assert applied.action == "pass_applied"
+
+    # Advance bots until play blocks on the human turn.
+    for _ in range(60):
+        current = manager.get_table(table.table_code)
+        if current.phase == "playing" and current.state.turn == 0:
+            break
+        step = manager.advance_one_action(table.table_code, player_secret=host_secret)
+        assert step.advanced is True
+    else:
+        raise AssertionError("Did not reach waiting-on-human play state.")
+
+    current = manager.get_table(table.table_code)
+    assert current.phase == "playing"
+    assert current.state.turn == 0
+    waiting_version = current.version
+
+    waiting_play = manager.advance_one_action(table.table_code, player_secret=host_secret)
+    assert waiting_play.advanced is False
+    assert waiting_play.action is None
+    assert waiting_play.can_advance is False
+    assert manager.get_table(table.table_code).version == waiting_version
+
+
 def test_snapshot_exposes_last_trick_and_seat_hand_points() -> None:
     manager = TableManager()
     table, host_secret = manager.create_table(display_name="Host", target_score=30, seed=23)

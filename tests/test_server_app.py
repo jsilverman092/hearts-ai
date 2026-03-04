@@ -15,6 +15,26 @@ def test_root_serves_ui_shell() -> None:
         response = client.get("/")
     assert response.status_code == 200
     assert "Hearts AI Live" in response.text
+    assert 'id="quickSoloBtn"' in response.text
+    assert 'id="autoplayBtn"' in response.text
+    assert 'id="stepBtn"' in response.text
+    assert 'id="paceRange"' in response.text
+
+
+def test_create_table_rejects_non_boolean_auto_advance() -> None:
+    app = create_app(table_manager=TableManager())
+    with TestClient(app) as client:
+        response = client.post(
+            "/tables",
+            json={
+                "display_name": "Host",
+                "target_score": 20,
+                "seed": 13,
+                "auto_advance": "true",
+            },
+        )
+    assert response.status_code == 400
+    assert "auto_advance" in response.json()["detail"]
 
 
 def test_websocket_join_with_existing_secret() -> None:
@@ -136,6 +156,134 @@ def _drive_game_to_completion(client: TestClient, *, table_code: str, player_sec
             continue
 
     raise AssertionError(f"Game did not complete within {max_steps} steps.")
+
+
+def _setup_single_player_table(client: TestClient, *, seed: int) -> tuple[str, str]:
+    created = client.post(
+        "/tables",
+        json={"display_name": "Host", "target_score": 20, "seed": seed},
+    ).json()
+    table_code = created["table_code"]
+    player_secret = created["player_secret"]
+    assert client.post(
+        f"/tables/{table_code}/seats/0",
+        json={"player_secret": player_secret},
+    ).status_code == 200
+    assert client.post(f"/tables/{table_code}/bots/1").status_code == 200
+    assert client.post(f"/tables/{table_code}/bots/2").status_code == 200
+    assert client.post(f"/tables/{table_code}/bots/3").status_code == 200
+    return table_code, player_secret
+
+
+def test_advance_endpoint_waits_for_human_pass() -> None:
+    manager = TableManager()
+    app = create_app(table_manager=manager)
+
+    with TestClient(app) as client:
+        table_code, player_secret = _setup_single_player_table(client, seed=41)
+
+        for _ in range(20):
+            snapshot = client.get(
+                f"/tables/{table_code}",
+                params={"player_secret": player_secret},
+            ).json()
+            submissions = snapshot["pass_submissions"]
+            if snapshot["phase"] == "passing" and all(submissions.get(str(seat)) for seat in (1, 2, 3)):
+                break
+            response = client.post(
+                f"/tables/{table_code}/advance",
+                json={"player_secret": player_secret},
+            )
+            assert response.status_code == 200
+            assert response.json()["advanced"] is True
+        else:
+            raise AssertionError("Did not reach waiting-on-human pass state.")
+
+        response = client.post(
+            f"/tables/{table_code}/advance",
+            json={"player_secret": player_secret},
+        )
+        payload = response.json()
+
+        assert response.status_code == 200
+        assert payload["advanced"] is False
+        assert payload["action"] is None
+        assert payload["can_advance"] is False
+        assert payload["snapshot"]["phase"] == "passing"
+        assert payload["snapshot"]["pass_submissions"]["0"] is False
+
+
+def test_advance_endpoint_waits_for_human_play() -> None:
+    manager = TableManager()
+    app = create_app(table_manager=manager)
+
+    with TestClient(app) as client:
+        table_code, player_secret = _setup_single_player_table(client, seed=43)
+
+        for _ in range(20):
+            snapshot = client.get(
+                f"/tables/{table_code}",
+                params={"player_secret": player_secret},
+            ).json()
+            submissions = snapshot["pass_submissions"]
+            if snapshot["phase"] == "passing" and all(submissions.get(str(seat)) for seat in (1, 2, 3)):
+                break
+            response = client.post(
+                f"/tables/{table_code}/advance",
+                json={"player_secret": player_secret},
+            )
+            assert response.status_code == 200
+            assert response.json()["advanced"] is True
+        else:
+            raise AssertionError("Did not reach waiting-on-human pass state.")
+
+        waiting_snapshot = client.get(
+            f"/tables/{table_code}",
+            params={"player_secret": player_secret},
+        ).json()
+        pass_count = int(waiting_snapshot["pass_count"])
+        cards = sorted(waiting_snapshot["viewer_hand"])[:pass_count]
+        response = client.post(
+            f"/tables/{table_code}/pass",
+            json={"player_secret": player_secret, "cards": cards},
+        )
+        assert response.status_code == 200
+
+        response = client.post(
+            f"/tables/{table_code}/advance",
+            json={"player_secret": player_secret},
+        )
+        assert response.status_code == 200
+        assert response.json()["action"] == "pass_applied"
+
+        for _ in range(80):
+            snapshot = client.get(
+                f"/tables/{table_code}",
+                params={"player_secret": player_secret},
+            ).json()
+            if snapshot["phase"] == "playing" and snapshot["turn"] == snapshot["viewer_seat"]:
+                break
+            response = client.post(
+                f"/tables/{table_code}/advance",
+                json={"player_secret": player_secret},
+            )
+            assert response.status_code == 200
+            assert response.json()["advanced"] is True
+        else:
+            raise AssertionError("Did not reach waiting-on-human play state.")
+
+        response = client.post(
+            f"/tables/{table_code}/advance",
+            json={"player_secret": player_secret},
+        )
+        payload = response.json()
+
+        assert response.status_code == 200
+        assert payload["advanced"] is False
+        assert payload["action"] is None
+        assert payload["can_advance"] is False
+        assert payload["snapshot"]["phase"] == "playing"
+        assert payload["snapshot"]["turn"] == payload["snapshot"]["viewer_seat"]
 
 
 def test_server_integration_full_game_deterministic_with_websocket(tmp_path) -> None:
