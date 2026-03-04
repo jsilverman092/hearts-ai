@@ -5,6 +5,7 @@ import pytest
 from hearts_ai.engine.game import is_hand_over
 from hearts_ai.engine.record import replay_jsonl
 from hearts_ai.engine.rules import legal_moves
+from hearts_ai.engine.scoring import trick_points
 from hearts_ai.server.state_views import table_snapshot
 from hearts_ai.server.tables import TableManager, UnauthorizedError
 
@@ -139,3 +140,58 @@ def test_advance_requires_host_or_seat_zero() -> None:
 
     with pytest.raises(UnauthorizedError):
         manager.advance_one_action(table.table_code, player_secret=guest_secret)
+
+
+def test_snapshot_exposes_last_trick_and_seat_hand_points() -> None:
+    manager = TableManager()
+    table, host_secret = manager.create_table(display_name="Host", target_score=30, seed=23)
+    manager.add_bot(table.table_code, seat=0)
+    manager.add_bot(table.table_code, seat=1)
+    manager.add_bot(table.table_code, seat=2)
+    manager.add_bot(table.table_code, seat=3)
+
+    for _ in range(400):
+        current = manager.get_table(table.table_code)
+        if current.state.trick_number >= 1 and not current.state.trick_in_progress:
+            break
+        manager.advance_one_action(table.table_code, player_secret=host_secret)
+
+    current = manager.get_table(table.table_code)
+    snapshot = table_snapshot(current, viewer_secret=host_secret)
+
+    expected_hand_points = {
+        str(int(player_id)): sum(trick_points(trick) for trick in current.state.taken_tricks[player_id])
+        for player_id in current.state.taken_tricks
+    }
+    assert snapshot["seat_hand_points"] == expected_hand_points
+    assert snapshot["last_trick"] is not None
+    assert snapshot["last_trick"]["trick_seq"] == current.state.trick_number
+    assert snapshot["last_trick"]["winner"] == int(current.state.turn)
+    expected_cards = [
+        {"player_id": int(player_id), "card": str(card)}
+        for player_id, card in current.state.taken_tricks[current.state.turn][-1]
+    ]
+    assert snapshot["last_trick"]["cards"] == expected_cards
+
+
+def test_snapshot_resets_last_trick_and_hand_points_on_new_hand() -> None:
+    manager = TableManager()
+    table, host_secret = manager.create_table(display_name="Host", target_score=100, seed=29)
+    manager.add_bot(table.table_code, seat=0)
+    manager.add_bot(table.table_code, seat=1)
+    manager.add_bot(table.table_code, seat=2)
+    manager.add_bot(table.table_code, seat=3)
+
+    start_hand = manager.get_table(table.table_code).state.hand_number
+    for _ in range(5000):
+        current = manager.get_table(table.table_code)
+        if current.state.hand_number > start_hand and current.state.trick_number == 0:
+            break
+        manager.advance_one_action(table.table_code, player_secret=host_secret)
+
+    current = manager.get_table(table.table_code)
+    snapshot = table_snapshot(current, viewer_secret=host_secret)
+    assert current.state.hand_number > start_hand
+    assert snapshot["trick_number"] == 0
+    assert snapshot["last_trick"] is None
+    assert snapshot["seat_hand_points"] == {"0": 0, "1": 0, "2": 0, "3": 0}

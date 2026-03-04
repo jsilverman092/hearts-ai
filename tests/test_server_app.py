@@ -239,3 +239,5 @@ def test_advance_endpoint_returns_snapshot_and_can_advance() -> None:
         assert payload["action"] in {"bot_pass_submitted", "pass_applied", "bot_card_played"}
         assert isinstance(payload["can_advance"], bool)
         assert isinstance(payload["snapshot"], dict)
+        assert "seat_hand_points" in payload["snapshot"]
+        assert "last_trick" in payload["snapshot"]

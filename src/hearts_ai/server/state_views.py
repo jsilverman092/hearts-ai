@@ -4,6 +4,7 @@ from typing import Any
 
 from hearts_ai.engine.errors import InvalidStateError
 from hearts_ai.engine.rules import legal_moves
+from hearts_ai.engine.scoring import trick_points
 from hearts_ai.engine.types import PLAYER_IDS
 from hearts_ai.server.tables import Table
 
@@ -41,6 +42,23 @@ def table_snapshot(table: Table, *, viewer_secret: str | None = None) -> dict[st
         {"player_id": int(player_id), "card": str(card)} for player_id, card in table.state.trick_in_progress
     ]
     scores = {str(int(player_id)): table.state.scores[player_id] for player_id in PLAYER_IDS}
+    seat_hand_points = {
+        str(int(player_id)): sum(trick_points(trick) for trick in table.state.taken_tricks[player_id])
+        for player_id in PLAYER_IDS
+    }
+    last_trick = (
+        {
+            "winner": int(table.last_trick.winner_id),
+            "cards": [
+                {"player_id": int(player_id), "card": str(card)}
+                for player_id, card in table.last_trick.trick
+            ],
+            "points": table.last_trick.points,
+            "trick_seq": table.last_trick.trick_seq,
+        }
+        if table.last_trick is not None
+        else None
+    )
 
     hand_cards: list[str] = []
     legal_for_viewer: list[str] = []
@@ -74,7 +92,9 @@ def table_snapshot(table: Table, *, viewer_secret: str | None = None) -> dict[st
         "hearts_broken": table.state.hearts_broken,
         "turn": int(table.state.turn) if table.state.turn is not None else None,
         "scores": scores,
+        "seat_hand_points": seat_hand_points,
         "current_trick": trick_cards,
+        "last_trick": last_trick,
         "seats": seats,
         "viewer_seat": int(viewer_seat) if viewer_seat is not None else None,
         "viewer_can_control_pace": viewer_can_control_pace,

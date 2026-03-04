@@ -11,8 +11,9 @@ from hearts_ai.bots.random_bot import RandomBot
 from hearts_ai.engine.cards import Card, Rank, Suit
 from hearts_ai.engine.game import apply_pass, deal, is_game_over, is_hand_over, new_game, play_card
 from hearts_ai.engine.record import GameRecorder
+from hearts_ai.engine.scoring import trick_points
 from hearts_ai.engine.state import GameConfig, GameState
-from hearts_ai.engine.types import PLAYER_IDS, PlayerId, to_player_id
+from hearts_ai.engine.types import PLAYER_IDS, PlayerId, Trick, to_player_id
 from hearts_ai.server.persistence import RecordStore
 
 TablePhase = Literal["lobby", "passing", "playing", "hand_scoring", "game_over"]
@@ -74,6 +75,14 @@ class AdvanceResult:
     can_advance: bool
 
 
+@dataclass(slots=True, frozen=True)
+class LastTrick:
+    winner_id: PlayerId
+    trick: Trick
+    points: int
+    trick_seq: int
+
+
 def _empty_seat_secrets() -> dict[PlayerId, str | None]:
     return {player_id: None for player_id in PLAYER_IDS}
 
@@ -101,6 +110,7 @@ class Table:
     summary_path: Path | None = None
     host_secret: str | None = None
     auto_advance: bool = False
+    last_trick: LastTrick | None = None
     hand_score_start: dict[PlayerId, int] = field(default_factory=_zero_scores)
     last_recorded_scored_hand: int = 0
     game_end_recorded: bool = False
@@ -161,7 +171,9 @@ class Table:
                 f"It is player {int(self.state.turn) if self.state.turn is not None else 'none'}'s turn."
             )
         card = _card_from_code(card_code)
+        previous_trick_number = self.state.trick_number
         play_card(state=self.state, player_id=player_id, card=card)
+        self._capture_last_trick(previous_trick_number=previous_trick_number)
         self._record_card_played(player_id=player_id, card=card)
         self.version += 1
         self._maybe_auto_advance()
@@ -255,7 +267,9 @@ class Table:
             bot_player = self.state.turn
             bot = RandomBot(player_id=bot_player)
             card = bot.choose_play(state=self.state, rng=self.rng)
+            previous_trick_number = self.state.trick_number
             play_card(state=self.state, player_id=bot_player, card=card)
+            self._capture_last_trick(previous_trick_number=previous_trick_number)
             self._record_card_played(player_id=bot_player, card=card)
             self.version += 1
             return "bot_card_played"
@@ -274,6 +288,7 @@ class Table:
             if self.recorder is not None:
                 self.recorder.record_hand_dealt(self.state)
             self.pending_passes.clear()
+            self.last_trick = None
             self.phase = "playing" if self.state.pass_applied else "passing"
             self.hand_score_start = dict(self.state.scores)
             self.version += 1
@@ -304,6 +319,23 @@ class Table:
         if participant.seat == to_player_id(0):
             return
         raise UnauthorizedError("Only the host or seat 0 can control table pacing.")
+
+    def _capture_last_trick(self, *, previous_trick_number: int) -> None:
+        if self.state.trick_number <= previous_trick_number:
+            return
+        winner = self.state.turn
+        if winner is None:
+            raise InvalidTableActionError("Completed trick is missing winner turn.")
+        winner_tricks = self.state.taken_tricks[winner]
+        if not winner_tricks:
+            raise InvalidTableActionError("Completed trick is missing from winner taken tricks.")
+        trick = list(winner_tricks[-1])
+        self.last_trick = LastTrick(
+            winner_id=winner,
+            trick=trick,
+            points=trick_points(trick),
+            trick_seq=self.state.trick_number,
+        )
 
     def _record_pass_applied(self, *, pass_map: dict[PlayerId, list[Card]]) -> None:
         if self.recorder is None:
@@ -473,6 +505,7 @@ def _card_from_code(code: str) -> Card:
 __all__ = [
     "AdvanceResult",
     "InvalidTableActionError",
+    "LastTrick",
     "Table",
     "TableError",
     "TableManager",
