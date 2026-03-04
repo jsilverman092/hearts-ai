@@ -307,6 +307,12 @@ button:hover:not(:disabled) {
   background: rgba(0, 0, 0, 0.08);
 }
 
+.trick-grid.resolved {
+  border-style: solid;
+  border-color: rgba(255, 221, 161, 0.8);
+  background: rgba(255, 220, 160, 0.09);
+}
+
 .trick-slot {
   position: absolute;
   display: grid;
@@ -365,6 +371,7 @@ button:hover:not(:disabled) {
   justify-items: center;
   box-shadow: 0 2px 6px rgba(23, 20, 17, 0.18);
   line-height: 1;
+  transition: transform 220ms ease, box-shadow 220ms ease, opacity 220ms ease;
 }
 
 .playing-card.small {
@@ -401,6 +408,15 @@ button:hover:not(:disabled) {
 .playing-card.suit-clubs,
 .playing-card.suit-spades {
   color: #21201d;
+}
+
+.trick-grid .playing-card {
+  animation: trick-card-in 180ms ease-out;
+}
+
+.trick-grid.resolved .playing-card {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(28, 22, 13, 0.28);
 }
 
 .card-btn {
@@ -443,6 +459,37 @@ button:hover:not(:disabled) {
 
 .hint {
   color: var(--ink-soft);
+}
+
+.pace-grid {
+  margin-top: 0.52rem;
+  display: grid;
+  gap: 0.48rem;
+  grid-template-columns: repeat(2, minmax(140px, 1fr));
+  align-items: center;
+}
+
+.pace-grid label {
+  font-size: 0.88rem;
+}
+
+.pace-grid p {
+  margin: 0;
+}
+
+.pace-grid input[type="range"] {
+  padding: 0;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.toggle-row input {
+  width: 16px;
+  height: 16px;
 }
 
 .hidden {
@@ -523,5 +570,20 @@ button:hover:not(:disabled) {
     width: calc(100% - 1.45rem);
     min-height: 165px;
     top: 50%;
+  }
+
+  .pace-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@keyframes trick-card-in {
+  from {
+    transform: translateY(5px);
+    opacity: 0.76;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
   }
 }

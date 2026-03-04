@@ -1,6 +1,8 @@
 const SCHEMA_VERSION = 1;
 const RECONNECT_DELAY_MS = 1500;
 const DEFAULT_PACE_MS = 900;
+const FAST_FORWARD_PACE_MS = 220;
+const TRICK_HOLD_MS = 1500;
 
 const appState = {
   tableCode: null,
@@ -9,8 +11,15 @@ const appState = {
   ws: null,
   reconnectTimer: null,
   advanceTimer: null,
+  trickHoldTimer: null,
   advanceInFlight: false,
   paceMs: DEFAULT_PACE_MS,
+  autoplayEnabled: true,
+  fastForwardToMyTurn: false,
+  trickHoldUntilMs: 0,
+  heldTrickKey: null,
+  seenLastTrickKey: null,
+  hasRenderedSnapshot: false,
   snapshot: null,
   selectedPassCards: new Set(),
 };
@@ -55,6 +64,11 @@ const dom = {
   tableSurface: document.getElementById("tableSurface"),
   trickGrid: document.getElementById("trickGrid"),
   lastTrickLine: document.getElementById("lastTrickLine"),
+  autoplayBtn: document.getElementById("autoplayBtn"),
+  stepBtn: document.getElementById("stepBtn"),
+  paceRange: document.getElementById("paceRange"),
+  paceValue: document.getElementById("paceValue"),
+  fastForwardToggle: document.getElementById("fastForwardToggle"),
   metaLine: document.getElementById("metaLine"),
   infoLine: document.getElementById("infoLine"),
   handGrid: document.getElementById("handGrid"),
@@ -158,6 +172,72 @@ function clearAdvanceTimer() {
   appState.advanceTimer = null;
 }
 
+function clearTrickHoldTimer() {
+  if (!appState.trickHoldTimer) {
+    return;
+  }
+  window.clearTimeout(appState.trickHoldTimer);
+  appState.trickHoldTimer = null;
+}
+
+function lastTrickKey(snapshot = appState.snapshot) {
+  if (!snapshot || !snapshot.last_trick) {
+    return null;
+  }
+  return `${snapshot.hand_number}:${snapshot.last_trick.trick_seq}`;
+}
+
+function isTrickHoldActive(snapshot = appState.snapshot) {
+  const key = lastTrickKey(snapshot);
+  if (!key) {
+    return false;
+  }
+  if (appState.heldTrickKey !== key) {
+    return false;
+  }
+  return Date.now() < appState.trickHoldUntilMs;
+}
+
+function activateTrickHold(trickKey) {
+  appState.heldTrickKey = trickKey;
+  appState.trickHoldUntilMs = Date.now() + TRICK_HOLD_MS;
+  clearTrickHoldTimer();
+  appState.trickHoldTimer = window.setTimeout(() => {
+    appState.trickHoldUntilMs = 0;
+    appState.heldTrickKey = null;
+    appState.trickHoldTimer = null;
+    render();
+  }, TRICK_HOLD_MS);
+}
+
+function maybeActivateTrickHold(snapshot) {
+  const trickKey = lastTrickKey(snapshot);
+  if (!trickKey) {
+    return;
+  }
+  if (!appState.hasRenderedSnapshot) {
+    appState.seenLastTrickKey = trickKey;
+    return;
+  }
+  if (trickKey !== appState.seenLastTrickKey) {
+    activateTrickHold(trickKey);
+    appState.seenLastTrickKey = trickKey;
+  }
+}
+
+function updatePaceControls(snapshot = appState.snapshot) {
+  const canControl = canControlPace(snapshot);
+  dom.autoplayBtn.disabled = !canControl;
+  dom.stepBtn.disabled = !canControl || appState.advanceInFlight;
+  dom.paceRange.disabled = !canControl;
+  dom.fastForwardToggle.disabled = !canControl;
+
+  dom.autoplayBtn.textContent = appState.autoplayEnabled ? "Pause" : "Play";
+  dom.paceRange.value = String(appState.paceMs);
+  dom.fastForwardToggle.checked = appState.fastForwardToMyTurn;
+  dom.paceValue.textContent = `${appState.paceMs}ms`;
+}
+
 function canControlPace(snapshot) {
   return Boolean(snapshot && snapshot.viewer_can_control_pace);
 }
@@ -166,7 +246,13 @@ function shouldAutoAdvance(snapshot) {
   if (!snapshot || !appState.tableCode || !appState.playerSecret) {
     return false;
   }
+  if (!appState.autoplayEnabled) {
+    return false;
+  }
   if (!canControlPace(snapshot)) {
+    return false;
+  }
+  if (isTrickHoldActive(snapshot)) {
     return false;
   }
 
@@ -212,6 +298,7 @@ async function advanceOneAction() {
     setInfo(error.message);
   } finally {
     appState.advanceInFlight = false;
+    updatePaceControls();
     scheduleAutoAdvance();
   }
 }
@@ -224,9 +311,19 @@ function scheduleAutoAdvance(snapshot = appState.snapshot) {
   if (!shouldAutoAdvance(snapshot)) {
     return;
   }
+  let delayMs = appState.paceMs;
+  if (
+    appState.fastForwardToMyTurn &&
+    snapshot &&
+    snapshot.phase === "playing" &&
+    snapshot.viewer_seat !== null &&
+    snapshot.turn !== snapshot.viewer_seat
+  ) {
+    delayMs = Math.min(FAST_FORWARD_PACE_MS, appState.paceMs);
+  }
   appState.advanceTimer = window.setTimeout(() => {
     void advanceOneAction();
-  }, appState.paceMs);
+  }, delayMs);
 }
 
 function loadSession() {
@@ -414,6 +511,7 @@ function connectWebSocket() {
   socket.addEventListener("close", () => {
     setConnectionStatus("offline", false);
     clearAdvanceTimer();
+    clearTrickHoldTimer();
     appState.advanceInFlight = false;
     if (!appState.tableCode) {
       return;
@@ -554,6 +652,19 @@ function renderSeat(snapshot, seat, seatPosition) {
 
 function renderTrick(snapshot, seatPositionById) {
   dom.trickGrid.innerHTML = "";
+  dom.trickGrid.classList.remove("resolved");
+
+  let displayedTrick = snapshot.current_trick || [];
+  let isResolvedDisplay = false;
+  if (
+    displayedTrick.length === 0 &&
+    snapshot.last_trick &&
+    isTrickHoldActive(snapshot)
+  ) {
+    displayedTrick = snapshot.last_trick.cards || [];
+    isResolvedDisplay = true;
+    dom.trickGrid.classList.add("resolved");
+  }
 
   for (const seat of snapshot.seats) {
     const slot = document.createElement("div");
@@ -564,7 +675,7 @@ function renderTrick(snapshot, seatPositionById) {
     label.textContent = `P${seat.seat}`;
     slot.appendChild(label);
 
-    const play = (snapshot.current_trick || []).find((entry) => entry.player_id === seat.seat);
+    const play = displayedTrick.find((entry) => entry.player_id === seat.seat);
     if (play) {
       slot.appendChild(createCardFace(play.card, { small: true }));
     }
@@ -572,11 +683,16 @@ function renderTrick(snapshot, seatPositionById) {
     dom.trickGrid.appendChild(slot);
   }
 
-  if (!snapshot.current_trick || snapshot.current_trick.length === 0) {
+  if (displayedTrick.length === 0) {
     const empty = document.createElement("span");
     empty.className = "trick-empty";
     empty.textContent = "No cards in trick.";
     dom.trickGrid.appendChild(empty);
+  } else if (isResolvedDisplay) {
+    const banner = document.createElement("span");
+    banner.className = "trick-empty";
+    banner.textContent = `Trick ${snapshot.last_trick.trick_seq} complete`;
+    dom.trickGrid.appendChild(banner);
   }
 }
 
@@ -693,6 +809,9 @@ function render(snapshot = appState.snapshot) {
     dom.viewerSeatValue.textContent = "spectator";
     dom.tableSection.classList.add("hidden");
     clearAdvanceTimer();
+    clearTrickHoldTimer();
+    appState.hasRenderedSnapshot = false;
+    updatePaceControls(null);
     return;
   }
 
@@ -702,6 +821,7 @@ function render(snapshot = appState.snapshot) {
   if (!("last_trick" in snapshot)) {
     snapshot.last_trick = null;
   }
+  maybeActivateTrickHold(snapshot);
 
   dom.tableSection.classList.remove("hidden");
   dom.phaseValue.textContent = snapshot.phase;
@@ -741,6 +861,8 @@ function render(snapshot = appState.snapshot) {
   renderTable(snapshot);
   renderPassPanel(snapshot);
   renderHand(snapshot);
+  updatePaceControls(snapshot);
+  appState.hasRenderedSnapshot = true;
   scheduleAutoAdvance(snapshot);
 }
 
@@ -749,6 +871,29 @@ function wireEvents() {
   dom.joinBtn.addEventListener("click", joinTable);
   dom.reconnectBtn.addEventListener("click", reconnectSession);
   dom.submitPassBtn.addEventListener("click", submitPass);
+  dom.autoplayBtn.addEventListener("click", () => {
+    appState.autoplayEnabled = !appState.autoplayEnabled;
+    updatePaceControls();
+    scheduleAutoAdvance();
+  });
+  dom.stepBtn.addEventListener("click", () => {
+    void advanceOneAction();
+  });
+  dom.paceRange.addEventListener("input", () => {
+    const parsed = Number(dom.paceRange.value);
+    if (!Number.isFinite(parsed)) {
+      return;
+    }
+    const next = Math.max(200, Math.min(2000, Math.round(parsed)));
+    appState.paceMs = next;
+    updatePaceControls();
+    scheduleAutoAdvance();
+  });
+  dom.fastForwardToggle.addEventListener("change", () => {
+    appState.fastForwardToMyTurn = dom.fastForwardToggle.checked;
+    updatePaceControls();
+    scheduleAutoAdvance();
+  });
 }
 
 function boot() {
@@ -762,6 +907,7 @@ function boot() {
   }
   setConnectionStatus("offline", false);
   wireEvents();
+  updatePaceControls(null);
   render();
 }
 

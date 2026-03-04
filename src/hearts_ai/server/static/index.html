@@ -69,6 +69,21 @@
           <p id="infoLine" class="hint">Waiting for table updates.</p>
         </article>
 
+        <article class="card pace-card">
+          <h3>Pace</h3>
+          <div class="pace-grid">
+            <button id="autoplayBtn" class="action alt">Pause</button>
+            <button id="stepBtn" class="ghost">Step</button>
+            <label for="paceRange">Speed</label>
+            <input id="paceRange" type="range" min="200" max="2000" step="50" value="900" />
+            <p id="paceValue" class="mono">900ms</p>
+            <label class="toggle-row" for="fastForwardToggle">
+              <input id="fastForwardToggle" type="checkbox" />
+              <span>Fast-forward to my turn</span>
+            </label>
+          </div>
+        </article>
+
         <article id="passPanel" class="card hidden">
           <h3>Pass Cards</h3>
           <p id="passHint" class="hint">Select cards to pass.</p>
@@ -83,6 +98,6 @@
       </section>
     </main>
 
-    <script src="/static/app.js?v=4" defer></script>
+    <script src="/static/app.js?v=6" defer></script>
   </body>
 </html>
