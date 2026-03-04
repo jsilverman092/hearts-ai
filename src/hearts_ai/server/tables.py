@@ -16,6 +16,14 @@ from hearts_ai.engine.types import PLAYER_IDS, PlayerId, to_player_id
 from hearts_ai.server.persistence import RecordStore
 
 TablePhase = Literal["lobby", "passing", "playing", "hand_scoring", "game_over"]
+AdvanceAction = Literal[
+    "bot_pass_submitted",
+    "pass_applied",
+    "bot_card_played",
+    "hand_scoring_entered",
+    "next_hand_dealt",
+    "game_over",
+]
 
 _TABLE_CODE_ALPHABET = string.ascii_uppercase + string.digits
 _CARD_SUITS = {"C": Suit.CLUBS, "D": Suit.DIAMONDS, "H": Suit.HEARTS, "S": Suit.SPADES}
@@ -59,6 +67,13 @@ class Participant:
     seat: PlayerId | None = None
 
 
+@dataclass(slots=True, frozen=True)
+class AdvanceResult:
+    advanced: bool
+    action: AdvanceAction | None
+    can_advance: bool
+
+
 def _empty_seat_secrets() -> dict[PlayerId, str | None]:
     return {player_id: None for player_id in PLAYER_IDS}
 
@@ -84,6 +99,8 @@ class Table:
     game_id: str | None = None
     record_path: Path | None = None
     summary_path: Path | None = None
+    host_secret: str | None = None
+    auto_advance: bool = False
     hand_score_start: dict[PlayerId, int] = field(default_factory=_zero_scores)
     last_recorded_scored_hand: int = 0
     game_end_recorded: bool = False
@@ -133,7 +150,7 @@ class Table:
             raise InvalidTableActionError("Pass already submitted for this hand.")
         self.pending_passes[player_id] = [_card_from_code(code) for code in cards]
         self.version += 1
-        self._advance_to_next_human_action()
+        self._maybe_auto_advance()
 
     def play(self, player_secret: str, card_code: str) -> None:
         if self.phase != "playing":
@@ -147,7 +164,31 @@ class Table:
         play_card(state=self.state, player_id=player_id, card=card)
         self._record_card_played(player_id=player_id, card=card)
         self.version += 1
-        self._advance_to_next_human_action()
+        self._maybe_auto_advance()
+
+    def can_advance(self) -> bool:
+        if self.phase == "passing":
+            if len(self.pending_passes) == len(PLAYER_IDS):
+                return True
+            return any(player_id in self.bot_seats and player_id not in self.pending_passes for player_id in PLAYER_IDS)
+        if self.phase == "playing":
+            if is_hand_over(self.state):
+                return True
+            if self.state.turn is None:
+                raise InvalidTableActionError("Game state turn is unset during playing phase.")
+            return self.state.turn in self.bot_seats
+        if self.phase == "hand_scoring":
+            return True
+        return False
+
+    def advance_one_action(self, *, player_secret: str) -> AdvanceResult:
+        self._require_pace_controller(player_secret)
+        action = self._advance_one_action()
+        return AdvanceResult(
+            advanced=action is not None,
+            action=action,
+            can_advance=self.can_advance(),
+        )
 
     def seat_display_name(self, player_id: PlayerId) -> str | None:
         seat_secret = self.seat_secrets[player_id]
@@ -168,96 +209,77 @@ class Table:
         self.phase = "playing" if self.state.pass_applied else "passing"
         self.pending_passes.clear()
         self.version += 1
-        self._advance_to_next_human_action()
+        self._maybe_auto_advance()
 
-    def _advance_to_next_human_action(self) -> None:
-        while True:
-            progressed = False
+    def _maybe_auto_advance(self) -> None:
+        if not self.auto_advance:
+            return
+        while self._advance_one_action() is not None:
+            pass
 
-            if self.phase == "passing":
-                for player_id in PLAYER_IDS:
-                    if player_id in self.pending_passes:
-                        continue
-                    if player_id in self.bot_seats:
-                        bot = RandomBot(player_id=player_id)
-                        self.pending_passes[player_id] = bot.choose_pass(
-                            hand=self.state.hands[player_id],
-                            state=self.state,
-                            rng=self.rng,
-                        )
-                        progressed = True
-
-                if len(self.pending_passes) == len(PLAYER_IDS):
-                    pass_map = dict(self.pending_passes)
-                    apply_pass(state=self.state, pass_map=pass_map)
-                    self._record_pass_applied(pass_map=pass_map)
-                    self.pending_passes.clear()
-                    self.phase = "playing"
-                    progressed = True
-                    self.version += 1
-                else:
-                    break
-
-            if self.phase == "playing":
-                if is_hand_over(self.state):
-                    self.phase = "hand_scoring"
-                    progressed = True
-                    self.version += 1
-
-                while self.phase == "playing":
-                    if is_hand_over(self.state):
-                        self.phase = "hand_scoring"
-                        progressed = True
-                        self.version += 1
-                        break
-
-                    if self.state.turn is None:
-                        raise InvalidTableActionError("Game state turn is unset during playing phase.")
-                    if self.state.turn not in self.bot_seats:
-                        break
-
-                    bot_player = self.state.turn
-                    bot = RandomBot(player_id=bot_player)
-                    card = bot.choose_play(state=self.state, rng=self.rng)
-                    play_card(state=self.state, player_id=bot_player, card=card)
-                    self._record_card_played(player_id=bot_player, card=card)
-                    progressed = True
-                    self.version += 1
-
-                    if is_hand_over(self.state):
-                        self.phase = "hand_scoring"
-                        progressed = True
-                        self.version += 1
-                        break
-
-                if self.phase == "playing" and self.state.turn not in self.bot_seats:
-                    break
-
-            if self.phase == "hand_scoring":
-                if not self.state.hand_scored or not is_hand_over(self.state):
-                    raise InvalidTableActionError("Cannot transition from hand_scoring before hand completion.")
-                self._record_hand_scored_if_needed()
-
-                if is_game_over(self.state):
-                    self.phase = "game_over"
-                    self.version += 1
-                    break
-
-                deal(state=self.state, rng=self.rng)
-                if self.recorder is not None:
-                    self.recorder.record_hand_dealt(self.state)
+    def _advance_one_action(self) -> AdvanceAction | None:
+        if self.phase == "passing":
+            if len(self.pending_passes) == len(PLAYER_IDS):
+                pass_map = dict(self.pending_passes)
+                apply_pass(state=self.state, pass_map=pass_map)
+                self._record_pass_applied(pass_map=pass_map)
                 self.pending_passes.clear()
-                self.phase = "playing" if self.state.pass_applied else "passing"
-                self.hand_score_start = dict(self.state.scores)
+                self.phase = "playing"
                 self.version += 1
-                progressed = True
-                continue
+                return "pass_applied"
 
-            if self.phase in {"lobby", "game_over"}:
-                break
+            for player_id in PLAYER_IDS:
+                if player_id in self.pending_passes or player_id not in self.bot_seats:
+                    continue
+                bot = RandomBot(player_id=player_id)
+                self.pending_passes[player_id] = bot.choose_pass(
+                    hand=self.state.hands[player_id],
+                    state=self.state,
+                    rng=self.rng,
+                )
+                self.version += 1
+                return "bot_pass_submitted"
+            return None
 
-            if not progressed:
-                break
+        if self.phase == "playing":
+            if is_hand_over(self.state):
+                self.phase = "hand_scoring"
+                self.version += 1
+                return "hand_scoring_entered"
+
+            if self.state.turn is None:
+                raise InvalidTableActionError("Game state turn is unset during playing phase.")
+            if self.state.turn not in self.bot_seats:
+                return None
+
+            bot_player = self.state.turn
+            bot = RandomBot(player_id=bot_player)
+            card = bot.choose_play(state=self.state, rng=self.rng)
+            play_card(state=self.state, player_id=bot_player, card=card)
+            self._record_card_played(player_id=bot_player, card=card)
+            self.version += 1
+            return "bot_card_played"
+
+        if self.phase == "hand_scoring":
+            if not self.state.hand_scored or not is_hand_over(self.state):
+                raise InvalidTableActionError("Cannot transition from hand_scoring before hand completion.")
+            self._record_hand_scored_if_needed()
+
+            if is_game_over(self.state):
+                self.phase = "game_over"
+                self.version += 1
+                return "game_over"
+
+            deal(state=self.state, rng=self.rng)
+            if self.recorder is not None:
+                self.recorder.record_hand_dealt(self.state)
+            self.pending_passes.clear()
+            self.phase = "playing" if self.state.pass_applied else "passing"
+            self.hand_score_start = dict(self.state.scores)
+            self.version += 1
+            return "next_hand_dealt"
+
+        return None
 
     def _require_participant(self, player_secret: str) -> Participant:
         participant = self.participants.get(player_secret)
@@ -274,6 +296,14 @@ class Table:
         if self.seat_secrets[participant.seat] != player_secret:
             raise UnauthorizedError("Player secret does not control this seat.")
         return participant.seat
+
+    def _require_pace_controller(self, player_secret: str) -> None:
+        participant = self._require_participant(player_secret)
+        if self.host_secret is not None and player_secret == self.host_secret:
+            return
+        if participant.seat == to_player_id(0):
+            return
+        raise UnauthorizedError("Only the host or seat 0 can control table pacing.")
 
     def _record_pass_applied(self, *, pass_map: dict[PlayerId, list[Card]]) -> None:
         if self.recorder is None:
@@ -321,6 +351,7 @@ class TableManager:
         display_name: str,
         target_score: int = 50,
         seed: int | None = None,
+        auto_advance: bool = False,
     ) -> tuple[Table, str]:
         table_code = self._generate_table_code()
         table_seed = seed if seed is not None else secrets.randbelow(2**32)
@@ -333,6 +364,7 @@ class TableManager:
             config=config,
             rng=rng,
             state=state,
+            auto_advance=auto_advance,
         )
         if self.record_store is not None:
             recorder, record_path, game_id = self.record_store.create_game_recorder(
@@ -348,6 +380,7 @@ class TableManager:
             table.hand_score_start = dict(state.scores)
 
         creator_secret = table.join(display_name=display_name)
+        table.host_secret = creator_secret
         self.tables[table_code] = table
         return table, creator_secret
 
@@ -380,6 +413,12 @@ class TableManager:
         table = self.get_table(table_code)
         table.play(player_secret=player_secret, card_code=card)
         self._post_action(table)
+
+    def advance_one_action(self, table_code: str, *, player_secret: str) -> AdvanceResult:
+        table = self.get_table(table_code)
+        result = table.advance_one_action(player_secret=player_secret)
+        self._post_action(table)
+        return result
 
     def _post_action(self, table: Table) -> None:
         if table.phase != "game_over":
@@ -432,6 +471,7 @@ def _card_from_code(code: str) -> Card:
 
 
 __all__ = [
+    "AdvanceResult",
     "InvalidTableActionError",
     "Table",
     "TableError",

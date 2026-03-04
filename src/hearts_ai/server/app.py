@@ -106,10 +106,14 @@ def create_app(*, table_manager: TableManager | None = None) -> Any:
         target_score = int(payload.get("target_score", 50))
         seed_raw = payload.get("seed")
         seed = int(seed_raw) if seed_raw is not None else None
+        auto_advance_raw = payload.get("auto_advance", False)
+        if not isinstance(auto_advance_raw, bool):
+            raise HTTPException(status_code=400, detail="Field 'auto_advance' must be a boolean.")
         table, player_secret = manager.create_table(
             display_name=display_name,
             target_score=target_score,
             seed=seed,
+            auto_advance=auto_advance_raw,
         )
         return {
             "table_code": table.table_code,
@@ -202,6 +206,28 @@ def create_app(*, table_manager: TableManager | None = None) -> Any:
         except TableError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return {"ok": True}
+
+    @app.post("/tables/{table_code}/advance")
+    async def advance_table(table_code: str, payload: dict[str, Any]) -> dict[str, Any]:
+        player_secret = str(payload.get("player_secret", ""))
+        try:
+            result = manager.advance_one_action(table_code, player_secret=player_secret)
+            table = manager.get_table(table_code)
+            if result.advanced:
+                await hub.broadcast_snapshot(table_code=table.table_code, manager=manager)
+        except TableNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except UnauthorizedError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except TableError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {
+            "ok": True,
+            "advanced": result.advanced,
+            "action": result.action,
+            "can_advance": result.can_advance,
+            "snapshot": table_snapshot(table, viewer_secret=player_secret),
+        }
 
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket) -> None:

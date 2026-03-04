@@ -73,7 +73,7 @@ def test_rest_claim_seat_broadcasts_snapshot() -> None:
 
 
 def _drive_game_to_completion(client: TestClient, *, table_code: str, player_secret: str) -> dict[str, int]:
-    max_steps = 1000
+    max_steps = 3000
     for _ in range(max_steps):
         snapshot = client.get(
             f"/tables/{table_code}",
@@ -89,6 +89,11 @@ def _drive_game_to_completion(client: TestClient, *, table_code: str, player_sec
             assert viewer_seat is not None
             viewer_key = str(viewer_seat)
             if snapshot["pass_submissions"].get(viewer_key):
+                response = client.post(
+                    f"/tables/{table_code}/advance",
+                    json={"player_secret": player_secret},
+                )
+                assert response.status_code == 200
                 continue
             pass_count = int(snapshot["pass_count"])
             cards = sorted(snapshot["viewer_hand"])[:pass_count]
@@ -99,12 +104,33 @@ def _drive_game_to_completion(client: TestClient, *, table_code: str, player_sec
             assert response.status_code == 200
             continue
 
-        if phase == "playing" and snapshot["turn"] == snapshot["viewer_seat"]:
-            legal = snapshot["viewer_legal_moves"]
-            assert legal
+        if phase == "playing":
+            if snapshot["turn"] == snapshot["viewer_seat"]:
+                legal = snapshot["viewer_legal_moves"]
+                if not legal:
+                    response = client.post(
+                        f"/tables/{table_code}/advance",
+                        json={"player_secret": player_secret},
+                    )
+                    assert response.status_code == 200
+                    continue
+                response = client.post(
+                    f"/tables/{table_code}/play",
+                    json={"player_secret": player_secret, "card": legal[0]},
+                )
+                assert response.status_code == 200
+                continue
             response = client.post(
-                f"/tables/{table_code}/play",
-                json={"player_secret": player_secret, "card": legal[0]},
+                f"/tables/{table_code}/advance",
+                json={"player_secret": player_secret},
+            )
+            assert response.status_code == 200
+            continue
+
+        if phase == "hand_scoring":
+            response = client.post(
+                f"/tables/{table_code}/advance",
+                json={"player_secret": player_secret},
             )
             assert response.status_code == 200
             continue
@@ -179,3 +205,37 @@ def test_server_integration_full_game_deterministic_with_websocket(tmp_path) -> 
     assert len(replayed) == 1
     _, replayed_state = replayed[0]
     assert {str(player): score for player, score in replayed_state.scores.items()} == scores_one
+
+
+def test_advance_endpoint_returns_snapshot_and_can_advance() -> None:
+    manager = TableManager()
+    app = create_app(table_manager=manager)
+
+    with TestClient(app) as client:
+        created = client.post(
+            "/tables",
+            json={"display_name": "Host", "target_score": 20, "seed": 19},
+        ).json()
+        table_code = created["table_code"]
+        player_secret = created["player_secret"]
+
+        assert client.post(
+            f"/tables/{table_code}/seats/0",
+            json={"player_secret": player_secret},
+        ).status_code == 200
+        assert client.post(f"/tables/{table_code}/bots/1").status_code == 200
+        assert client.post(f"/tables/{table_code}/bots/2").status_code == 200
+        assert client.post(f"/tables/{table_code}/bots/3").status_code == 200
+
+        response = client.post(
+            f"/tables/{table_code}/advance",
+            json={"player_secret": player_secret},
+        )
+        payload = response.json()
+
+        assert response.status_code == 200
+        assert payload["ok"] is True
+        assert payload["advanced"] is True
+        assert payload["action"] in {"bot_pass_submitted", "pass_applied", "bot_card_played"}
+        assert isinstance(payload["can_advance"], bool)
+        assert isinstance(payload["snapshot"], dict)

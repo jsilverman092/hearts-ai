@@ -10,9 +10,17 @@ from hearts_ai.server.tables import Table
 
 def table_snapshot(table: Table, *, viewer_secret: str | None = None) -> dict[str, Any]:
     viewer_seat = None
+    viewer_can_control_pace = False
     if viewer_secret is not None:
         participant = table.participants.get(viewer_secret)
         viewer_seat = participant.seat if participant is not None else None
+        viewer_can_control_pace = bool(
+            participant is not None
+            and (
+                (table.host_secret is not None and viewer_secret == table.host_secret)
+                or participant.seat == 0
+            )
+        )
 
     seats: list[dict[str, Any]] = []
     for player_id in PLAYER_IDS:
@@ -69,6 +77,7 @@ def table_snapshot(table: Table, *, viewer_secret: str | None = None) -> dict[st
         "current_trick": trick_cards,
         "seats": seats,
         "viewer_seat": int(viewer_seat) if viewer_seat is not None else None,
+        "viewer_can_control_pace": viewer_can_control_pace,
         "viewer_hand": hand_cards,
         "viewer_legal_moves": legal_for_viewer,
         "pass_submissions": pass_status,

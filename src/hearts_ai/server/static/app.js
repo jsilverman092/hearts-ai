@@ -1,5 +1,6 @@
 const SCHEMA_VERSION = 1;
 const RECONNECT_DELAY_MS = 1500;
+const DEFAULT_PACE_MS = 900;
 
 const appState = {
   tableCode: null,
@@ -7,6 +8,9 @@ const appState = {
   displayName: "",
   ws: null,
   reconnectTimer: null,
+  advanceTimer: null,
+  advanceInFlight: false,
+  paceMs: DEFAULT_PACE_MS,
   snapshot: null,
   selectedPassCards: new Set(),
 };
@@ -57,6 +61,85 @@ function saveSession() {
     displayName: appState.displayName,
   };
   window.localStorage.setItem("hearts_ai_session", JSON.stringify(payload));
+}
+
+function clearAdvanceTimer() {
+  if (!appState.advanceTimer) {
+    return;
+  }
+  window.clearTimeout(appState.advanceTimer);
+  appState.advanceTimer = null;
+}
+
+function canControlPace(snapshot) {
+  return Boolean(snapshot && snapshot.viewer_can_control_pace);
+}
+
+function shouldAutoAdvance(snapshot) {
+  if (!snapshot || !appState.tableCode || !appState.playerSecret) {
+    return false;
+  }
+  if (!canControlPace(snapshot)) {
+    return false;
+  }
+
+  if (snapshot.phase === "hand_scoring") {
+    return true;
+  }
+
+  if (snapshot.phase === "passing") {
+    if (snapshot.viewer_seat === null) {
+      return false;
+    }
+    const viewerKey = String(snapshot.viewer_seat);
+    return Boolean(snapshot.pass_submissions && snapshot.pass_submissions[viewerKey]);
+  }
+
+  if (snapshot.phase === "playing") {
+    if (snapshot.turn === null) {
+      return false;
+    }
+    if (snapshot.viewer_seat !== null && snapshot.turn === snapshot.viewer_seat) {
+      return (snapshot.viewer_legal_moves || []).length === 0;
+    }
+    return true;
+  }
+
+  return false;
+}
+
+async function advanceOneAction() {
+  if (appState.advanceInFlight || !appState.tableCode || !appState.playerSecret) {
+    return;
+  }
+  appState.advanceInFlight = true;
+  try {
+    const response = await apiRequest(`/tables/${appState.tableCode}/advance`, "POST", {
+      player_secret: appState.playerSecret,
+    });
+    if (response && response.snapshot) {
+      appState.snapshot = response.snapshot;
+      render();
+    }
+  } catch (error) {
+    setInfo(error.message);
+  } finally {
+    appState.advanceInFlight = false;
+    scheduleAutoAdvance();
+  }
+}
+
+function scheduleAutoAdvance(snapshot = appState.snapshot) {
+  clearAdvanceTimer();
+  if (appState.advanceInFlight) {
+    return;
+  }
+  if (!shouldAutoAdvance(snapshot)) {
+    return;
+  }
+  appState.advanceTimer = window.setTimeout(() => {
+    void advanceOneAction();
+  }, appState.paceMs);
 }
 
 function loadSession() {
@@ -243,6 +326,8 @@ function connectWebSocket() {
 
   socket.addEventListener("close", () => {
     setConnectionStatus("offline", false);
+    clearAdvanceTimer();
+    appState.advanceInFlight = false;
     if (!appState.tableCode) {
       return;
     }
@@ -474,6 +559,7 @@ function render(snapshot = appState.snapshot) {
     dom.phaseValue.textContent = "-";
     dom.viewerSeatValue.textContent = "spectator";
     dom.tableSection.classList.add("hidden");
+    clearAdvanceTimer();
     return;
   }
 
@@ -517,6 +603,7 @@ function render(snapshot = appState.snapshot) {
   renderTrick(snapshot);
   renderPassPanel(snapshot);
   renderHand(snapshot);
+  scheduleAutoAdvance(snapshot);
 }
 
 function wireEvents() {
@@ -541,4 +628,3 @@ function boot() {
 }
 
 boot();
-

@@ -1,9 +1,12 @@
 from pathlib import Path
 
+import pytest
+
+from hearts_ai.engine.game import is_hand_over
 from hearts_ai.engine.record import replay_jsonl
 from hearts_ai.engine.rules import legal_moves
 from hearts_ai.server.state_views import table_snapshot
-from hearts_ai.server.tables import TableManager
+from hearts_ai.server.tables import TableManager, UnauthorizedError
 
 
 def test_table_starts_after_all_seats_filled() -> None:
@@ -23,15 +26,21 @@ def test_table_starts_after_all_seats_filled() -> None:
 
 def test_all_bot_table_runs_to_game_over() -> None:
     manager = TableManager()
-    table, _ = manager.create_table(display_name="Host", target_score=20, seed=1)
+    table, player_secret = manager.create_table(display_name="Host", target_score=20, seed=1)
     manager.add_bot(table.table_code, seat=0)
     manager.add_bot(table.table_code, seat=1)
     manager.add_bot(table.table_code, seat=2)
     manager.add_bot(table.table_code, seat=3)
 
-    table = manager.get_table(table.table_code)
-    assert table.phase == "game_over"
-    assert any(score >= 20 for score in table.state.scores.values())
+    for _ in range(2000):
+        table = manager.get_table(table.table_code)
+        if table.phase == "game_over":
+            break
+        manager.advance_one_action(table.table_code, player_secret=player_secret)
+
+    finished = manager.get_table(table.table_code)
+    assert finished.phase == "game_over"
+    assert any(score >= 20 for score in finished.state.scores.values())
 
 
 def test_state_snapshot_hides_other_hands() -> None:
@@ -59,21 +68,30 @@ def test_human_plus_bots_game_reaches_game_over_without_bot_legal_move_crash() -
     manager.add_bot(table.table_code, seat=2)
     manager.add_bot(table.table_code, seat=3)
 
-    for _ in range(600):
+    for _ in range(2000):
         current = manager.get_table(table.table_code)
         if current.phase == "game_over":
             break
         if current.phase == "passing":
             if 0 in current.pending_passes:
+                manager.advance_one_action(table.table_code, player_secret=player_secret)
                 continue
             hand = sorted(current.state.hands[0])
             cards = [str(card) for card in hand[: current.config.pass_count]]
             manager.submit_pass(table.table_code, player_secret=player_secret, cards=cards)
             continue
         if current.phase == "playing":
+            if is_hand_over(current.state):
+                manager.advance_one_action(table.table_code, player_secret=player_secret)
+                continue
             if current.state.turn == 0:
                 moves = legal_moves(current.state, 0)
                 manager.play_card(table.table_code, player_secret=player_secret, card=str(moves[0]))
+            else:
+                manager.advance_one_action(table.table_code, player_secret=player_secret)
+            continue
+        if current.phase == "hand_scoring":
+            manager.advance_one_action(table.table_code, player_secret=player_secret)
             continue
 
     assert manager.get_table(table.table_code).phase == "game_over"
@@ -81,11 +99,17 @@ def test_human_plus_bots_game_reaches_game_over_without_bot_legal_move_crash() -
 
 def test_persistence_writes_replay_and_summary(tmp_path: Path) -> None:
     manager = TableManager.with_persistence(records_dir=tmp_path)
-    table, _ = manager.create_table(display_name="Host", target_score=20, seed=13)
+    table, player_secret = manager.create_table(display_name="Host", target_score=20, seed=13)
     manager.add_bot(table.table_code, seat=0)
     manager.add_bot(table.table_code, seat=1)
     manager.add_bot(table.table_code, seat=2)
     manager.add_bot(table.table_code, seat=3)
+
+    for _ in range(2000):
+        current = manager.get_table(table.table_code)
+        if current.phase == "game_over":
+            break
+        manager.advance_one_action(table.table_code, player_secret=player_secret)
 
     finished = manager.get_table(table.table_code)
     assert finished.phase == "game_over"
@@ -101,3 +125,17 @@ def test_persistence_writes_replay_and_summary(tmp_path: Path) -> None:
 
     summary_lines = finished.summary_path.read_text(encoding="utf-8").strip().splitlines()
     assert len(summary_lines) == 1
+
+
+def test_advance_requires_host_or_seat_zero() -> None:
+    manager = TableManager()
+    table, host_secret = manager.create_table(display_name="Host", target_score=20, seed=17)
+    guest_secret = manager.join_table(table.table_code, display_name="Guest")
+
+    manager.claim_seat(table.table_code, player_secret=host_secret, seat=1)
+    manager.claim_seat(table.table_code, player_secret=guest_secret, seat=2)
+    manager.add_bot(table.table_code, seat=0)
+    manager.add_bot(table.table_code, seat=3)
+
+    with pytest.raises(UnauthorizedError):
+        manager.advance_one_action(table.table_code, player_secret=guest_secret)
