@@ -16,6 +16,22 @@ const appState = {
 };
 
 const SEAT_POSITIONS = ["south", "west", "north", "east"];
+const HAND_SUIT_ORDER = { C: 0, D: 1, S: 2, H: 3 };
+const RANK_ORDER = {
+  "2": 0,
+  "3": 1,
+  "4": 2,
+  "5": 3,
+  "6": 4,
+  "7": 5,
+  "8": 6,
+  "9": 7,
+  "10": 8,
+  J: 9,
+  Q: 10,
+  K: 11,
+  A: 12,
+};
 const SUIT_META = {
   C: { entity: "&clubs;", className: "clubs" },
   D: { entity: "&diams;", className: "diamonds" },
@@ -91,6 +107,24 @@ function createCardFace(cardCode, options = {}) {
   card.append(top, center, bottom);
   card.title = String(cardCode || "");
   return card;
+}
+
+function sortCardsForHand(cards) {
+  return [...cards].sort((leftCard, rightCard) => {
+    const left = parseCard(leftCard);
+    const right = parseCard(rightCard);
+    const leftSuit = HAND_SUIT_ORDER[left.suit] ?? 99;
+    const rightSuit = HAND_SUIT_ORDER[right.suit] ?? 99;
+    if (leftSuit !== rightSuit) {
+      return leftSuit - rightSuit;
+    }
+    const leftRank = RANK_ORDER[left.rank] ?? 99;
+    const rightRank = RANK_ORDER[right.rank] ?? 99;
+    if (leftRank !== rightRank) {
+      return leftRank - rightRank;
+    }
+    return String(leftCard).localeCompare(String(rightCard));
+  });
 }
 
 function wsUrl() {
@@ -606,7 +640,8 @@ function renderPassPanel(snapshot) {
     dom.passHint.textContent = `Select ${passCount} cards to pass.`;
   }
 
-  for (const card of snapshot.viewer_hand) {
+  const orderedHand = sortCardsForHand(snapshot.viewer_hand || []);
+  for (const card of orderedHand) {
     const button = document.createElement("button");
     button.className = "card-btn";
     button.appendChild(createCardFace(card));
@@ -629,8 +664,9 @@ function renderHand(snapshot) {
   dom.handGrid.innerHTML = "";
   const legal = new Set(snapshot.viewer_legal_moves || []);
   const canPlay = snapshot.phase === "playing" && snapshot.turn === snapshot.viewer_seat;
+  const orderedHand = sortCardsForHand(snapshot.viewer_hand || []);
 
-  for (const card of snapshot.viewer_hand || []) {
+  for (const card of orderedHand) {
     const button = document.createElement("button");
     button.className = "card-btn";
     button.appendChild(createCardFace(card));
