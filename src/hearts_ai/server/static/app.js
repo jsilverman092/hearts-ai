@@ -15,6 +15,14 @@ const appState = {
   selectedPassCards: new Set(),
 };
 
+const SEAT_POSITIONS = ["south", "west", "north", "east"];
+const SUIT_META = {
+  C: { entity: "&clubs;", className: "clubs" },
+  D: { entity: "&diams;", className: "diamonds" },
+  H: { entity: "&hearts;", className: "hearts" },
+  S: { entity: "&spades;", className: "spades" },
+};
+
 const dom = {
   displayName: document.getElementById("displayName"),
   targetScore: document.getElementById("targetScore"),
@@ -28,9 +36,9 @@ const dom = {
   viewerSeatValue: document.getElementById("viewerSeatValue"),
   phaseValue: document.getElementById("phaseValue"),
   tableSection: document.getElementById("tableSection"),
-  seatsGrid: document.getElementById("seatsGrid"),
-  scoreGrid: document.getElementById("scoreGrid"),
+  tableSurface: document.getElementById("tableSurface"),
   trickGrid: document.getElementById("trickGrid"),
+  lastTrickLine: document.getElementById("lastTrickLine"),
   metaLine: document.getElementById("metaLine"),
   infoLine: document.getElementById("infoLine"),
   handGrid: document.getElementById("handGrid"),
@@ -39,6 +47,51 @@ const dom = {
   passHint: document.getElementById("passHint"),
   submitPassBtn: document.getElementById("submitPassBtn"),
 };
+
+function seatPositionForViewer(seat, viewerSeat) {
+  const anchorSeat = viewerSeat === null ? 0 : Number(viewerSeat);
+  const relative = (Number(seat) - anchorSeat + 4) % 4;
+  return SEAT_POSITIONS[relative];
+}
+
+function parseCard(cardCode) {
+  const normalized = String(cardCode || "").toUpperCase();
+  if (normalized.length < 2) {
+    return { rank: "?", suit: "?", meta: null };
+  }
+  const suit = normalized.slice(-1);
+  const rank = normalized.slice(0, -1);
+  return { rank, suit, meta: SUIT_META[suit] || null };
+}
+
+function createCardFace(cardCode, options = {}) {
+  const { small = false } = options;
+  const parsed = parseCard(cardCode);
+  const card = document.createElement("div");
+  card.className = "playing-card";
+  if (small) {
+    card.classList.add("small");
+  }
+  if (parsed.meta) {
+    card.classList.add(`suit-${parsed.meta.className}`);
+  }
+
+  const top = document.createElement("span");
+  top.className = "corner";
+  top.textContent = parsed.rank;
+
+  const center = document.createElement("span");
+  center.className = "suit";
+  center.innerHTML = parsed.meta ? parsed.meta.entity : "?";
+
+  const bottom = document.createElement("span");
+  bottom.className = "corner bottom";
+  bottom.textContent = parsed.rank;
+
+  card.append(top, center, bottom);
+  card.title = String(cardCode || "");
+  return card;
+}
 
 function wsUrl() {
   const proto = window.location.protocol === "https:" ? "wss" : "ws";
@@ -404,81 +457,123 @@ async function playCard(cardCode) {
   }
 }
 
-function renderSeats(snapshot) {
-  dom.seatsGrid.innerHTML = "";
+function renderSeat(snapshot, seat, seatPosition) {
+  const seatBox = document.createElement("div");
+  seatBox.className = `table-seat pos-${seatPosition}`;
+  if (snapshot.viewer_seat === seat.seat) {
+    seatBox.classList.add("you");
+  }
+  if (seat.kind === "bot") {
+    seatBox.classList.add("bot");
+  }
+  if (snapshot.phase === "playing" && snapshot.turn === seat.seat) {
+    seatBox.classList.add("active");
+  }
+  if (seat.kind === "open") {
+    seatBox.classList.add("open");
+  }
 
-  for (const seat of snapshot.seats) {
-    const seatBox = document.createElement("div");
-    seatBox.className = "seat";
-    if (snapshot.viewer_seat === seat.seat) {
-      seatBox.classList.add("you");
-    }
-    if (seat.kind === "bot") {
-      seatBox.classList.add("bot");
-    }
+  const head = document.createElement("div");
+  head.className = "seat-head";
+  head.innerHTML = `<span>P${seat.seat}</span><span>${seat.kind}</span>`;
 
-    const head = document.createElement("div");
-    head.className = "seat-head";
-    head.innerHTML = `<span>P${seat.seat}</span><span>${seat.kind}</span>`;
+  const name = document.createElement("div");
+  name.className = "seat-name";
+  name.textContent = seat.display_name || (seat.kind === "open" ? "Open seat" : "Bot");
 
-    const name = document.createElement("div");
-    name.className = "seat-name";
-    name.textContent = seat.display_name || (seat.kind === "open" ? "Open seat" : "Bot");
+  const metrics = document.createElement("div");
+  metrics.className = "seat-metrics";
 
+  const totalMetric = document.createElement("span");
+  totalMetric.className = "seat-metric";
+  totalMetric.textContent = `Total ${snapshot.scores[String(seat.seat)] || 0}`;
+
+  const handMetric = document.createElement("span");
+  handMetric.className = "seat-metric";
+  handMetric.textContent = `Hand ${snapshot.seat_hand_points[String(seat.seat)] || 0}`;
+
+  metrics.append(totalMetric, handMetric);
+
+  seatBox.append(head, name, metrics);
+
+  if (seat.kind === "open" && appState.playerSecret) {
     const actions = document.createElement("div");
-    actions.className = "chip-row";
+    actions.className = "seat-actions";
 
-    if (seat.kind === "open" && appState.playerSecret) {
-      const claimBtn = document.createElement("button");
-      claimBtn.className = "ghost";
-      claimBtn.textContent = "Claim";
-      claimBtn.addEventListener("click", () => claimSeat(seat.seat));
-      actions.appendChild(claimBtn);
+    const claimBtn = document.createElement("button");
+    claimBtn.className = "ghost";
+    claimBtn.textContent = "Claim";
+    claimBtn.addEventListener("click", () => claimSeat(seat.seat));
+    actions.appendChild(claimBtn);
 
-      const botBtn = document.createElement("button");
-      botBtn.className = "ghost";
-      botBtn.textContent = "Add bot";
-      botBtn.addEventListener("click", () => addBot(seat.seat));
-      actions.appendChild(botBtn);
+    const botBtn = document.createElement("button");
+    botBtn.className = "ghost";
+    botBtn.textContent = "Add bot";
+    botBtn.addEventListener("click", () => addBot(seat.seat));
+    actions.appendChild(botBtn);
+
+    seatBox.appendChild(actions);
+  }
+
+  return seatBox;
+}
+
+function renderTrick(snapshot, seatPositionById) {
+  dom.trickGrid.innerHTML = "";
+
+  for (const seat of snapshot.seats) {
+    const slot = document.createElement("div");
+    slot.className = `trick-slot pos-${seatPositionById[seat.seat]}`;
+
+    const label = document.createElement("span");
+    label.className = "trick-label";
+    label.textContent = `P${seat.seat}`;
+    slot.appendChild(label);
+
+    const play = (snapshot.current_trick || []).find((entry) => entry.player_id === seat.seat);
+    if (play) {
+      slot.appendChild(createCardFace(play.card, { small: true }));
     }
 
-    seatBox.append(head, name, actions);
-    dom.seatsGrid.appendChild(seatBox);
+    dom.trickGrid.appendChild(slot);
   }
-}
 
-function renderScores(snapshot) {
-  dom.scoreGrid.innerHTML = "";
-  for (const seat of snapshot.seats) {
-    const row = document.createElement("div");
-    row.className = "chip-row";
-    const badge = document.createElement("span");
-    badge.className = "chip";
-    badge.textContent = `P${seat.seat}`;
-    const value = document.createElement("span");
-    value.className = "chip";
-    value.textContent = String(snapshot.scores[String(seat.seat)] || 0);
-    row.append(badge, value);
-    dom.scoreGrid.appendChild(row);
-  }
-}
-
-function renderTrick(snapshot) {
-  dom.trickGrid.innerHTML = "";
   if (!snapshot.current_trick || snapshot.current_trick.length === 0) {
     const empty = document.createElement("span");
-    empty.className = "hint";
+    empty.className = "trick-empty";
     empty.textContent = "No cards in trick.";
     dom.trickGrid.appendChild(empty);
+  }
+}
+
+function renderLastTrick(snapshot) {
+  if (!snapshot.last_trick) {
+    dom.lastTrickLine.textContent = "No completed trick yet.";
     return;
   }
+  const points = Number(snapshot.last_trick.points || 0);
+  const winner = Number(snapshot.last_trick.winner);
+  const pointWord = points === 1 ? "point" : "points";
+  dom.lastTrickLine.textContent =
+    `Last trick: P${winner} took ${points} ${pointWord} (T${snapshot.last_trick.trick_seq}).`;
+}
 
-  for (const play of snapshot.current_trick) {
-    const token = document.createElement("span");
-    token.className = "chip";
-    token.textContent = `P${play.player_id}: ${play.card}`;
-    dom.trickGrid.appendChild(token);
+function renderTable(snapshot) {
+  for (const child of Array.from(dom.tableSurface.children)) {
+    if (child !== dom.trickGrid) {
+      child.remove();
+    }
   }
+
+  const seatPositionById = {};
+  for (const seat of snapshot.seats) {
+    const position = seatPositionForViewer(seat.seat, snapshot.viewer_seat);
+    seatPositionById[seat.seat] = position;
+    dom.tableSurface.appendChild(renderSeat(snapshot, seat, position));
+  }
+
+  renderTrick(snapshot, seatPositionById);
+  renderLastTrick(snapshot);
 }
 
 function togglePassCard(cardCode, passCount) {
@@ -514,7 +609,8 @@ function renderPassPanel(snapshot) {
   for (const card of snapshot.viewer_hand) {
     const button = document.createElement("button");
     button.className = "card-btn";
-    button.textContent = card;
+    button.appendChild(createCardFace(card));
+    button.title = `Pass ${card}`;
     if (appState.selectedPassCards.has(card)) {
       button.classList.add("selected");
     }
@@ -537,7 +633,8 @@ function renderHand(snapshot) {
   for (const card of snapshot.viewer_hand || []) {
     const button = document.createElement("button");
     button.className = "card-btn";
-    button.textContent = card;
+    button.appendChild(createCardFace(card));
+    button.title = `Play ${card}`;
     if (legal.has(card)) {
       button.classList.add("legal");
     }
@@ -561,6 +658,13 @@ function render(snapshot = appState.snapshot) {
     dom.tableSection.classList.add("hidden");
     clearAdvanceTimer();
     return;
+  }
+
+  if (!snapshot.seat_hand_points) {
+    snapshot.seat_hand_points = { "0": 0, "1": 0, "2": 0, "3": 0 };
+  }
+  if (!("last_trick" in snapshot)) {
+    snapshot.last_trick = null;
   }
 
   dom.tableSection.classList.remove("hidden");
@@ -598,9 +702,7 @@ function render(snapshot = appState.snapshot) {
     setInfo("Game over. Create another table to play again.");
   }
 
-  renderSeats(snapshot);
-  renderScores(snapshot);
-  renderTrick(snapshot);
+  renderTable(snapshot);
   renderPassPanel(snapshot);
   renderHand(snapshot);
   scheduleAutoAdvance(snapshot);

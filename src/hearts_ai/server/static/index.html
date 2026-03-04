@@ -55,22 +55,13 @@
       </section>
 
       <section id="tableSection" class="panel table hidden">
-        <div class="table-grid">
-          <article class="card">
-            <h3>Seats</h3>
-            <div id="seatsGrid" class="seats-grid"></div>
-          </article>
-
-          <article class="card">
-            <h3>Scores</h3>
-            <div id="scoreGrid" class="score-grid"></div>
-          </article>
-
-          <article class="card">
-            <h3>Current Trick</h3>
+        <article class="card table-card">
+          <h3>Table</h3>
+          <div id="tableSurface" class="table-surface">
             <div id="trickGrid" class="trick-grid"></div>
-          </article>
-        </div>
+          </div>
+          <p id="lastTrickLine" class="hint">No completed trick yet.</p>
+        </article>
 
         <article class="card meta-card">
           <h3>Hand Status</h3>
@@ -92,6 +83,6 @@
       </section>
     </main>
 
-    <script src="/static/app.js?v=2" defer></script>
+    <script src="/static/app.js?v=3" defer></script>
   </body>
 </html>
