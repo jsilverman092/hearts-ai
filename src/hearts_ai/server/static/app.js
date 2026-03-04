@@ -683,16 +683,8 @@ function renderTrick(snapshot, seatPositionById) {
     dom.trickGrid.appendChild(slot);
   }
 
-  if (displayedTrick.length === 0) {
-    const empty = document.createElement("span");
-    empty.className = "trick-empty";
-    empty.textContent = "No cards in trick.";
-    dom.trickGrid.appendChild(empty);
-  } else if (isResolvedDisplay) {
-    const banner = document.createElement("span");
-    banner.className = "trick-empty";
-    banner.textContent = `Trick ${snapshot.last_trick.trick_seq} complete`;
-    dom.trickGrid.appendChild(banner);
+  if (displayedTrick.length === 0 || isResolvedDisplay) {
+    return;
   }
 }
 
