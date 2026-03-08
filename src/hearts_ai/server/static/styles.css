@@ -9,9 +9,9 @@
   --panel: rgba(255, 255, 255, 0.8);
   --felt0: #1d6e44;
   --felt1: #145034;
-  --mono: "Consolas", "Courier New", monospace;
-  --display: "Trebuchet MS", "Lucida Sans Unicode", sans-serif;
-  --text: "Cambria", "Times New Roman", serif;
+  --mono: "JetBrains Mono", "Consolas", "Courier New", monospace;
+  --display: "Playfair Display", Georgia, serif;
+  --text: "Lato", system-ui, sans-serif;
   --radius: 14px;
 }
 
@@ -48,6 +48,7 @@ body {
   font-family: var(--display);
   letter-spacing: 0.05em;
   font-size: clamp(2rem, 6vw, 3.4rem);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
 .subtitle {
@@ -60,6 +61,15 @@ body {
   margin: 0;
   font-family: var(--mono);
   font-size: 0.82rem;
+  letter-spacing: 0.22em;
+  color: var(--accent);
+}
+
+.suit-row {
+  margin: 0.25rem 0 0;
+  font-size: 1.05rem;
+  letter-spacing: 0.35em;
+  opacity: 0.38;
   color: var(--accent);
 }
 
@@ -67,8 +77,10 @@ body {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--panel);
-  box-shadow: 0 8px 18px rgba(35, 31, 22, 0.1);
-  backdrop-filter: blur(3px);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.65) inset,
+    0 10px 24px rgba(35, 31, 22, 0.13);
+  backdrop-filter: blur(6px);
 }
 
 .controls {
@@ -112,6 +124,13 @@ input {
   border: 1px solid var(--line);
   padding: 0.52rem 0.62rem;
   background: #fffef8;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(10, 106, 63, 0.14);
 }
 
 button {
@@ -119,7 +138,7 @@ button {
   border: 1px solid transparent;
   padding: 0.56rem 0.75rem;
   cursor: pointer;
-  transition: transform 120ms ease, filter 120ms ease;
+  transition: transform 120ms ease, filter 120ms ease, box-shadow 120ms ease;
 }
 
 button:disabled {
@@ -132,13 +151,23 @@ button:hover:not(:disabled) {
   filter: saturate(1.05);
 }
 
+button:active:not(:disabled) {
+  transform: translateY(0) scale(0.97);
+  filter: brightness(0.95);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .action {
-  background: var(--accent);
+  background: linear-gradient(175deg, color-mix(in srgb, var(--accent) 85%, white), var(--accent));
   color: #f9f9f7;
 }
 
 .action.alt {
-  background: var(--accent-2);
+  background: linear-gradient(175deg, color-mix(in srgb, var(--accent-2) 85%, white), var(--accent-2));
 }
 
 .ghost {
@@ -146,11 +175,20 @@ button:hover:not(:disabled) {
   border-color: var(--line);
 }
 
+.ghost:hover:not(:disabled) {
+  background: rgba(35, 33, 30, 0.06);
+}
+
 .status-line {
   display: grid;
   gap: 0.72rem;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   padding: 0.72rem 0.9rem;
+}
+
+.status-line > div {
+  border-left: 2px solid var(--line);
+  padding-left: 0.62rem;
 }
 
 .label {
@@ -171,6 +209,15 @@ button:hover:not(:disabled) {
   background: rgba(120, 120, 120, 0.18);
 }
 
+.badge:not(.muted) {
+  animation: pulse-badge 2.4s ease-in-out infinite;
+}
+
+@keyframes pulse-badge {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.7; }
+}
+
 .mono {
   font-family: var(--mono);
 }
@@ -183,9 +230,10 @@ button:hover:not(:disabled) {
 
 .card {
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 14px;
   background: rgba(255, 255, 255, 0.74);
   padding: 0.76rem;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.55) inset;
 }
 
 .table-card {
