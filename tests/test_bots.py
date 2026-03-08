@@ -433,3 +433,77 @@ def test_heuristic_v2_choose_pass_records_reason_payload() -> None:
     assert len(passed) == state.config.pass_count
     assert reason is not None
     assert tuple(passed) == reason.selected_cards
+
+
+def test_heuristic_v2_avoids_leading_queen_spades_when_lower_spade_available() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [
+            Card(Suit.SPADES, Rank.QUEEN),
+            Card(Suit.SPADES, Rank.FIVE),
+            Card(Suit.SPADES, Rank.NINE),
+            Card(Suit.HEARTS, Rank.ACE),
+        ],
+        PlayerId(1): [Card(Suit.CLUBS, Rank.TWO)],
+        PlayerId(2): [Card(Suit.CLUBS, Rank.THREE)],
+        PlayerId(3): [Card(Suit.CLUBS, Rank.FOUR)],
+    }
+    state.hearts_broken = False
+    state.trick_number = 4
+
+    bot = HeuristicBotV2(player_id=PlayerId(0), rollout_samples=0)
+    card = bot.choose_play(state=state, rng=random.Random(70))
+
+    assert card == Card(Suit.SPADES, Rank.FIVE)
+
+
+def test_heuristic_v2_avoids_leading_high_spade_when_lower_spade_available() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [
+            Card(Suit.SPADES, Rank.KING),
+            Card(Suit.SPADES, Rank.SIX),
+            Card(Suit.SPADES, Rank.TEN),
+            Card(Suit.HEARTS, Rank.KING),
+        ],
+        PlayerId(1): [Card(Suit.CLUBS, Rank.TWO)],
+        PlayerId(2): [Card(Suit.CLUBS, Rank.THREE)],
+        PlayerId(3): [Card(Suit.CLUBS, Rank.FOUR)],
+    }
+    state.hearts_broken = False
+    state.trick_number = 6
+
+    bot = HeuristicBotV2(player_id=PlayerId(0), rollout_samples=0)
+    card = bot.choose_play(state=state, rng=random.Random(71))
+
+    assert card == Card(Suit.SPADES, Rank.SIX)
+
+
+def test_heuristic_v2_rollout_scores_lead_candidates() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [
+            Card(Suit.SPADES, Rank.QUEEN),
+            Card(Suit.SPADES, Rank.FIVE),
+            Card(Suit.HEARTS, Rank.ACE),
+        ],
+        PlayerId(1): [Card(Suit.CLUBS, Rank.TWO)],
+        PlayerId(2): [Card(Suit.CLUBS, Rank.THREE)],
+        PlayerId(3): [Card(Suit.CLUBS, Rank.FOUR)],
+    }
+    state.hearts_broken = False
+    state.trick_number = 7
+
+    bot = HeuristicBotV2(player_id=PlayerId(0), rollout_samples=5, rollout_weight=0.5)
+    bot.choose_play(state=state, rng=random.Random(72))
+    reason = bot._peek_last_play_reason()
+
+    assert reason is not None
+    assert reason.mode == "lead"
+
+    queen_entry = next(
+        candidate
+        for candidate in reason.candidates
+        if candidate.card == Card(Suit.SPADES, Rank.QUEEN)
+    )
+    assert abs(queen_entry.rollout_score) > 0.01

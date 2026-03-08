@@ -122,6 +122,7 @@ class HeuristicBotV2:
             base_score, tags = _score_base_v2(
                 state=state,
                 player_id=self.player_id,
+                legal=legal,
                 card=card,
                 mode=mode,
                 moon_target=moon_target,
@@ -257,12 +258,13 @@ def _moon_defense_target(state: GameState, player_id: PlayerId, threshold: int) 
 def _score_base_v2(
     state: GameState,
     player_id: PlayerId,
+    legal: list[Card],
     card: Card,
     mode: Literal["lead", "follow", "discard"],
     moon_target: PlayerId | None,
 ) -> tuple[float, list[str]]:
     if mode == "lead":
-        return _score_lead_v2(state=state, card=card)
+        return _score_lead_v2(state=state, legal=legal, card=card)
     if mode == "follow":
         return _score_follow_v2(
             state=state,
@@ -277,9 +279,16 @@ def _score_base_v2(
     )
 
 
-def _score_lead_v2(state: GameState, card: Card) -> tuple[float, list[str]]:
+def _score_lead_v2(
+    state: GameState,
+    legal: list[Card],
+    card: Card,
+) -> tuple[float, list[str]]:
     score = 0.0
     tags: list[str] = []
+    spade_legal = [candidate for candidate in legal if candidate.suit == Suit.SPADES]
+    lower_spade_available = any(candidate.rank < card.rank for candidate in spade_legal)
+
     if card.suit != Suit.HEARTS:
         score += 2.0
         tags.append("lead_non_heart")
@@ -288,12 +297,27 @@ def _score_lead_v2(state: GameState, card: Card) -> tuple[float, list[str]]:
         tags.append("avoid_heart_lead")
     score -= float(int(card.rank)) * 0.12
     tags.append("prefer_lower_lead")
-    if card in (_QUEEN_SPADES, _KING_SPADES, _ACE_SPADES):
-        score += 1.1
-        tags.append("shed_spade_risk")
+    if card == _QUEEN_SPADES:
+        score -= 4.0 if lower_spade_available else 2.2
+        tags.append("avoid_qs_lead")
+    elif card in (_KING_SPADES, _ACE_SPADES):
+        score -= 2.6 if lower_spade_available else 1.4
+        tags.append("avoid_high_spade_lead")
+    if card.suit == Suit.SPADES and int(card.rank) >= int(Rank.JACK):
+        # High spade leads are broadly risky without strong trick context.
+        score -= 0.8
+        tags.append("cautious_high_spade_lead")
     if state.trick_number == 0:
         score -= float(int(card.rank)) * 0.06
         tags.append("first_trick_conservative_lead")
+    if card == _QUEEN_SPADES and state.hearts_broken:
+        # If hearts are already live, opening with queen is even less attractive.
+        score -= 0.5
+        tags.append("avoid_qs_after_hearts_broken")
+    if card.suit == Suit.SPADES and len(spade_legal) == len(legal):
+        # If we are effectively forced to lead spades, favor lower spades.
+        score -= float(int(card.rank)) * 0.04
+        tags.append("forced_spade_lead_prefer_low")
     return score, tags
 
 
@@ -372,8 +396,6 @@ def _rollout_score_v2(
     rng: random.Random,
 ) -> float:
     if samples <= 0:
-        return 0.0
-    if not state.trick_in_progress and mode == "lead":
         return 0.0
 
     base_trick = [*state.trick_in_progress, (player_id, card)]

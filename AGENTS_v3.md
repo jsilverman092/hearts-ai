@@ -164,9 +164,11 @@ Focus areas:
   - remove context-free "shed spade risk" bonuses on opening leads
   - prevent `Q♠` from being treated as a generally good lead
   - refine lead scoring so dangerous high cards are only shed in defensible spots
+  - once hearts are broken, treat very low hearts as valid escape leads rather than blindly preferring high spades
 - High-spade handling:
   - separate "dangerous to keep" from "safe to unload now"
   - only reward unloading `Q♠` / `K♠` / `A♠` when trick context makes it plausibly safe
+  - penalize `K♠` / `A♠` leads when a cheaper low lead is available that is more likely to get the bot out of the lead
 - Rollout / base-score interaction:
   - ensure rollout does not silently skip the exact situations where lead safety matters most
   - rebalance base heuristics so unsupported bonuses cannot dominate obvious tactical risk
@@ -177,14 +179,17 @@ Testing additions:
 - Add regression tests for clearly bad v2 choices:
   - do not lead `Q♠` when a safer low spade lead exists
   - do not overvalue dangerous high-spade opening leads without supporting context
+  - once hearts are broken, do not lead `K♠` over a low heart escape lead like `3H`
 - Add scenario tests covering:
   - safe vs unsafe spade unload spots
   - opening-lead comparisons across low cards vs dangerous honors
+  - broken-hearts lead comparisons across low hearts vs dangerous high spades
   - moon-defense behavior not overriding obvious local safety
 
 Acceptance criteria:
 - `heuristic_v2` no longer makes obvious tactical self-owns in normal play.
 - Regression tests cover the known high-spade lead failure mode.
+- Regression tests cover the broken-hearts low-heart-vs-high-spade lead case.
 - Benchmark results remain at least competitive with v1 and clearly above random.
 - Phase 3 reason payload hooks remain intact for future UI explanation mode.
 
@@ -194,7 +199,7 @@ Update/add tests:
 - `tests/test_bots.py`:
   - pass-priority scenarios (`Q♠`, high spades, high hearts)
   - play-choice scenarios for lead/follow/off-suit
-  - `heuristic_v2` regression scenarios for dangerous opening leads and unsafe high-spade dumps
+  - `heuristic_v2` regression scenarios for dangerous opening leads, broken-hearts low-heart escape leads, and unsafe high-spade dumps
 - integration/smoke:
   - deterministic full-game runs with heuristic bots
   - legal-move invariants remain enforced
