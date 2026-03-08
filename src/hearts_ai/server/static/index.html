@@ -29,8 +29,8 @@
           <input id="seed" type="number" placeholder="Auto" />
           <label for="botType">Bot Type</label>
           <select id="botType">
-            <option value="random" selected>random</option>
-            <option value="heuristic">heuristic</option>
+            <option value="heuristic" selected>heuristic</option>
+            <option value="random">random</option>
           </select>
           <div class="create-actions">
             <button id="quickSoloBtn" class="action">Quick Solo</button>
@@ -106,10 +106,11 @@
         <article class="card">
           <h3>Your Hand</h3>
           <div id="handGrid" class="hand-grid"></div>
+          <button id="beginHandBtn" class="action hidden">Begin Hand</button>
         </article>
       </section>
     </main>
 
-    <script src="/static/app.js?v=12" defer></script>
+    <script src="/static/app.js?v=16" defer></script>
   </body>
 </html>

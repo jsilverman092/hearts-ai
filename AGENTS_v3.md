@@ -98,6 +98,36 @@ Acceptance criteria:
 - Deterministic behavior remains reproducible with fixed seed.
 - Existing server integration tests remain green with new bot-selection coverage.
 
+## Phase 2.6: UI Gameplay Polish
+
+Scope:
+- Improve hand-flow readability without changing game rules or engine behavior.
+- Keep this phase UI/interaction-only.
+- Prioritize stable, clear feedback over flashy effects.
+
+Implementation targets:
+- Pass flow timing:
+  - minimize wait after pass submission
+  - add explicit `Begin Hand` gate after pass resolution so viewer can review received cards before play starts
+- Pass-result visibility:
+  - highlight newly received cards in viewer hand at hand start
+  - surface "new from pass" context in hand/status messaging
+- Seat score hierarchy:
+  - display Hand points as a large value alongside seat name line
+  - keep Total points as the smaller persistent pill
+- Table readability polish:
+  - tighten seat/table spacing so seat info sits closer to trick action
+  - disable old trick card entry flash animation (future card-flight animation can replace it)
+
+Acceptance criteria:
+- Pass phase advances quickly once submissions are complete.
+- Viewer must explicitly click `Begin Hand` before normal play highlighting/auto-advance resumes at hand start.
+- Newly received pass cards are clearly distinguishable at hand start.
+- Hand points are more prominent than Total points in each seat panel.
+- Trick card placement updates without the previous flash/jump effect.
+- No gameplay/engine rule changes.
+- Existing tests remain green with targeted UI/server coverage updates as needed.
+
 ## Phase 3: HeuristicBot v2 (Risk-Aware Upgrade)
 
 Enhancements:
@@ -146,5 +176,6 @@ Start complex methods (determinized search) only after:
 2. Phase 2 HeuristicBot v1
 3. Phase 2 test coverage
 4. Phase 2.5 server/UI bot-selection plumbing
-5. Phase 3 HeuristicBot v2
-6. Compare v1/v2 and decide on search transition
+5. Phase 2.6 UI gameplay polish
+6. Phase 3 HeuristicBot v2
+7. Compare v1/v2 and decide on search transition

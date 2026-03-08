@@ -2,7 +2,9 @@ const SCHEMA_VERSION = 1;
 const RECONNECT_DELAY_MS = 1500;
 const DEFAULT_PACE_MS = 900;
 const FAST_FORWARD_PACE_MS = 220;
+const PASS_AUTOPLAY_DELAY_MS = 20;
 const TRICK_HOLD_MS = 1500;
+const BOT_OPTIONS = ["heuristic", "random"];
 
 const appState = {
   tableCode: null,
@@ -23,6 +25,10 @@ const appState = {
   snapshot: null,
   selectedPassCards: new Set(),
   seatBotTypeDrafts: {},
+  submittedPassCardsByHand: {},
+  prePassHandByHand: {},
+  receivedPassCardsByHand: {},
+  beginHandPendingByHand: {},
 };
 
 const SEAT_POSITIONS = ["south", "west", "north", "east"];
@@ -79,6 +85,7 @@ const dom = {
   passCards: document.getElementById("passCards"),
   passHint: document.getElementById("passHint"),
   submitPassBtn: document.getElementById("submitPassBtn"),
+  beginHandBtn: document.getElementById("beginHandBtn"),
 };
 
 function seatPositionForViewer(seat, viewerSeat) {
@@ -151,7 +158,7 @@ function wsUrl() {
 
 function globalBotType() {
   if (!dom.botType || !dom.botType.value) {
-    return "random";
+    return "heuristic";
   }
   return dom.botType.value;
 }
@@ -170,6 +177,79 @@ function seatDraftBotType(seat) {
 
 function setSeatDraftBotType(seat, botType) {
   appState.seatBotTypeDrafts[String(seat)] = String(botType);
+}
+
+function handKey(handNumber) {
+  return String(Number(handNumber || 0));
+}
+
+function applySnapshot(snapshot) {
+  const previous = appState.snapshot;
+  maybeCaptureReceivedPassCards(previous, snapshot);
+  appState.snapshot = snapshot;
+  render();
+}
+
+function maybeCaptureReceivedPassCards(previous, nextSnapshot) {
+  if (!previous || !nextSnapshot) {
+    return;
+  }
+  if (previous.phase !== "passing" || nextSnapshot.phase !== "playing") {
+    return;
+  }
+  if (Number(nextSnapshot.trick_number || 0) !== 0) {
+    return;
+  }
+  if (nextSnapshot.viewer_seat === null) {
+    return;
+  }
+
+  const key = handKey(nextSnapshot.hand_number);
+  const submitted = appState.submittedPassCardsByHand[key] || [];
+  if (submitted.length === 0) {
+    appState.receivedPassCardsByHand[key] = [];
+    appState.beginHandPendingByHand[key] = false;
+    return;
+  }
+
+  const prePassHand = appState.prePassHandByHand[key] || previous.viewer_hand || [];
+  const submittedSet = new Set(submitted);
+  const keptCards = new Set(prePassHand.filter((card) => !submittedSet.has(card)));
+  const currentHand = nextSnapshot.viewer_hand || [];
+  appState.receivedPassCardsByHand[key] = currentHand.filter((card) => !keptCards.has(card));
+  appState.beginHandPendingByHand[key] = appState.receivedPassCardsByHand[key].length > 0;
+}
+
+function receivedPassCards(snapshot = appState.snapshot) {
+  if (!snapshot) {
+    return [];
+  }
+  if (snapshot.phase !== "playing" || Number(snapshot.trick_number || 0) !== 0) {
+    return [];
+  }
+  return appState.receivedPassCardsByHand[handKey(snapshot.hand_number)] || [];
+}
+
+function isBeginHandPending(snapshot = appState.snapshot) {
+  if (!snapshot) {
+    return false;
+  }
+  if (snapshot.phase !== "playing") {
+    return false;
+  }
+  if (snapshot.viewer_seat === null) {
+    return false;
+  }
+  if (Number(snapshot.trick_number || 0) !== 0) {
+    return false;
+  }
+  if ((snapshot.current_trick || []).length !== 0) {
+    return false;
+  }
+  if (receivedPassCards(snapshot).length === 0) {
+    return false;
+  }
+  return Boolean(appState.beginHandPendingByHand[handKey(snapshot.hand_number)]);
 }
 
 function setConnectionStatus(label, connected) {
@@ -281,6 +361,9 @@ function shouldAutoAdvance(snapshot) {
   if (isTrickHoldActive(snapshot)) {
     return false;
   }
+  if (isBeginHandPending(snapshot)) {
+    return false;
+  }
 
   if (snapshot.phase === "hand_scoring") {
     return true;
@@ -317,8 +400,7 @@ async function advanceOneAction() {
       player_secret: appState.playerSecret,
     });
     if (response && response.snapshot) {
-      appState.snapshot = response.snapshot;
-      render();
+      applySnapshot(response.snapshot);
     }
   } catch (error) {
     setInfo(error.message);
@@ -338,6 +420,9 @@ function scheduleAutoAdvance(snapshot = appState.snapshot) {
     return;
   }
   let delayMs = appState.paceMs;
+  if (snapshot && snapshot.phase === "passing") {
+    delayMs = Math.min(delayMs, PASS_AUTOPLAY_DELAY_MS);
+  }
   if (
     appState.fastForwardToMyTurn &&
     snapshot &&
@@ -420,6 +505,10 @@ function applyCreatedTableSession(created, displayName) {
   dom.joinCode.value = created.table_code;
   appState.selectedPassCards.clear();
   appState.seatBotTypeDrafts = {};
+  appState.submittedPassCardsByHand = {};
+  appState.prePassHandByHand = {};
+  appState.receivedPassCardsByHand = {};
+  appState.beginHandPendingByHand = {};
   saveSession();
 }
 
@@ -485,6 +574,10 @@ async function joinTable() {
     appState.displayName = displayName;
     appState.selectedPassCards.clear();
     appState.seatBotTypeDrafts = {};
+    appState.submittedPassCardsByHand = {};
+    appState.prePassHandByHand = {};
+    appState.receivedPassCardsByHand = {};
+    appState.beginHandPendingByHand = {};
     saveSession();
     await fetchSnapshot();
     connectWebSocket();
@@ -515,8 +608,7 @@ async function fetchSnapshot() {
     ? `?player_secret=${encodeURIComponent(appState.playerSecret)}`
     : "";
   const snapshot = await apiRequest(`/tables/${appState.tableCode}${secretQuery}`, "GET");
-  appState.snapshot = snapshot;
-  render();
+  applySnapshot(snapshot);
 }
 
 function connectWebSocket() {
@@ -572,8 +664,7 @@ function connectWebSocket() {
     }
 
     if (message.type === "state_snapshot") {
-      appState.snapshot = message.payload || null;
-      render();
+      applySnapshot(message.payload || null);
       return;
     }
 
@@ -642,6 +733,10 @@ async function submitPass() {
     return;
   }
   try {
+    const key = handKey(appState.snapshot.hand_number);
+    appState.submittedPassCardsByHand[key] = Array.from(appState.selectedPassCards);
+    appState.prePassHandByHand[key] = [...(appState.snapshot.viewer_hand || [])];
+
     await apiRequest(`/tables/${appState.tableCode}/pass`, "POST", {
       player_secret: appState.playerSecret,
       cards: Array.from(appState.selectedPassCards),
@@ -686,7 +781,21 @@ function renderSeat(snapshot, seat, seatPosition) {
 
   const head = document.createElement("div");
   head.className = "seat-head";
-  head.innerHTML = `<span>P${seat.seat}</span><span>${seat.kind}</span>`;
+  const seatId = document.createElement("span");
+  seatId.className = "seat-id";
+  seatId.textContent = `P${seat.seat}`;
+
+  const seatStatus = document.createElement("div");
+  seatStatus.className = "seat-status";
+
+  const seatKind = document.createElement("span");
+  seatKind.className = "seat-kind";
+  seatKind.textContent = seat.kind;
+  seatStatus.append(seatKind);
+  head.append(seatId, seatStatus);
+
+  const nameRow = document.createElement("div");
+  nameRow.className = "seat-name-row";
 
   const name = document.createElement("div");
   name.className = "seat-name";
@@ -697,20 +806,21 @@ function renderSeat(snapshot, seat, seatPosition) {
     name.textContent = seat.display_name || (seat.kind === "open" ? "Open seat" : "Bot");
   }
 
+  const handValue = document.createElement("span");
+  handValue.className = "seat-hand-big";
+  handValue.textContent = String(snapshot.seat_hand_points[String(seat.seat)] || 0);
+
+  nameRow.append(name, handValue);
+
   const metrics = document.createElement("div");
   metrics.className = "seat-metrics";
 
   const totalMetric = document.createElement("span");
-  totalMetric.className = "seat-metric";
+  totalMetric.className = "seat-metric seat-metric-total";
   totalMetric.textContent = `Total ${snapshot.scores[String(seat.seat)] || 0}`;
+  metrics.append(totalMetric);
 
-  const handMetric = document.createElement("span");
-  handMetric.className = "seat-metric";
-  handMetric.textContent = `Hand ${snapshot.seat_hand_points[String(seat.seat)] || 0}`;
-
-  metrics.append(totalMetric, handMetric);
-
-  seatBox.append(head, name, metrics);
+  seatBox.append(head, nameRow, metrics);
 
   const canConfigureBots = snapshot.phase === "lobby" && Boolean(appState.playerSecret);
 
@@ -730,7 +840,7 @@ function renderSeat(snapshot, seat, seatPosition) {
     const botSelect = document.createElement("select");
     botSelect.className = "ghost";
     const openDefault = seatDraftBotType(seat);
-    for (const botName of ["random", "heuristic"]) {
+    for (const botName of BOT_OPTIONS) {
       const option = document.createElement("option");
       option.value = botName;
       option.textContent = botName;
@@ -756,7 +866,7 @@ function renderSeat(snapshot, seat, seatPosition) {
     const botSelect = document.createElement("select");
     botSelect.className = "ghost";
     const current = seatDraftBotType(seat);
-    for (const botName of ["random", "heuristic"]) {
+    for (const botName of BOT_OPTIONS) {
       const option = document.createElement("option");
       option.value = botName;
       option.textContent = botName;
@@ -902,7 +1012,9 @@ function renderPassPanel(snapshot) {
 function renderHand(snapshot) {
   dom.handGrid.innerHTML = "";
   const legal = new Set(snapshot.viewer_legal_moves || []);
-  const canPlay = snapshot.phase === "playing" && snapshot.turn === snapshot.viewer_seat;
+  const received = new Set(receivedPassCards(snapshot));
+  const beginPending = isBeginHandPending(snapshot);
+  const canPlay = !beginPending && snapshot.phase === "playing" && snapshot.turn === snapshot.viewer_seat;
   const orderedHand = sortCardsForHand(snapshot.viewer_hand || []);
 
   for (const card of orderedHand) {
@@ -910,19 +1022,40 @@ function renderHand(snapshot) {
     button.className = "card-btn";
     button.appendChild(createCardFace(card));
     button.title = `Play ${card}`;
-    if (legal.has(card)) {
+    if (received.has(card)) {
+      button.classList.add("received");
+      button.title = `New from pass: ${card}`;
+    }
+    if (!beginPending && legal.has(card)) {
       button.classList.add("legal");
     }
 
     if (canPlay && legal.has(card)) {
       button.classList.add("play");
       button.addEventListener("click", () => playCard(card));
-    } else {
+    } else if (!beginPending) {
       button.disabled = true;
+    } else {
+      button.classList.add("review-locked");
     }
 
     dom.handGrid.appendChild(button);
   }
+}
+
+function renderBeginHandButton(snapshot) {
+  const visible = isBeginHandPending(snapshot);
+  dom.beginHandBtn.classList.toggle("hidden", !visible);
+  dom.beginHandBtn.disabled = !visible;
+}
+
+function beginHand() {
+  const snapshot = appState.snapshot;
+  if (!isBeginHandPending(snapshot)) {
+    return;
+  }
+  appState.beginHandPendingByHand[handKey(snapshot.hand_number)] = false;
+  render();
 }
 
 function render(snapshot = appState.snapshot) {
@@ -933,6 +1066,7 @@ function render(snapshot = appState.snapshot) {
     dom.tableSection.classList.add("hidden");
     clearAdvanceTimer();
     clearTrickHoldTimer();
+    dom.beginHandBtn.classList.add("hidden");
     appState.hasRenderedSnapshot = false;
     updatePaceControls(null);
     return;
@@ -970,12 +1104,19 @@ function render(snapshot = appState.snapshot) {
       }
     }
   } else if (snapshot.phase === "playing") {
+    const receivedCards = receivedPassCards(snapshot);
+    let baseInfo = "Waiting for next turn.";
     if (snapshot.viewer_seat !== null && snapshot.turn === snapshot.viewer_seat) {
-      setInfo("Your turn. Play a legal card.");
+      baseInfo = "Your turn. Play a legal card.";
     } else if (snapshot.turn !== null) {
-      setInfo(`Waiting on P${snapshot.turn}.`);
+      baseInfo = `Waiting on P${snapshot.turn}.`;
+    }
+    if (isBeginHandPending(snapshot)) {
+      setInfo(`Review new cards from pass, then click Begin Hand. New: ${receivedCards.join(" ")}`);
+    } else if (receivedCards.length > 0) {
+      setInfo(`${baseInfo} New from pass: ${receivedCards.join(" ")}`);
     } else {
-      setInfo("Waiting for next turn.");
+      setInfo(baseInfo);
     }
   } else if (snapshot.phase === "game_over") {
     setInfo("Game over. Create another table to play again.");
@@ -984,6 +1125,7 @@ function render(snapshot = appState.snapshot) {
   renderTable(snapshot);
   renderPassPanel(snapshot);
   renderHand(snapshot);
+  renderBeginHandButton(snapshot);
   updatePaceControls(snapshot);
   appState.hasRenderedSnapshot = true;
   scheduleAutoAdvance(snapshot);
@@ -995,6 +1137,7 @@ function wireEvents() {
   dom.joinBtn.addEventListener("click", joinTable);
   dom.reconnectBtn.addEventListener("click", reconnectSession);
   dom.submitPassBtn.addEventListener("click", submitPass);
+  dom.beginHandBtn.addEventListener("click", beginHand);
   dom.autoplayBtn.addEventListener("click", () => {
     appState.autoplayEnabled = !appState.autoplayEnabled;
     updatePaceControls();

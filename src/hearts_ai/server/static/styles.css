@@ -253,6 +253,9 @@ button:focus-visible {
   background:
     radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.11), transparent 48%),
     linear-gradient(175deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.03));
+  max-width: 980px;
+  width: 100%;
+  margin: 0 auto;
 }
 
 .table-surface {
@@ -274,7 +277,7 @@ button:focus-visible {
 
 .table-seat {
   position: absolute;
-  width: min(260px, calc(100% - 2.8rem));
+  width: min(232px, calc(100% - 2.8rem));
   border-radius: 12px;
   padding: 0.52rem;
   color: #f3f0e8;
@@ -337,15 +340,46 @@ button:focus-visible {
 .seat-head {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.42rem;
   font-family: var(--mono);
+}
+
+.seat-id {
+  font-size: 0.88rem;
+}
+
+.seat-status {
+  display: grid;
+  justify-items: end;
+  gap: 0.08rem;
+}
+
+.seat-kind {
+  font-size: 0.74rem;
+  opacity: 0.86;
+  text-transform: lowercase;
+}
+
+.seat-hand-big {
+  line-height: 1;
+  font-size: 1.36rem;
+  font-weight: 700;
+  color: #ffe4ab;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.32);
 }
 
 .seat-name {
   font-weight: 600;
   min-height: 1.1rem;
   font-size: 0.93rem;
+}
+
+.seat-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
 }
 
 .seat-metrics {
@@ -501,10 +535,6 @@ button:focus-visible {
   color: #21201d;
 }
 
-.trick-grid .playing-card {
-  animation: trick-card-in 180ms ease-out;
-}
-
 .trick-grid.resolved .playing-card {
   transform: translateY(-1px);
   box-shadow: 0 3px 10px rgba(28, 22, 13, 0.28);
@@ -535,9 +565,20 @@ button:focus-visible {
   background: rgba(10, 106, 63, 0.14);
 }
 
+.card-btn.received {
+  border-color: rgba(255, 196, 102, 0.95);
+  background: rgba(255, 224, 157, 0.2);
+  box-shadow: 0 0 0 2px rgba(255, 196, 102, 0.2);
+  animation: received-card-pulse 1.2s ease-in-out infinite;
+}
+
 .card-btn.play:hover:not(:disabled) {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px rgba(10, 106, 63, 0.22);
+}
+
+.card-btn.review-locked {
+  pointer-events: none;
 }
 
 .card-btn:hover:not(:disabled) .playing-card {
@@ -556,6 +597,10 @@ button:focus-visible {
   flex-wrap: wrap;
   gap: 0.44rem;
   margin-top: 0.56rem;
+}
+
+#beginHandBtn {
+  margin-top: 0.62rem;
 }
 
 .meta-card p {
@@ -609,7 +654,7 @@ button:focus-visible {
 
   .table-seat.pos-west,
   .table-seat.pos-east {
-    width: min(230px, calc(100% - 2rem));
+    width: min(210px, calc(100% - 2rem));
     top: auto;
     transform: none;
   }
@@ -687,13 +732,11 @@ button:focus-visible {
   }
 }
 
-@keyframes trick-card-in {
-  from {
-    transform: translateY(-6px) scale(1.06);
-    opacity: 0;
+@keyframes received-card-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 2px rgba(255, 196, 102, 0.18);
   }
-  to {
-    transform: translateY(0) scale(1);
-    opacity: 1;
+  50% {
+    box-shadow: 0 0 0 4px rgba(255, 196, 102, 0.32);
   }
 }
