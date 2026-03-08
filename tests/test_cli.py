@@ -34,6 +34,14 @@ def test_simulate_games_explicit_random_bot_matches_default() -> None:
     assert explicit_lines == default_lines
 
 
+def test_simulate_games_is_deterministic_with_heuristic_bots() -> None:
+    first = simulate_games(seed=5, games=1, target_score=50, bot_spec="heuristic")
+    second = simulate_games(seed=5, games=1, target_score=50, bot_spec="heuristic")
+
+    assert first == second
+    assert any(" FINAL " in line for line in first)
+
+
 def test_simulate_games_rejects_invalid_bot_spec() -> None:
     with pytest.raises(ValueError):
         simulate_games(seed=1, games=1, target_score=50, bot_spec="random,random")

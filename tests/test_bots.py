@@ -113,6 +113,26 @@ def test_heuristic_bot_choose_pass_keeps_low_spades_over_offsuit_cards() -> None
     assert all(card in hand for card in passed)
 
 
+def test_heuristic_bot_choose_pass_hold_returns_empty() -> None:
+    state = GameState()
+    state.pass_direction = "hold"
+    hand = [Card(Suit.HEARTS, Rank.ACE), Card(Suit.CLUBS, Rank.TWO)]
+    bot = HeuristicBot(player_id=PlayerId(0))
+
+    assert bot.choose_pass(hand=hand, state=state, rng=random.Random(5)) == []
+
+
+def test_heuristic_bot_choose_pass_raises_if_pass_count_exceeds_hand_size() -> None:
+    state = GameState()
+    state.pass_direction = "left"
+    state.config.pass_count = 3
+    hand = [Card(Suit.CLUBS, Rank.TWO), Card(Suit.DIAMONDS, Rank.THREE)]
+    bot = HeuristicBot(player_id=PlayerId(0))
+
+    with pytest.raises(InvalidStateError):
+        bot.choose_pass(hand=hand, state=state, rng=random.Random(2))
+
+
 def test_heuristic_bot_choose_play_leads_low_non_heart() -> None:
     state = GameState()
     state.hands = {
@@ -133,6 +153,25 @@ def test_heuristic_bot_choose_play_leads_low_non_heart() -> None:
     card = bot.choose_play(state=state, rng=random.Random(2))
 
     assert card == Card(Suit.DIAMONDS, Rank.THREE)
+    assert card in legal_moves(state=state, player_id=PlayerId(0))
+
+
+def test_heuristic_bot_choose_play_first_trick_returns_two_of_clubs() -> None:
+    two_clubs = Card(Suit.CLUBS, Rank.TWO)
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [Card(Suit.HEARTS, Rank.KING), two_clubs],
+        PlayerId(1): [Card(Suit.CLUBS, Rank.THREE)],
+        PlayerId(2): [Card(Suit.SPADES, Rank.FOUR)],
+        PlayerId(3): [Card(Suit.DIAMONDS, Rank.FIVE)],
+    }
+    state.hearts_broken = False
+    state.trick_number = 0
+
+    bot = HeuristicBot(player_id=PlayerId(0))
+    card = bot.choose_play(state=state, rng=random.Random(1))
+
+    assert card == two_clubs
     assert card in legal_moves(state=state, player_id=PlayerId(0))
 
 
@@ -159,6 +198,28 @@ def test_heuristic_bot_choose_play_sheds_queen_of_spades_offsuit() -> None:
     assert card in legal_moves(state=state, player_id=PlayerId(0))
 
 
+def test_heuristic_bot_choose_play_without_points_prefers_high_losing_follow() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [Card(Suit.SPADES, Rank.THREE), Card(Suit.SPADES, Rank.QUEEN)],
+        PlayerId(1): [Card(Suit.SPADES, Rank.KING)],
+        PlayerId(2): [Card(Suit.DIAMONDS, Rank.FIVE)],
+        PlayerId(3): [Card(Suit.CLUBS, Rank.TWO)],
+    }
+    state.trick_in_progress = [
+        (PlayerId(1), Card(Suit.SPADES, Rank.KING)),
+        (PlayerId(2), Card(Suit.DIAMONDS, Rank.FIVE)),
+    ]
+    state.hearts_broken = True
+    state.trick_number = 4
+
+    bot = HeuristicBot(player_id=PlayerId(0))
+    card = bot.choose_play(state=state, rng=random.Random(6))
+
+    assert card == Card(Suit.SPADES, Rank.QUEEN)
+    assert card in legal_moves(state=state, player_id=PlayerId(0))
+
+
 def test_heuristic_bot_choose_play_with_points_prefers_high_losing_follow() -> None:
     state = GameState()
     state.hands = {
@@ -178,6 +239,28 @@ def test_heuristic_bot_choose_play_with_points_prefers_high_losing_follow() -> N
     card = bot.choose_play(state=state, rng=random.Random(3))
 
     assert card == Card(Suit.SPADES, Rank.QUEEN)
+    assert card in legal_moves(state=state, player_id=PlayerId(0))
+
+
+def test_heuristic_bot_choose_play_with_points_and_no_losing_card_chooses_lowest_follow() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [Card(Suit.SPADES, Rank.KING), Card(Suit.SPADES, Rank.ACE)],
+        PlayerId(1): [Card(Suit.SPADES, Rank.QUEEN)],
+        PlayerId(2): [Card(Suit.HEARTS, Rank.FIVE)],
+        PlayerId(3): [Card(Suit.CLUBS, Rank.TWO)],
+    }
+    state.trick_in_progress = [
+        (PlayerId(1), Card(Suit.SPADES, Rank.QUEEN)),
+        (PlayerId(2), Card(Suit.HEARTS, Rank.FIVE)),
+    ]
+    state.hearts_broken = True
+    state.trick_number = 6
+
+    bot = HeuristicBot(player_id=PlayerId(0))
+    card = bot.choose_play(state=state, rng=random.Random(4))
+
+    assert card == Card(Suit.SPADES, Rank.KING)
     assert card in legal_moves(state=state, player_id=PlayerId(0))
 
 

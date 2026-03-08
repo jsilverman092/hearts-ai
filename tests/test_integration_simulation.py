@@ -69,3 +69,10 @@ def test_engine_full_game_deterministic_with_heuristic_bots() -> None:
     final_scores, hands_played = result_one
     assert hands_played >= 1
     assert any(score >= 50 for score in final_scores.values())
+
+
+def test_engine_full_game_fixed_seed_snapshot_with_heuristic_bots() -> None:
+    final_scores, hands_played = _run_full_game(seed=1, target_score=50, bot_spec="heuristic")
+
+    assert hands_played == 6
+    assert final_scores == {0: 55, 1: 17, 2: 27, 3: 57}
