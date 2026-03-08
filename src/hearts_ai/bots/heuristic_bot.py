@@ -39,7 +39,11 @@ class HeuristicBot:
 
         if not state.trick_in_progress:
             return _choose_lead(moves)
-        return _choose_follow_or_discard(trick=state.trick_in_progress, legal=moves)
+        return _choose_follow_or_discard(
+            trick=state.trick_in_progress,
+            legal=moves,
+            first_trick=state.trick_number == 0,
+        )
 
 
 def _choose_lead(legal: list[Card]) -> Card:
@@ -48,15 +52,15 @@ def _choose_lead(legal: list[Card]) -> Card:
     return min(candidates, key=_low_key)
 
 
-def _choose_follow_or_discard(trick: Trick, legal: list[Card]) -> Card:
+def _choose_follow_or_discard(trick: Trick, legal: list[Card], first_trick: bool) -> Card:
     led_suit = trick[0][1].suit
     follow_cards = [card for card in legal if card.suit == led_suit]
     if follow_cards:
-        return _choose_follow(trick=trick, follow_cards=follow_cards)
+        return _choose_follow(trick=trick, follow_cards=follow_cards, first_trick=first_trick)
     return max(legal, key=_discard_priority)
 
 
-def _choose_follow(trick: Trick, follow_cards: list[Card]) -> Card:
+def _choose_follow(trick: Trick, follow_cards: list[Card], first_trick: bool) -> Card:
     led_suit = trick[0][1].suit
     current_highest = max(
         card.rank for _, card in trick if card.suit == led_suit
@@ -68,6 +72,9 @@ def _choose_follow(trick: Trick, follow_cards: list[Card]) -> Card:
         return max(losing_cards, key=_discard_priority)
     if trick_has_points:
         return min(follow_cards, key=_low_key)
+    if first_trick and not losing_cards:
+        # First trick without points: if we must win, shed the highest club now.
+        return max(follow_cards, key=_discard_priority)
     if losing_cards:
         return max(losing_cards, key=_discard_priority)
     return min(follow_cards, key=_low_key)

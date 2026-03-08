@@ -75,4 +75,4 @@ def test_engine_full_game_fixed_seed_snapshot_with_heuristic_bots() -> None:
     final_scores, hands_played = _run_full_game(seed=1, target_score=50, bot_spec="heuristic")
 
     assert hands_played == 6
-    assert final_scores == {0: 55, 1: 17, 2: 27, 3: 57}
+    assert final_scores == {0: 41, 1: 22, 2: 35, 3: 58}

@@ -54,6 +54,7 @@ Play heuristics:
 - Following suit:
   - if trick currently contains points, prefer losing safely
   - if no points, shed dangerous high cards when reasonable
+  - first trick refinement: if forced to win a club-follow, shed the highest club; if able to lose, play highest losing club
 - Off-suit:
   - dump `Q♠` first when safe
   - then shed high hearts / high-risk losers

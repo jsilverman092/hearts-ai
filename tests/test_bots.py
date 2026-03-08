@@ -175,6 +175,50 @@ def test_heuristic_bot_choose_play_first_trick_returns_two_of_clubs() -> None:
     assert card in legal_moves(state=state, player_id=PlayerId(0))
 
 
+def test_heuristic_bot_first_trick_forced_win_sheds_highest_club() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [Card(Suit.CLUBS, Rank.FOUR), Card(Suit.CLUBS, Rank.EIGHT)],
+        PlayerId(1): [Card(Suit.CLUBS, Rank.TWO)],
+        PlayerId(2): [Card(Suit.CLUBS, Rank.KING)],
+        PlayerId(3): [Card(Suit.DIAMONDS, Rank.THREE)],
+    }
+    state.trick_in_progress = [
+        (PlayerId(1), Card(Suit.CLUBS, Rank.TWO)),
+        (PlayerId(2), Card(Suit.CLUBS, Rank.FOUR)),
+    ]
+    state.hearts_broken = False
+    state.trick_number = 0
+
+    bot = HeuristicBot(player_id=PlayerId(0))
+    card = bot.choose_play(state=state, rng=random.Random(10))
+
+    assert card == Card(Suit.CLUBS, Rank.EIGHT)
+    assert card in legal_moves(state=state, player_id=PlayerId(0))
+
+
+def test_heuristic_bot_first_trick_prefers_highest_losing_club_when_possible() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [Card(Suit.CLUBS, Rank.SEVEN), Card(Suit.CLUBS, Rank.JACK)],
+        PlayerId(1): [Card(Suit.CLUBS, Rank.TWO)],
+        PlayerId(2): [Card(Suit.CLUBS, Rank.EIGHT)],
+        PlayerId(3): [Card(Suit.DIAMONDS, Rank.THREE)],
+    }
+    state.trick_in_progress = [
+        (PlayerId(1), Card(Suit.CLUBS, Rank.TWO)),
+        (PlayerId(2), Card(Suit.CLUBS, Rank.EIGHT)),
+    ]
+    state.hearts_broken = False
+    state.trick_number = 0
+
+    bot = HeuristicBot(player_id=PlayerId(0))
+    card = bot.choose_play(state=state, rng=random.Random(11))
+
+    assert card == Card(Suit.CLUBS, Rank.SEVEN)
+    assert card in legal_moves(state=state, player_id=PlayerId(0))
+
+
 def test_heuristic_bot_choose_play_sheds_queen_of_spades_offsuit() -> None:
     state = GameState()
     state.hands = {
