@@ -66,6 +66,26 @@ Acceptance criteria:
 - Bot is deterministic given state + seed.
 - Bot outperforms random in benchmark aggregate (target threshold defined in Phase 1 harness).
 
+## Phase 2.5: Server/UI Bot Selection Plumbing
+
+Scope:
+- Ensure UI table bots can use the same bot policies as CLI (`random`, `heuristic`).
+- Keep this phase plumbing-only (no new heuristic logic).
+
+Implementation targets:
+- `src/hearts_ai/server/tables.py`:
+  - store bot type per bot seat
+  - instantiate bot via bot factory during pass/play auto-advance
+- `src/hearts_ai/server/app.py` and UI API contracts:
+  - allow bot type to be set when adding a bot seat (default `random`)
+- reuse:
+  - `src/hearts_ai/bots/factory.py`
+
+Acceptance criteria:
+- UI bot seats are configurable by bot name.
+- Deterministic behavior remains reproducible with fixed seed.
+- Existing server integration tests remain green with new bot-selection coverage.
+
 ## Phase 3: HeuristicBot v2 (Risk-Aware Upgrade)
 
 Enhancements:
@@ -93,6 +113,9 @@ Update/add tests:
 - integration/smoke:
   - deterministic full-game runs with heuristic bots
   - legal-move invariants remain enforced
+- server/UI path:
+  - bot seat type selection and persistence in table state
+  - deterministic auto-advance behavior when seats use `heuristic`
 
 Do not make benchmark win-rate assertions brittle in CI:
 - Keep strict assertions for determinism/legality.
@@ -110,5 +133,6 @@ Start complex methods (determinized search) only after:
 1. Phase 1 benchmark + bot-selection plumbing
 2. Phase 2 HeuristicBot v1
 3. Phase 2 test coverage
-4. Phase 3 HeuristicBot v2
-5. Compare v1/v2 and decide on search transition
+4. Phase 2.5 server/UI bot-selection plumbing
+5. Phase 3 HeuristicBot v2
+6. Compare v1/v2 and decide on search transition

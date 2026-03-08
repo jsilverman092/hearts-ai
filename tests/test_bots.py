@@ -2,6 +2,7 @@ import random
 
 import pytest
 
+from hearts_ai.bots.heuristic_bot import HeuristicBot
 from hearts_ai.bots.random_bot import RandomBot
 from hearts_ai.engine.cards import Card, Rank, Suit
 from hearts_ai.engine.errors import InvalidStateError
@@ -67,6 +68,151 @@ def test_random_bot_choose_play_raises_without_legal_moves() -> None:
         PlayerId(3): [Card(Suit.CLUBS, Rank.SIX)],
     }
     bot = RandomBot(player_id=PlayerId(0))
+
+    with pytest.raises(InvalidStateError):
+        bot.choose_play(state=state, rng=random.Random(1))
+
+
+def test_heuristic_bot_choose_pass_prioritizes_spade_dangers() -> None:
+    state = GameState()
+    state.pass_direction = "left"
+    hand = [
+        Card(Suit.SPADES, Rank.QUEEN),
+        Card(Suit.SPADES, Rank.ACE),
+        Card(Suit.SPADES, Rank.KING),
+        Card(Suit.HEARTS, Rank.ACE),
+        Card(Suit.DIAMONDS, Rank.TWO),
+    ]
+    bot = HeuristicBot(player_id=PlayerId(0))
+
+    passed = bot.choose_pass(hand=hand, state=state, rng=random.Random(7))
+
+    assert passed == [
+        Card(Suit.SPADES, Rank.QUEEN),
+        Card(Suit.SPADES, Rank.KING),
+        Card(Suit.SPADES, Rank.ACE),
+    ]
+
+
+def test_heuristic_bot_choose_pass_keeps_low_spades_over_offsuit_cards() -> None:
+    state = GameState()
+    state.pass_direction = "left"
+    hand = [
+        Card(Suit.SPADES, Rank.FOUR),
+        Card(Suit.CLUBS, Rank.ACE),
+        Card(Suit.DIAMONDS, Rank.KING),
+        Card(Suit.HEARTS, Rank.THREE),
+        Card(Suit.HEARTS, Rank.TWO),
+    ]
+    bot = HeuristicBot(player_id=PlayerId(0))
+
+    passed = bot.choose_pass(hand=hand, state=state, rng=random.Random(13))
+
+    assert Card(Suit.SPADES, Rank.FOUR) not in passed
+    assert Card(Suit.CLUBS, Rank.ACE) in passed
+    assert all(card in hand for card in passed)
+
+
+def test_heuristic_bot_choose_play_leads_low_non_heart() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [
+            Card(Suit.HEARTS, Rank.TWO),
+            Card(Suit.CLUBS, Rank.TEN),
+            Card(Suit.DIAMONDS, Rank.THREE),
+            Card(Suit.SPADES, Rank.FOUR),
+        ],
+        PlayerId(1): [Card(Suit.CLUBS, Rank.TWO)],
+        PlayerId(2): [Card(Suit.DIAMONDS, Rank.TWO)],
+        PlayerId(3): [Card(Suit.SPADES, Rank.TWO)],
+    }
+    state.hearts_broken = False
+    state.trick_number = 1
+
+    bot = HeuristicBot(player_id=PlayerId(0))
+    card = bot.choose_play(state=state, rng=random.Random(2))
+
+    assert card == Card(Suit.DIAMONDS, Rank.THREE)
+    assert card in legal_moves(state=state, player_id=PlayerId(0))
+
+
+def test_heuristic_bot_choose_play_sheds_queen_of_spades_offsuit() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [
+            Card(Suit.SPADES, Rank.QUEEN),
+            Card(Suit.HEARTS, Rank.ACE),
+            Card(Suit.DIAMONDS, Rank.THREE),
+        ],
+        PlayerId(1): [Card(Suit.CLUBS, Rank.KING)],
+        PlayerId(2): [Card(Suit.CLUBS, Rank.TWO)],
+        PlayerId(3): [Card(Suit.CLUBS, Rank.THREE)],
+    }
+    state.trick_in_progress = [(PlayerId(1), Card(Suit.CLUBS, Rank.KING))]
+    state.hearts_broken = False
+    state.trick_number = 5
+
+    bot = HeuristicBot(player_id=PlayerId(0))
+    card = bot.choose_play(state=state, rng=random.Random(9))
+
+    assert card == Card(Suit.SPADES, Rank.QUEEN)
+    assert card in legal_moves(state=state, player_id=PlayerId(0))
+
+
+def test_heuristic_bot_choose_play_with_points_prefers_high_losing_follow() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [Card(Suit.SPADES, Rank.THREE), Card(Suit.SPADES, Rank.QUEEN)],
+        PlayerId(1): [Card(Suit.SPADES, Rank.KING)],
+        PlayerId(2): [Card(Suit.HEARTS, Rank.FIVE)],
+        PlayerId(3): [Card(Suit.CLUBS, Rank.TWO)],
+    }
+    state.trick_in_progress = [
+        (PlayerId(1), Card(Suit.SPADES, Rank.KING)),
+        (PlayerId(2), Card(Suit.HEARTS, Rank.FIVE)),
+    ]
+    state.hearts_broken = True
+    state.trick_number = 4
+
+    bot = HeuristicBot(player_id=PlayerId(0))
+    card = bot.choose_play(state=state, rng=random.Random(3))
+
+    assert card == Card(Suit.SPADES, Rank.QUEEN)
+    assert card in legal_moves(state=state, player_id=PlayerId(0))
+
+
+def test_heuristic_bot_choose_play_is_deterministic() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [
+            Card(Suit.SPADES, Rank.QUEEN),
+            Card(Suit.HEARTS, Rank.ACE),
+            Card(Suit.DIAMONDS, Rank.THREE),
+        ],
+        PlayerId(1): [Card(Suit.CLUBS, Rank.KING)],
+        PlayerId(2): [Card(Suit.CLUBS, Rank.TWO)],
+        PlayerId(3): [Card(Suit.CLUBS, Rank.THREE)],
+    }
+    state.trick_in_progress = [(PlayerId(1), Card(Suit.CLUBS, Rank.KING))]
+    state.hearts_broken = False
+    state.trick_number = 5
+
+    bot = HeuristicBot(player_id=PlayerId(0))
+    first = bot.choose_play(state=state, rng=random.Random(1))
+    second = bot.choose_play(state=state, rng=random.Random(999))
+
+    assert first == second
+
+
+def test_heuristic_bot_choose_play_raises_without_legal_moves() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [],
+        PlayerId(1): [Card(Suit.DIAMONDS, Rank.FOUR)],
+        PlayerId(2): [Card(Suit.CLUBS, Rank.FIVE)],
+        PlayerId(3): [Card(Suit.CLUBS, Rank.SIX)],
+    }
+    bot = HeuristicBot(player_id=PlayerId(0))
 
     with pytest.raises(InvalidStateError):
         bot.choose_play(state=state, rng=random.Random(1))
