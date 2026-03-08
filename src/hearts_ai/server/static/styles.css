@@ -250,10 +250,13 @@ button:focus-visible {
   border: 1px solid rgba(17, 70, 46, 0.55);
   background:
     radial-gradient(circle at 45% 40%, rgba(38, 128, 80, 0.45), rgba(20, 80, 52, 0.85)),
+    repeating-radial-gradient(circle at 50% 50%, transparent 0, transparent 3px, rgba(0, 0, 0, 0.012) 3px, rgba(0, 0, 0, 0.012) 4px),
     linear-gradient(160deg, var(--felt0), var(--felt1));
   box-shadow:
-    inset 0 0 0 3px rgba(255, 255, 255, 0.09),
-    inset 0 14px 35px rgba(0, 0, 0, 0.22);
+    inset 0 0 0 4px rgba(255, 255, 255, 0.07),
+    inset 0 0 0 5px rgba(0, 0, 0, 0.18),
+    inset 0 18px 40px rgba(0, 0, 0, 0.28),
+    inset 0 -8px 20px rgba(0, 0, 0, 0.15);
 }
 
 .table-seat {
@@ -293,17 +296,25 @@ button:focus-visible {
 }
 
 .table-seat.you {
+  background: rgba(15, 55, 35, 0.72);
   border-color: rgba(255, 223, 163, 0.85);
-  box-shadow: 0 0 0 2px rgba(255, 223, 163, 0.35);
+  box-shadow: 0 0 0 2px rgba(255, 223, 163, 0.25), 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .table-seat.active {
   border-color: rgba(171, 237, 203, 0.95);
-  box-shadow: 0 0 0 2px rgba(171, 237, 203, 0.28);
+  animation: active-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes active-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(171, 237, 203, 0.28); }
+  50%       { box-shadow: 0 0 0 4px rgba(171, 237, 203, 0.5); }
 }
 
 .table-seat.open {
   background: rgba(50, 44, 34, 0.5);
+  border-style: dashed;
+  border-color: rgba(200, 200, 190, 0.4);
 }
 
 .table-seat.bot {
@@ -417,13 +428,15 @@ button:focus-visible {
   height: 76px;
   border-radius: 9px;
   border: 1px solid #cfc8b8;
-  background: #fff;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(248, 246, 240, 0.98));
   color: #1d1c1a;
   display: grid;
   grid-template-rows: auto 1fr auto;
   align-items: center;
   justify-items: center;
-  box-shadow: 0 2px 6px rgba(23, 20, 17, 0.18);
+  box-shadow:
+    0 0 0 1px rgba(200, 190, 172, 0.55) inset,
+    0 2px 6px rgba(23, 20, 17, 0.18);
   line-height: 1;
   transition: transform 220ms ease, box-shadow 220ms ease, opacity 220ms ease;
 }
@@ -450,7 +463,7 @@ button:focus-visible {
 }
 
 .playing-card .suit {
-  font-size: 1.18rem;
+  font-size: 1.35rem;
   font-family: var(--display);
 }
 
@@ -485,15 +498,29 @@ button:focus-visible {
 
 .card-btn.legal {
   border-color: rgba(10, 106, 63, 0.82);
+  box-shadow: 0 -2px 0 rgba(10, 106, 63, 0.55) inset;
 }
 
 .card-btn.selected {
   border-color: rgba(162, 75, 45, 0.9);
-  background: rgba(162, 75, 45, 0.16);
+  background: rgba(162, 75, 45, 0.14);
+  transform: translateY(-3px);
 }
 
 .card-btn.play {
   background: rgba(10, 106, 63, 0.14);
+}
+
+.card-btn.play:hover:not(:disabled) {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(10, 106, 63, 0.22);
+}
+
+.card-btn:hover:not(:disabled) .playing-card {
+  transform: translateY(-2px);
+  box-shadow:
+    0 0 0 1px rgba(200, 190, 172, 0.55) inset,
+    0 5px 12px rgba(23, 20, 17, 0.22);
 }
 
 .card-btn:disabled .playing-card {
@@ -533,6 +560,7 @@ button:focus-visible {
 
 .pace-grid input[type="range"] {
   padding: 0;
+  accent-color: var(--accent);
 }
 
 .toggle-row {
@@ -637,11 +665,11 @@ button:focus-visible {
 
 @keyframes trick-card-in {
   from {
-    transform: translateY(5px);
-    opacity: 0.76;
+    transform: translateY(-6px) scale(1.06);
+    opacity: 0;
   }
   to {
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
     opacity: 1;
   }
 }
