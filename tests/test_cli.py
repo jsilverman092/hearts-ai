@@ -1,6 +1,6 @@
 import pytest
 
-from hearts_ai.cli import main, simulate_games
+from hearts_ai.cli import benchmark_games, main, simulate_games
 
 
 def test_simulate_games_is_deterministic() -> None:
@@ -25,3 +25,35 @@ def test_simulate_games_supports_multiple_games() -> None:
     final_lines = [line for line in lines if " FINAL " in line]
 
     assert len(final_lines) == 2
+
+
+def test_simulate_games_explicit_random_bot_matches_default() -> None:
+    default_lines = simulate_games(seed=4, games=1, target_score=50)
+    explicit_lines = simulate_games(seed=4, games=1, target_score=50, bot_spec="random")
+
+    assert explicit_lines == default_lines
+
+
+def test_simulate_games_rejects_invalid_bot_spec() -> None:
+    with pytest.raises(ValueError):
+        simulate_games(seed=1, games=1, target_score=50, bot_spec="random,random")
+
+
+def test_benchmark_games_is_deterministic() -> None:
+    first = benchmark_games(seed=8, games=10, target_score=50, bot_spec="random")
+    second = benchmark_games(seed=8, games=10, target_score=50, bot_spec="random")
+
+    assert first == second
+    assert first[0] == "BENCHMARK GAMES 10 SEED_START 8 TARGET 50 BOTS random,random,random,random"
+    assert len(first) == 5
+
+
+def test_cli_main_benchmark_prints_expected_lines(capsys: pytest.CaptureFixture[str]) -> None:
+    expected = benchmark_games(seed=3, games=5, target_score=40, bot_spec="random")
+    exit_code = main(
+        ["benchmark", "--seed", "3", "--games", "5", "--target-score", "40", "--bots", "random"]
+    )
+    captured = capsys.readouterr().out.strip().splitlines()
+
+    assert exit_code == 0
+    assert captured == expected
