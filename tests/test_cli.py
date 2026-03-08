@@ -70,3 +70,11 @@ def test_cli_main_benchmark_prints_expected_lines(capsys: pytest.CaptureFixture[
 def test_benchmark_games_supports_heuristic_bot_name() -> None:
     lines = benchmark_games(seed=2, games=3, target_score=30, bot_spec="heuristic")
     assert lines[0] == "BENCHMARK GAMES 3 SEED_START 2 TARGET 30 BOTS heuristic,heuristic,heuristic,heuristic"
+
+
+def test_benchmark_games_supports_heuristic_v2_bot_name() -> None:
+    lines = benchmark_games(seed=2, games=3, target_score=30, bot_spec="heuristic_v2")
+    assert lines[0] == (
+        "BENCHMARK GAMES 3 SEED_START 2 TARGET 30 "
+        "BOTS heuristic_v2,heuristic_v2,heuristic_v2,heuristic_v2"
+    )

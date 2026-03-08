@@ -2,7 +2,7 @@ import random
 
 import pytest
 
-from hearts_ai.bots.heuristic_bot import HeuristicBot
+from hearts_ai.bots.heuristic_bot import HeuristicBot, HeuristicBotV2
 from hearts_ai.bots.random_bot import RandomBot
 from hearts_ai.engine.cards import Card, Rank, Suit
 from hearts_ai.engine.errors import InvalidStateError
@@ -343,3 +343,93 @@ def test_heuristic_bot_choose_play_raises_without_legal_moves() -> None:
 
     with pytest.raises(InvalidStateError):
         bot.choose_play(state=state, rng=random.Random(1))
+
+
+def test_heuristic_v2_choose_play_returns_legal_move_and_reason_payload() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [
+            Card(Suit.SPADES, Rank.QUEEN),
+            Card(Suit.HEARTS, Rank.ACE),
+            Card(Suit.DIAMONDS, Rank.THREE),
+        ],
+        PlayerId(1): [Card(Suit.CLUBS, Rank.KING)],
+        PlayerId(2): [Card(Suit.CLUBS, Rank.TWO)],
+        PlayerId(3): [Card(Suit.CLUBS, Rank.THREE)],
+    }
+    state.trick_in_progress = [(PlayerId(1), Card(Suit.CLUBS, Rank.KING))]
+    state.hearts_broken = False
+    state.trick_number = 5
+
+    bot = HeuristicBotV2(player_id=PlayerId(0))
+    card = bot.choose_play(state=state, rng=random.Random(33))
+    reason = bot._peek_last_play_reason()
+
+    assert card in legal_moves(state=state, player_id=PlayerId(0))
+    assert reason is not None
+    assert reason.chosen_card == card
+    assert reason.mode == "discard"
+    assert len(reason.candidates) == 3
+
+
+def test_heuristic_v2_choose_play_is_deterministic() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [
+            Card(Suit.SPADES, Rank.QUEEN),
+            Card(Suit.HEARTS, Rank.ACE),
+            Card(Suit.DIAMONDS, Rank.THREE),
+        ],
+        PlayerId(1): [Card(Suit.CLUBS, Rank.KING)],
+        PlayerId(2): [Card(Suit.CLUBS, Rank.TWO)],
+        PlayerId(3): [Card(Suit.CLUBS, Rank.THREE)],
+    }
+    state.trick_in_progress = [(PlayerId(1), Card(Suit.CLUBS, Rank.KING))]
+    state.hearts_broken = False
+    state.trick_number = 5
+
+    bot = HeuristicBotV2(player_id=PlayerId(0))
+    first = bot.choose_play(state=state, rng=random.Random(44))
+    second = bot.choose_play(state=state, rng=random.Random(44))
+    assert first == second
+
+
+def test_heuristic_v2_first_trick_forced_win_sheds_highest_club() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [Card(Suit.CLUBS, Rank.FOUR), Card(Suit.CLUBS, Rank.EIGHT)],
+        PlayerId(1): [Card(Suit.CLUBS, Rank.TWO)],
+        PlayerId(2): [Card(Suit.CLUBS, Rank.FOUR)],
+        PlayerId(3): [Card(Suit.DIAMONDS, Rank.THREE)],
+    }
+    state.trick_in_progress = [
+        (PlayerId(1), Card(Suit.CLUBS, Rank.TWO)),
+        (PlayerId(2), Card(Suit.CLUBS, Rank.FOUR)),
+    ]
+    state.hearts_broken = False
+    state.trick_number = 0
+
+    bot = HeuristicBotV2(player_id=PlayerId(0))
+    card = bot.choose_play(state=state, rng=random.Random(55))
+
+    assert card == Card(Suit.CLUBS, Rank.EIGHT)
+
+
+def test_heuristic_v2_choose_pass_records_reason_payload() -> None:
+    state = GameState()
+    state.pass_direction = "left"
+    hand = [
+        Card(Suit.SPADES, Rank.QUEEN),
+        Card(Suit.SPADES, Rank.ACE),
+        Card(Suit.SPADES, Rank.KING),
+        Card(Suit.HEARTS, Rank.ACE),
+        Card(Suit.DIAMONDS, Rank.TWO),
+    ]
+    bot = HeuristicBotV2(player_id=PlayerId(0))
+
+    passed = bot.choose_pass(hand=hand, state=state, rng=random.Random(7))
+    reason = bot._peek_last_pass_reason()
+
+    assert len(passed) == state.config.pass_count
+    assert reason is not None
+    assert tuple(passed) == reason.selected_cards

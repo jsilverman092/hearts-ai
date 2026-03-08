@@ -138,14 +138,55 @@ Enhancements:
   - when one opponent accumulates points quickly, prioritize blocking moon
 - Add optional shallow rollout evaluator:
   - 1-ply move scoring with small sampled continuations
+- Add internal decision-reason payload hooks:
+  - capture chosen move rationale, top alternatives, and rollout summary data
+  - keep hooks internal in Phase 3 (no UI exposure yet)
 
 Constraints:
 - Keep runtime practical for CLI simulations.
 - Keep behavior deterministic with explicit RNG usage.
+- Keep explanation payload generation lightweight and side-effect-free.
 
 Acceptance criteria:
 - v2 outperforms v1 on benchmark suite.
 - No regressions in legality and determinism tests.
+- Internal reason payload data is available for future debug/UI explanation mode integration.
+
+## Phase 3.5: HeuristicBot v2 Stabilization
+
+Scope:
+- Treat the initial `heuristic_v2` implementation as a first pass, not a finished upgrade.
+- Fix strategically incoherent behaviors before moving on to search-oriented work.
+- Prioritize removing obviously bad tactics over adding more cleverness.
+
+Focus areas:
+- Opening leads:
+  - remove context-free "shed spade risk" bonuses on opening leads
+  - prevent `Q♠` from being treated as a generally good lead
+  - refine lead scoring so dangerous high cards are only shed in defensible spots
+- High-spade handling:
+  - separate "dangerous to keep" from "safe to unload now"
+  - only reward unloading `Q♠` / `K♠` / `A♠` when trick context makes it plausibly safe
+- Rollout / base-score interaction:
+  - ensure rollout does not silently skip the exact situations where lead safety matters most
+  - rebalance base heuristics so unsupported bonuses cannot dominate obvious tactical risk
+- Moon-defense cleanup:
+  - keep moon-blocking logic from distorting normal, non-moon play too aggressively
+
+Testing additions:
+- Add regression tests for clearly bad v2 choices:
+  - do not lead `Q♠` when a safer low spade lead exists
+  - do not overvalue dangerous high-spade opening leads without supporting context
+- Add scenario tests covering:
+  - safe vs unsafe spade unload spots
+  - opening-lead comparisons across low cards vs dangerous honors
+  - moon-defense behavior not overriding obvious local safety
+
+Acceptance criteria:
+- `heuristic_v2` no longer makes obvious tactical self-owns in normal play.
+- Regression tests cover the known high-spade lead failure mode.
+- Benchmark results remain at least competitive with v1 and clearly above random.
+- Phase 3 reason payload hooks remain intact for future UI explanation mode.
 
 ## Test Plan
 
@@ -153,6 +194,7 @@ Update/add tests:
 - `tests/test_bots.py`:
   - pass-priority scenarios (`Q♠`, high spades, high hearts)
   - play-choice scenarios for lead/follow/off-suit
+  - `heuristic_v2` regression scenarios for dangerous opening leads and unsafe high-spade dumps
 - integration/smoke:
   - deterministic full-game runs with heuristic bots
   - legal-move invariants remain enforced
@@ -179,4 +221,5 @@ Start complex methods (determinized search) only after:
 4. Phase 2.5 server/UI bot-selection plumbing
 5. Phase 2.6 UI gameplay polish
 6. Phase 3 HeuristicBot v2
-7. Compare v1/v2 and decide on search transition
+7. Phase 3.5 HeuristicBot v2 stabilization
+8. Compare v1/v2 and decide on search transition

@@ -4,7 +4,7 @@ const DEFAULT_PACE_MS = 900;
 const FAST_FORWARD_PACE_MS = 220;
 const PASS_AUTOPLAY_DELAY_MS = 20;
 const TRICK_HOLD_MS = 1500;
-const BOT_OPTIONS = ["heuristic", "random"];
+const BOT_OPTIONS = ["heuristic_v2", "heuristic", "random"];
 
 const appState = {
   tableCode: null,
@@ -158,7 +158,7 @@ function wsUrl() {
 
 function globalBotType() {
   if (!dom.botType || !dom.botType.value) {
-    return "heuristic";
+    return "heuristic_v2";
   }
   return dom.botType.value;
 }
