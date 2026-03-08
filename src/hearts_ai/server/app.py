@@ -157,9 +157,14 @@ def create_app(*, table_manager: TableManager | None = None) -> Any:
         return {"ok": True}
 
     @app.post("/tables/{table_code}/bots/{seat}")
-    async def add_bot(table_code: str, seat: int) -> dict[str, bool]:
+    async def add_bot(table_code: str, seat: int, payload: dict[str, Any] | None = None) -> dict[str, bool]:
+        bot_name = "random"
+        if payload is not None and "bot_name" in payload:
+            if not isinstance(payload["bot_name"], str):
+                raise HTTPException(status_code=400, detail="Field 'bot_name' must be a string.")
+            bot_name = payload["bot_name"]
         try:
-            manager.add_bot(table_code, seat=seat)
+            manager.add_bot(table_code, seat=seat, bot_name=bot_name)
             table = manager.get_table(table_code)
             await hub.broadcast_snapshot(table_code=table.table_code, manager=manager)
         except TableNotFoundError as exc:

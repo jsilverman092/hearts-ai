@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
-from hearts_ai.bots.random_bot import RandomBot
+from hearts_ai.bots.factory import create_bot, normalize_bot_name
 from hearts_ai.engine.cards import Card, Rank, Suit
 from hearts_ai.engine.game import apply_pass, deal, is_game_over, is_hand_over, new_game, play_card
 from hearts_ai.engine.record import GameRecorder
@@ -91,6 +91,10 @@ def _zero_scores() -> dict[PlayerId, int]:
     return {player_id: 0 for player_id in PLAYER_IDS}
 
 
+def _empty_bot_seat_types() -> dict[PlayerId, str]:
+    return {}
+
+
 @dataclass(slots=True)
 class Table:
     table_code: str
@@ -102,6 +106,7 @@ class Table:
     participants: dict[str, Participant] = field(default_factory=dict)
     seat_secrets: dict[PlayerId, str | None] = field(default_factory=_empty_seat_secrets)
     bot_seats: set[PlayerId] = field(default_factory=set)
+    bot_seat_types: dict[PlayerId, str] = field(default_factory=_empty_bot_seat_types)
     pending_passes: dict[PlayerId, list[Card]] = field(default_factory=dict)
     version: int = 0
     recorder: GameRecorder | None = None
@@ -143,12 +148,19 @@ class Table:
         self.version += 1
         self._maybe_start_game()
 
-    def add_bot(self, seat: int) -> None:
+    def add_bot(self, seat: int, *, bot_name: str = "random") -> None:
+        if self.phase != "lobby":
+            raise InvalidTableActionError("Bot configuration is only allowed during lobby phase.")
         player_id = to_player_id(seat)
         current_secret = self.seat_secrets[player_id]
         if current_secret is not None:
             raise InvalidTableActionError(f"Seat {seat} is occupied by a human player.")
+        try:
+            normalized_bot_name = normalize_bot_name(bot_name)
+        except ValueError as exc:
+            raise InvalidTableActionError(str(exc)) from exc
         self.bot_seats.add(player_id)
+        self.bot_seat_types[player_id] = normalized_bot_name
         self.version += 1
         self._maybe_start_game()
 
@@ -243,7 +255,7 @@ class Table:
             for player_id in PLAYER_IDS:
                 if player_id in self.pending_passes or player_id not in self.bot_seats:
                     continue
-                bot = RandomBot(player_id=player_id)
+                bot = self._bot_for_player(player_id)
                 self.pending_passes[player_id] = bot.choose_pass(
                     hand=self.state.hands[player_id],
                     state=self.state,
@@ -265,7 +277,7 @@ class Table:
                 return None
 
             bot_player = self.state.turn
-            bot = RandomBot(player_id=bot_player)
+            bot = self._bot_for_player(bot_player)
             card = bot.choose_play(state=self.state, rng=self.rng)
             previous_trick_number = self.state.trick_number
             play_card(state=self.state, player_id=bot_player, card=card)
@@ -367,6 +379,12 @@ class Table:
         self.hand_score_start = dict(self.state.scores)
         self.last_recorded_scored_hand = self.state.hand_number
 
+    def bot_name_for_seat(self, player_id: PlayerId) -> str:
+        return self.bot_seat_types.get(player_id, "random")
+
+    def _bot_for_player(self, player_id: PlayerId):
+        return create_bot(self.bot_name_for_seat(player_id), player_id=player_id)
+
 
 @dataclass(slots=True)
 class TableManager:
@@ -431,9 +449,9 @@ class TableManager:
         table.claim_seat(player_secret=player_secret, seat=seat)
         self._post_action(table)
 
-    def add_bot(self, table_code: str, *, seat: int) -> None:
+    def add_bot(self, table_code: str, *, seat: int, bot_name: str = "random") -> None:
         table = self.get_table(table_code)
-        table.add_bot(seat=seat)
+        table.add_bot(seat=seat, bot_name=bot_name)
         self._post_action(table)
 
     def submit_pass(self, table_code: str, *, player_secret: str, cards: list[str]) -> None:

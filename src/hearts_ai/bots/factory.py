@@ -17,6 +17,14 @@ def available_bot_names() -> tuple[str, ...]:
     return tuple(sorted(_BOT_BUILDERS))
 
 
+def normalize_bot_name(bot_name: str) -> str:
+    normalized = bot_name.strip().lower()
+    if normalized not in _BOT_BUILDERS:
+        available = ", ".join(available_bot_names())
+        raise ValueError(f"Unknown bot name: {bot_name!r}. Available: {available}.")
+    return normalized
+
+
 def resolve_bot_names(bot_spec: str | None) -> tuple[str, ...]:
     if bot_spec is None or not bot_spec.strip():
         names = ["random"] * PLAYER_COUNT
@@ -49,4 +57,15 @@ def create_bots(bot_names: Sequence[str]) -> dict[PlayerId, Bot]:
     }
 
 
-__all__ = ["available_bot_names", "create_bots", "resolve_bot_names"]
+def create_bot(bot_name: str, player_id: PlayerId) -> Bot:
+    normalized = normalize_bot_name(bot_name)
+    return _BOT_BUILDERS[normalized](player_id=player_id)
+
+
+__all__ = [
+    "available_bot_names",
+    "create_bot",
+    "create_bots",
+    "normalize_bot_name",
+    "resolve_bot_names",
+]

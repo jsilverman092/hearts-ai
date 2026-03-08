@@ -114,11 +114,13 @@ label {
 }
 
 input,
+select,
 button {
   font: inherit;
 }
 
-input {
+input,
+select {
   width: 100%;
   border-radius: 10px;
   border: 1px solid var(--line);
@@ -127,10 +129,21 @@ input {
   transition: border-color 140ms ease, box-shadow 140ms ease;
 }
 
-input:focus {
+select:hover {
+  background: #fffef8;
+  border-color: color-mix(in srgb, var(--line) 78%, var(--ink-soft));
+  box-shadow: 0 1px 2px rgba(35, 33, 30, 0.08);
+}
+
+input:focus,
+select:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(10, 106, 63, 0.14);
+}
+
+select {
+  appearance: none;
 }
 
 button {
@@ -359,6 +372,17 @@ button:focus-visible {
 .seat-actions .ghost {
   color: #f3f0e8;
   border-color: rgba(239, 247, 242, 0.52);
+}
+
+.seat-actions select.ghost {
+  color: var(--ink);
+  background: #fffef8;
+  border-color: var(--line);
+}
+
+.seat-actions select.ghost option {
+  color: var(--ink);
+  background: #fffef8;
 }
 
 .trick-grid {

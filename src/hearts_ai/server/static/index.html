@@ -27,6 +27,11 @@
           <input id="targetScore" type="number" min="1" value="50" />
           <label for="seed">Seed (optional)</label>
           <input id="seed" type="number" placeholder="Auto" />
+          <label for="botType">Bot Type</label>
+          <select id="botType">
+            <option value="random" selected>random</option>
+            <option value="heuristic">heuristic</option>
+          </select>
           <div class="create-actions">
             <button id="quickSoloBtn" class="action">Quick Solo</button>
             <button id="createBtn" class="ghost">Create Table</button>
@@ -105,6 +110,6 @@
       </section>
     </main>
 
-    <script src="/static/app.js?v=9" defer></script>
+    <script src="/static/app.js?v=12" defer></script>
   </body>
 </html>

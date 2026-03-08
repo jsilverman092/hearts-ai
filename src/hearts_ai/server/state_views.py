@@ -28,6 +28,7 @@ def table_snapshot(table: Table, *, viewer_secret: str | None = None) -> dict[st
         if player_id in table.bot_seats:
             seat_kind = "bot"
             display_name = f"Bot {int(player_id)}"
+            bot_name = table.bot_name_for_seat(player_id)
         else:
             secret = table.seat_secrets[player_id]
             if secret is None:
@@ -36,7 +37,15 @@ def table_snapshot(table: Table, *, viewer_secret: str | None = None) -> dict[st
             else:
                 seat_kind = "human"
                 display_name = table.seat_display_name(player_id)
-        seats.append({"seat": int(player_id), "kind": seat_kind, "display_name": display_name})
+            bot_name = None
+        seats.append(
+            {
+                "seat": int(player_id),
+                "kind": seat_kind,
+                "display_name": display_name,
+                "bot_name": bot_name,
+            }
+        )
 
     trick_cards = [
         {"player_id": int(player_id), "card": str(card)} for player_id, card in table.state.trick_in_progress

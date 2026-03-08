@@ -16,6 +16,7 @@ def test_root_serves_ui_shell() -> None:
     assert response.status_code == 200
     assert "Hearts AI Live" in response.text
     assert 'id="quickSoloBtn"' in response.text
+    assert 'id="botType"' in response.text
     assert 'id="autoplayBtn"' in response.text
     assert 'id="stepBtn"' in response.text
     assert 'id="paceRange"' in response.text
@@ -158,7 +159,7 @@ def _drive_game_to_completion(client: TestClient, *, table_code: str, player_sec
     raise AssertionError(f"Game did not complete within {max_steps} steps.")
 
 
-def _setup_single_player_table(client: TestClient, *, seed: int) -> tuple[str, str]:
+def _setup_single_player_table(client: TestClient, *, seed: int, bot_name: str = "random") -> tuple[str, str]:
     created = client.post(
         "/tables",
         json={"display_name": "Host", "target_score": 20, "seed": seed},
@@ -169,9 +170,9 @@ def _setup_single_player_table(client: TestClient, *, seed: int) -> tuple[str, s
         f"/tables/{table_code}/seats/0",
         json={"player_secret": player_secret},
     ).status_code == 200
-    assert client.post(f"/tables/{table_code}/bots/1").status_code == 200
-    assert client.post(f"/tables/{table_code}/bots/2").status_code == 200
-    assert client.post(f"/tables/{table_code}/bots/3").status_code == 200
+    assert client.post(f"/tables/{table_code}/bots/1", json={"bot_name": bot_name}).status_code == 200
+    assert client.post(f"/tables/{table_code}/bots/2", json={"bot_name": bot_name}).status_code == 200
+    assert client.post(f"/tables/{table_code}/bots/3", json={"bot_name": bot_name}).status_code == 200
     return table_code, player_secret
 
 
@@ -389,3 +390,107 @@ def test_advance_endpoint_returns_snapshot_and_can_advance() -> None:
         assert isinstance(payload["snapshot"], dict)
         assert "seat_hand_points" in payload["snapshot"]
         assert "last_trick" in payload["snapshot"]
+
+
+def test_add_bot_endpoint_accepts_bot_name() -> None:
+    manager = TableManager()
+    app = create_app(table_manager=manager)
+
+    with TestClient(app) as client:
+        created = client.post(
+            "/tables",
+            json={"display_name": "Host", "target_score": 20, "seed": 19},
+        ).json()
+        table_code = created["table_code"]
+
+        response = client.post(f"/tables/{table_code}/bots/1", json={"bot_name": "heuristic"})
+        assert response.status_code == 200
+
+        snapshot = client.get(f"/tables/{table_code}").json()
+        seat_one = [seat for seat in snapshot["seats"] if seat["seat"] == 1][0]
+        assert seat_one["kind"] == "bot"
+        assert seat_one["bot_name"] == "heuristic"
+
+
+def test_add_bot_endpoint_updates_existing_bot_type() -> None:
+    manager = TableManager()
+    app = create_app(table_manager=manager)
+
+    with TestClient(app) as client:
+        created = client.post(
+            "/tables",
+            json={"display_name": "Host", "target_score": 20, "seed": 19},
+        ).json()
+        table_code = created["table_code"]
+
+        first = client.post(f"/tables/{table_code}/bots/1", json={"bot_name": "random"})
+        assert first.status_code == 200
+        second = client.post(f"/tables/{table_code}/bots/1", json={"bot_name": "heuristic"})
+        assert second.status_code == 200
+
+        snapshot = client.get(f"/tables/{table_code}").json()
+        seat_one = [seat for seat in snapshot["seats"] if seat["seat"] == 1][0]
+        assert seat_one["bot_name"] == "heuristic"
+
+
+def test_add_bot_endpoint_rejects_non_string_bot_name() -> None:
+    manager = TableManager()
+    app = create_app(table_manager=manager)
+
+    with TestClient(app) as client:
+        created = client.post(
+            "/tables",
+            json={"display_name": "Host", "target_score": 20, "seed": 19},
+        ).json()
+        table_code = created["table_code"]
+
+        response = client.post(f"/tables/{table_code}/bots/1", json={"bot_name": 123})
+        assert response.status_code == 400
+        assert "bot_name" in response.json()["detail"]
+
+
+def test_add_bot_endpoint_rejects_configuration_after_start() -> None:
+    manager = TableManager()
+    app = create_app(table_manager=manager)
+
+    with TestClient(app) as client:
+        created = client.post(
+            "/tables",
+            json={"display_name": "Host", "target_score": 20, "seed": 19},
+        ).json()
+        table_code = created["table_code"]
+        player_secret = created["player_secret"]
+
+        assert client.post(
+            f"/tables/{table_code}/seats/0",
+            json={"player_secret": player_secret},
+        ).status_code == 200
+        assert client.post(f"/tables/{table_code}/bots/1", json={"bot_name": "random"}).status_code == 200
+        assert client.post(f"/tables/{table_code}/bots/2", json={"bot_name": "random"}).status_code == 200
+        assert client.post(f"/tables/{table_code}/bots/3", json={"bot_name": "random"}).status_code == 200
+
+        response = client.post(f"/tables/{table_code}/bots/1", json={"bot_name": "heuristic"})
+        assert response.status_code == 400
+        assert "lobby" in response.json()["detail"].lower()
+
+
+def test_server_integration_full_game_deterministic_with_websocket_heuristic_bots(tmp_path) -> None:
+    manager = TableManager.with_persistence(records_dir=tmp_path)
+    app = create_app(table_manager=manager)
+
+    with TestClient(app) as client:
+        table_code, player_secret = _setup_single_player_table(client, seed=223, bot_name="heuristic")
+        scores_one = _drive_game_to_completion(
+            client,
+            table_code=table_code,
+            player_secret=player_secret,
+        )
+
+        table_code_two, player_secret_two = _setup_single_player_table(client, seed=223, bot_name="heuristic")
+        scores_two = _drive_game_to_completion(
+            client,
+            table_code=table_code_two,
+            player_secret=player_secret_two,
+        )
+
+    assert scores_one == scores_two

@@ -22,6 +22,7 @@ const appState = {
   hasRenderedSnapshot: false,
   snapshot: null,
   selectedPassCards: new Set(),
+  seatBotTypeDrafts: {},
 };
 
 const SEAT_POSITIONS = ["south", "west", "north", "east"];
@@ -52,6 +53,7 @@ const dom = {
   displayName: document.getElementById("displayName"),
   targetScore: document.getElementById("targetScore"),
   seed: document.getElementById("seed"),
+  botType: document.getElementById("botType"),
   joinCode: document.getElementById("joinCode"),
   quickSoloBtn: document.getElementById("quickSoloBtn"),
   createBtn: document.getElementById("createBtn"),
@@ -145,6 +147,29 @@ function sortCardsForHand(cards) {
 function wsUrl() {
   const proto = window.location.protocol === "https:" ? "wss" : "ws";
   return `${proto}://${window.location.host}/ws`;
+}
+
+function globalBotType() {
+  if (!dom.botType || !dom.botType.value) {
+    return "random";
+  }
+  return dom.botType.value;
+}
+
+function seatDraftBotType(seat) {
+  const key = String(seat.seat);
+  const draft = appState.seatBotTypeDrafts[key];
+  if (draft) {
+    return draft;
+  }
+  if (seat.kind === "bot" && seat.bot_name) {
+    return String(seat.bot_name);
+  }
+  return globalBotType();
+}
+
+function setSeatDraftBotType(seat, botType) {
+  appState.seatBotTypeDrafts[String(seat)] = String(botType);
 }
 
 function setConnectionStatus(label, connected) {
@@ -394,6 +419,7 @@ function applyCreatedTableSession(created, displayName) {
   appState.displayName = displayName;
   dom.joinCode.value = created.table_code;
   appState.selectedPassCards.clear();
+  appState.seatBotTypeDrafts = {};
   saveSession();
 }
 
@@ -426,8 +452,11 @@ async function quickStartSolo() {
     await apiRequest(`/tables/${appState.tableCode}/seats/0`, "POST", {
       player_secret: appState.playerSecret,
     });
+    const botName = globalBotType();
     for (const seat of [1, 2, 3]) {
-      await apiRequest(`/tables/${appState.tableCode}/bots/${seat}`, "POST");
+      await apiRequest(`/tables/${appState.tableCode}/bots/${seat}`, "POST", {
+        bot_name: botName,
+      });
     }
 
     await fetchSnapshot();
@@ -455,6 +484,7 @@ async function joinTable() {
     appState.playerSecret = joined.player_secret;
     appState.displayName = displayName;
     appState.selectedPassCards.clear();
+    appState.seatBotTypeDrafts = {};
     saveSession();
     await fetchSnapshot();
     connectWebSocket();
@@ -585,13 +615,17 @@ async function claimSeat(seat) {
   }
 }
 
-async function addBot(seat) {
+async function addBot(seat, botName = null) {
   if (!appState.tableCode) {
     setInfo("Create or join a table first.");
     return;
   }
   try {
-    await apiRequest(`/tables/${appState.tableCode}/bots/${seat}`, "POST");
+    const nextBot = botName || globalBotType();
+    await apiRequest(`/tables/${appState.tableCode}/bots/${seat}`, "POST", {
+      bot_name: nextBot,
+    });
+    setSeatDraftBotType(seat, nextBot);
     await fetchSnapshot();
   } catch (error) {
     setInfo(error.message);
@@ -656,7 +690,12 @@ function renderSeat(snapshot, seat, seatPosition) {
 
   const name = document.createElement("div");
   name.className = "seat-name";
-  name.textContent = seat.display_name || (seat.kind === "open" ? "Open seat" : "Bot");
+  if (seat.kind === "bot") {
+    const botName = seat.bot_name ? String(seat.bot_name) : "random";
+    name.textContent = `Bot (${botName})`;
+  } else {
+    name.textContent = seat.display_name || (seat.kind === "open" ? "Open seat" : "Bot");
+  }
 
   const metrics = document.createElement("div");
   metrics.className = "seat-metrics";
@@ -673,7 +712,9 @@ function renderSeat(snapshot, seat, seatPosition) {
 
   seatBox.append(head, name, metrics);
 
-  if (seat.kind === "open" && appState.playerSecret) {
+  const canConfigureBots = snapshot.phase === "lobby" && Boolean(appState.playerSecret);
+
+  if (seat.kind === "open" && canConfigureBots) {
     const actions = document.createElement("div");
     actions.className = "seat-actions";
 
@@ -686,9 +727,54 @@ function renderSeat(snapshot, seat, seatPosition) {
     const botBtn = document.createElement("button");
     botBtn.className = "ghost";
     botBtn.textContent = "Add bot";
-    botBtn.addEventListener("click", () => addBot(seat.seat));
+    const botSelect = document.createElement("select");
+    botSelect.className = "ghost";
+    const openDefault = seatDraftBotType(seat);
+    for (const botName of ["random", "heuristic"]) {
+      const option = document.createElement("option");
+      option.value = botName;
+      option.textContent = botName;
+      if (botName === openDefault) {
+        option.selected = true;
+      }
+      botSelect.appendChild(option);
+    }
+    botSelect.addEventListener("change", () => {
+      setSeatDraftBotType(seat.seat, botSelect.value);
+    });
+    botBtn.addEventListener("click", () => addBot(seat.seat, botSelect.value));
+    actions.appendChild(botSelect);
     actions.appendChild(botBtn);
 
+    seatBox.appendChild(actions);
+  }
+
+  if (seat.kind === "bot" && canConfigureBots) {
+    const actions = document.createElement("div");
+    actions.className = "seat-actions";
+
+    const botSelect = document.createElement("select");
+    botSelect.className = "ghost";
+    const current = seatDraftBotType(seat);
+    for (const botName of ["random", "heuristic"]) {
+      const option = document.createElement("option");
+      option.value = botName;
+      option.textContent = botName;
+      if (botName === current) {
+        option.selected = true;
+      }
+      botSelect.appendChild(option);
+    }
+    botSelect.addEventListener("change", () => {
+      setSeatDraftBotType(seat.seat, botSelect.value);
+    });
+
+    const updateBtn = document.createElement("button");
+    updateBtn.className = "ghost";
+    updateBtn.textContent = "Set bot";
+    updateBtn.addEventListener("click", () => addBot(seat.seat, botSelect.value));
+
+    actions.append(botSelect, updateBtn);
     seatBox.appendChild(actions);
   }
 

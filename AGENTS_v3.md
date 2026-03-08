@@ -71,18 +71,30 @@ Acceptance criteria:
 Scope:
 - Ensure UI table bots can use the same bot policies as CLI (`random`, `heuristic`).
 - Keep this phase plumbing-only (no new heuristic logic).
+- Preserve fast flow for Quick Solo while allowing seat-level control in lobby.
 
 Implementation targets:
 - `src/hearts_ai/server/tables.py`:
   - store bot type per bot seat
   - instantiate bot via bot factory during pass/play auto-advance
+  - enforce lobby-only bot configuration
 - `src/hearts_ai/server/app.py` and UI API contracts:
   - allow bot type to be set when adding a bot seat (default `random`)
+  - allow updating an existing bot seat type during lobby
 - reuse:
   - `src/hearts_ai/bots/factory.py`
+- `src/hearts_ai/server/static/` UI behavior:
+  - top-level Bot Type acts as default
+  - Quick Solo applies top-level Bot Type to all bot seats at creation
+  - Create Table supports seat-level bot type selection in lobby
+  - existing bot seats can be changed in lobby
+  - seat bot controls are hidden after lobby
 
 Acceptance criteria:
-- UI bot seats are configurable by bot name.
+- UI bot seats are configurable by bot name during lobby.
+- Quick Solo uses top-level Bot Type for all bot seats.
+- Create Table supports mixed bot-seat setups in lobby.
+- Bot configuration cannot be changed after game start.
 - Deterministic behavior remains reproducible with fixed seed.
 - Existing server integration tests remain green with new bot-selection coverage.
 

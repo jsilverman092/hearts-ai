@@ -7,7 +7,7 @@ from hearts_ai.engine.record import replay_jsonl
 from hearts_ai.engine.rules import legal_moves
 from hearts_ai.engine.scoring import trick_points
 from hearts_ai.server.state_views import table_snapshot
-from hearts_ai.server.tables import TableManager, UnauthorizedError
+from hearts_ai.server.tables import InvalidTableActionError, TableManager, UnauthorizedError
 
 
 def test_table_starts_after_all_seats_filled() -> None:
@@ -42,6 +42,94 @@ def test_all_bot_table_runs_to_game_over() -> None:
     finished = manager.get_table(table.table_code)
     assert finished.phase == "game_over"
     assert any(score >= 20 for score in finished.state.scores.values())
+
+
+def test_all_heuristic_bot_table_is_deterministic() -> None:
+    manager_one = TableManager()
+    table_one, player_secret_one = manager_one.create_table(display_name="Host", target_score=20, seed=1)
+    manager_one.add_bot(table_one.table_code, seat=0, bot_name="heuristic")
+    manager_one.add_bot(table_one.table_code, seat=1, bot_name="heuristic")
+    manager_one.add_bot(table_one.table_code, seat=2, bot_name="heuristic")
+    manager_one.add_bot(table_one.table_code, seat=3, bot_name="heuristic")
+
+    for _ in range(2000):
+        current = manager_one.get_table(table_one.table_code)
+        if current.phase == "game_over":
+            break
+        manager_one.advance_one_action(table_one.table_code, player_secret=player_secret_one)
+
+    finished_one = manager_one.get_table(table_one.table_code)
+    assert finished_one.phase == "game_over"
+
+    manager_two = TableManager()
+    table_two, player_secret_two = manager_two.create_table(display_name="Host", target_score=20, seed=1)
+    manager_two.add_bot(table_two.table_code, seat=0, bot_name="heuristic")
+    manager_two.add_bot(table_two.table_code, seat=1, bot_name="heuristic")
+    manager_two.add_bot(table_two.table_code, seat=2, bot_name="heuristic")
+    manager_two.add_bot(table_two.table_code, seat=3, bot_name="heuristic")
+
+    for _ in range(2000):
+        current = manager_two.get_table(table_two.table_code)
+        if current.phase == "game_over":
+            break
+        manager_two.advance_one_action(table_two.table_code, player_secret=player_secret_two)
+
+    finished_two = manager_two.get_table(table_two.table_code)
+    assert finished_two.phase == "game_over"
+    assert finished_one.state.scores == finished_two.state.scores
+
+
+def test_add_bot_persists_bot_type_in_table_and_snapshot() -> None:
+    manager = TableManager()
+    table, player_secret = manager.create_table(display_name="Host", target_score=50, seed=7)
+    manager.claim_seat(table.table_code, player_secret=player_secret, seat=0)
+    manager.add_bot(table.table_code, seat=1)
+    manager.add_bot(table.table_code, seat=2, bot_name="heuristic")
+    manager.add_bot(table.table_code, seat=3, bot_name="heuristic")
+
+    current = manager.get_table(table.table_code)
+    assert current.bot_name_for_seat(1) == "random"
+    assert current.bot_name_for_seat(2) == "heuristic"
+    assert current.bot_name_for_seat(3) == "heuristic"
+
+    snapshot = table_snapshot(current, viewer_secret=player_secret)
+    seats = {seat["seat"]: seat for seat in snapshot["seats"]}
+    assert seats[1]["bot_name"] == "random"
+    assert seats[2]["bot_name"] == "heuristic"
+    assert seats[3]["bot_name"] == "heuristic"
+
+
+def test_add_bot_rejects_unknown_bot_type() -> None:
+    manager = TableManager()
+    table, _ = manager.create_table(display_name="Host", target_score=50, seed=7)
+
+    with pytest.raises(InvalidTableActionError):
+        manager.add_bot(table.table_code, seat=0, bot_name="unknown-bot")
+
+
+def test_add_bot_updates_existing_bot_type() -> None:
+    manager = TableManager()
+    table, _ = manager.create_table(display_name="Host", target_score=50, seed=7)
+    manager.add_bot(table.table_code, seat=1, bot_name="random")
+    manager.add_bot(table.table_code, seat=1, bot_name="heuristic")
+
+    current = manager.get_table(table.table_code)
+    assert current.bot_name_for_seat(1) == "heuristic"
+
+
+def test_add_bot_rejects_configuration_after_game_start() -> None:
+    manager = TableManager()
+    table, player_secret = manager.create_table(display_name="Host", target_score=50, seed=7)
+    manager.claim_seat(table.table_code, player_secret=player_secret, seat=0)
+    manager.add_bot(table.table_code, seat=1, bot_name="random")
+    manager.add_bot(table.table_code, seat=2, bot_name="random")
+    manager.add_bot(table.table_code, seat=3, bot_name="random")
+
+    started = manager.get_table(table.table_code)
+    assert started.phase in {"passing", "playing"}
+
+    with pytest.raises(InvalidTableActionError):
+        manager.add_bot(table.table_code, seat=1, bot_name="heuristic")
 
 
 def test_state_snapshot_hides_other_hands() -> None:

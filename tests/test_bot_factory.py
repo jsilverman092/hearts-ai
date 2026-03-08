@@ -1,9 +1,15 @@
 import pytest
 
-from hearts_ai.bots.factory import available_bot_names, create_bots, resolve_bot_names
+from hearts_ai.bots.factory import (
+    available_bot_names,
+    create_bot,
+    create_bots,
+    normalize_bot_name,
+    resolve_bot_names,
+)
 from hearts_ai.bots.heuristic_bot import HeuristicBot
 from hearts_ai.bots.random_bot import RandomBot
-from hearts_ai.engine.types import PLAYER_IDS
+from hearts_ai.engine.types import PLAYER_IDS, PlayerId
 
 
 def test_available_bot_names_contains_heuristic_and_random() -> None:
@@ -30,3 +36,13 @@ def test_create_bots_supports_heuristic() -> None:
     bots = create_bots(("heuristic", "heuristic", "heuristic", "heuristic"))
     assert set(bots.keys()) == set(PLAYER_IDS)
     assert all(isinstance(bots[player_id], HeuristicBot) for player_id in PLAYER_IDS)
+
+
+def test_create_bot_supports_mixed_case_name() -> None:
+    bot = create_bot("Heuristic", player_id=PlayerId(0))
+    assert isinstance(bot, HeuristicBot)
+
+
+def test_normalize_bot_name_rejects_unknown() -> None:
+    with pytest.raises(ValueError):
+        normalize_bot_name("not-a-bot")
