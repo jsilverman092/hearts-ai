@@ -183,6 +183,14 @@ function handKey(handNumber) {
   return String(Number(handNumber || 0));
 }
 
+function passDirectionLabel(direction) {
+  const normalized = String(direction || "").toLowerCase();
+  if (normalized === "left" || normalized === "right" || normalized === "across" || normalized === "hold") {
+    return normalized;
+  }
+  return "";
+}
+
 function applySnapshot(snapshot) {
   const previous = appState.snapshot;
   maybeCaptureReceivedPassCards(previous, snapshot);
@@ -971,6 +979,7 @@ function togglePassCard(cardCode, passCount) {
 function renderPassPanel(snapshot) {
   const viewerSeat = snapshot.viewer_seat;
   const passCount = Number(snapshot.pass_count || 3);
+  const passDirection = passDirectionLabel(snapshot.pass_direction);
   const viewerKey = viewerSeat === null ? null : String(viewerSeat);
   const alreadySubmitted =
     viewerKey !== null && snapshot.pass_submissions && snapshot.pass_submissions[viewerKey] === true;
@@ -984,9 +993,13 @@ function renderPassPanel(snapshot) {
 
   dom.passCards.innerHTML = "";
   if (alreadySubmitted) {
-    dom.passHint.textContent = "Pass submitted. Waiting for other players.";
+    dom.passHint.textContent = passDirection
+      ? `Pass submitted (${passDirection}). Waiting for other players.`
+      : "Pass submitted. Waiting for other players.";
   } else {
-    dom.passHint.textContent = `Select ${passCount} cards to pass.`;
+    dom.passHint.textContent = passDirection
+      ? `Select ${passCount} cards to pass ${passDirection}.`
+      : `Select ${passCount} cards to pass.`;
   }
 
   const orderedHand = sortCardsForHand(snapshot.viewer_hand || []);

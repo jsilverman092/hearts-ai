@@ -288,13 +288,29 @@ def _score_lead_v2(
     tags: list[str] = []
     spade_legal = [candidate for candidate in legal if candidate.suit == Suit.SPADES]
     lower_spade_available = any(candidate.rank < card.rank for candidate in spade_legal)
+    low_heart_legal = [
+        candidate
+        for candidate in legal
+        if candidate.suit == Suit.HEARTS and int(candidate.rank) <= int(Rank.FIVE)
+    ]
 
     if card.suit != Suit.HEARTS:
         score += 2.0
         tags.append("lead_non_heart")
     else:
-        score -= 2.5
-        tags.append("avoid_heart_lead")
+        if not state.hearts_broken:
+            score -= 2.5
+            tags.append("avoid_heart_lead")
+        else:
+            # Once hearts are broken, low hearts are often useful escape leads.
+            score -= 0.5
+            tags.append("hearts_broken_heart_lead")
+            if int(card.rank) <= int(Rank.FIVE):
+                score += 1.9
+                tags.append("low_heart_escape_lead")
+            elif int(card.rank) >= int(Rank.TEN):
+                score -= 0.9
+                tags.append("avoid_high_heart_lead")
     score -= float(int(card.rank)) * 0.12
     tags.append("prefer_lower_lead")
     if card == _QUEEN_SPADES:
@@ -307,6 +323,10 @@ def _score_lead_v2(
         # High spade leads are broadly risky without strong trick context.
         score -= 0.8
         tags.append("cautious_high_spade_lead")
+    if state.hearts_broken and low_heart_legal and card in (_QUEEN_SPADES, _KING_SPADES, _ACE_SPADES):
+        # Do not burn high spades when a cheap heart escape lead exists.
+        score -= 1.6
+        tags.append("prefer_low_heart_over_high_spade")
     if state.trick_number == 0:
         score -= float(int(card.rank)) * 0.06
         tags.append("first_trick_conservative_lead")

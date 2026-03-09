@@ -507,3 +507,23 @@ def test_heuristic_v2_rollout_scores_lead_candidates() -> None:
         if candidate.card == Card(Suit.SPADES, Rank.QUEEN)
     )
     assert abs(queen_entry.rollout_score) > 0.01
+
+
+def test_heuristic_v2_broken_hearts_prefers_low_heart_escape_over_king_spades() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [
+            Card(Suit.SPADES, Rank.KING),
+            Card(Suit.HEARTS, Rank.THREE),
+        ],
+        PlayerId(1): [Card(Suit.CLUBS, Rank.TWO)],
+        PlayerId(2): [Card(Suit.CLUBS, Rank.THREE)],
+        PlayerId(3): [Card(Suit.CLUBS, Rank.FOUR)],
+    }
+    state.hearts_broken = True
+    state.trick_number = 8
+
+    bot = HeuristicBotV2(player_id=PlayerId(0))
+    card = bot.choose_play(state=state, rng=random.Random(73))
+
+    assert card == Card(Suit.HEARTS, Rank.THREE)
