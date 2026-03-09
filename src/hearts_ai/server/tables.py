@@ -5,7 +5,7 @@ import secrets
 import string
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from hearts_ai.bots.factory import create_bot, normalize_bot_name
 from hearts_ai.engine.cards import Card, Rank, Suit
@@ -120,6 +120,7 @@ class Table:
     last_recorded_scored_hand: int = 0
     game_end_recorded: bool = False
     summary_written: bool = False
+    debug_last_bot_decision: dict[str, Any] | None = None
 
     def join(self, display_name: str) -> str:
         if not display_name.strip():
@@ -261,6 +262,7 @@ class Table:
                     state=self.state,
                     rng=self.rng,
                 )
+                self._capture_bot_debug_decision(player_id=player_id, bot=bot, decision_kind="pass")
                 self.version += 1
                 return "bot_pass_submitted"
             return None
@@ -279,6 +281,7 @@ class Table:
             bot_player = self.state.turn
             bot = self._bot_for_player(bot_player)
             card = bot.choose_play(state=self.state, rng=self.rng)
+            self._capture_bot_debug_decision(player_id=bot_player, bot=bot, decision_kind="play")
             previous_trick_number = self.state.trick_number
             play_card(state=self.state, player_id=bot_player, card=card)
             self._capture_last_trick(previous_trick_number=previous_trick_number)
@@ -384,6 +387,26 @@ class Table:
 
     def _bot_for_player(self, player_id: PlayerId):
         return create_bot(self.bot_name_for_seat(player_id), player_id=player_id)
+
+    def _capture_bot_debug_decision(self, *, player_id: PlayerId, bot: Any, decision_kind: str) -> None:
+        if self.bot_name_for_seat(player_id) != "heuristic_v2":
+            return
+        if decision_kind == "pass":
+            payload = _serialize_heuristic_v2_pass_reason(bot)
+        elif decision_kind == "play":
+            payload = _serialize_heuristic_v2_play_reason(bot)
+        else:
+            return
+        if payload is None:
+            return
+        self.debug_last_bot_decision = {
+            "seat": int(player_id),
+            "bot_name": "heuristic_v2",
+            "decision_kind": decision_kind,
+            "hand_number": self.state.hand_number,
+            "trick_number": self.state.trick_number,
+            "payload": payload,
+        }
 
 
 @dataclass(slots=True)
@@ -518,6 +541,49 @@ def _card_from_code(code: str) -> Card:
     if rank_code not in _CARD_RANKS:
         raise InvalidTableActionError(f"Invalid card rank in card code: {code!r}.")
     return Card(suit=_CARD_SUITS[suit_code], rank=_CARD_RANKS[rank_code])
+
+
+def _serialize_heuristic_v2_pass_reason(bot: Any) -> dict[str, Any] | None:
+    peek = getattr(bot, "_peek_last_pass_reason", None)
+    if not callable(peek):
+        return None
+    reason = peek()
+    if reason is None:
+        return None
+    return {
+        "selected_cards": [str(card) for card in reason.selected_cards],
+        "candidates": [
+            {
+                "card": str(candidate.card),
+                "score": [int(value) for value in candidate.score],
+            }
+            for candidate in reason.candidates
+        ],
+    }
+
+
+def _serialize_heuristic_v2_play_reason(bot: Any) -> dict[str, Any] | None:
+    peek = getattr(bot, "_peek_last_play_reason", None)
+    if not callable(peek):
+        return None
+    reason = peek()
+    if reason is None:
+        return None
+    return {
+        "mode": str(reason.mode),
+        "chosen_card": str(reason.chosen_card),
+        "moon_defense_target": int(reason.moon_defense_target) if reason.moon_defense_target is not None else None,
+        "candidates": [
+            {
+                "card": str(candidate.card),
+                "base_score": float(candidate.base_score),
+                "rollout_score": float(candidate.rollout_score),
+                "total_score": float(candidate.total_score),
+                "tags": [str(tag) for tag in candidate.tags],
+            }
+            for candidate in reason.candidates
+        ],
+    }
 
 
 __all__ = [

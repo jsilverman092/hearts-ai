@@ -342,3 +342,51 @@ def test_snapshot_resets_last_trick_and_hand_points_on_new_hand() -> None:
     assert snapshot["trick_number"] == 0
     assert snapshot["last_trick"] is None
     assert snapshot["seat_hand_points"] == {"0": 0, "1": 0, "2": 0, "3": 0}
+
+
+def test_snapshot_exposes_heuristic_v2_debug_decision_payload() -> None:
+    manager = TableManager()
+    table, host_secret = manager.create_table(display_name="Host", target_score=30, seed=31)
+    manager.add_bot(table.table_code, seat=0, bot_name="heuristic_v2")
+    manager.add_bot(table.table_code, seat=1, bot_name="heuristic_v2")
+    manager.add_bot(table.table_code, seat=2, bot_name="heuristic_v2")
+    manager.add_bot(table.table_code, seat=3, bot_name="heuristic_v2")
+
+    for _ in range(16):
+        result = manager.advance_one_action(table.table_code, player_secret=host_secret)
+        if result.action in {"bot_pass_submitted", "bot_card_played"}:
+            break
+    else:
+        raise AssertionError("Did not capture a heuristic_v2 decision action.")
+
+    current = manager.get_table(table.table_code)
+    snapshot = table_snapshot(current, viewer_secret=host_secret)
+    debug = snapshot["debug_last_bot_decision"]
+
+    assert isinstance(debug, dict)
+    assert debug["bot_name"] == "heuristic_v2"
+    assert debug["decision_kind"] in {"pass", "play"}
+    assert isinstance(debug["seat"], int)
+    assert isinstance(debug["hand_number"], int)
+    assert isinstance(debug["trick_number"], int)
+    assert isinstance(debug["payload"], dict)
+    if debug["decision_kind"] == "pass":
+        assert "selected_cards" in debug["payload"]
+        assert "candidates" in debug["payload"]
+    else:
+        assert "chosen_card" in debug["payload"]
+        assert "candidates" in debug["payload"]
+
+
+def test_snapshot_debug_decision_is_none_when_no_heuristic_v2_action() -> None:
+    manager = TableManager()
+    table, host_secret = manager.create_table(display_name="Host", target_score=30, seed=33)
+    manager.add_bot(table.table_code, seat=0, bot_name="random")
+    manager.add_bot(table.table_code, seat=1, bot_name="random")
+    manager.add_bot(table.table_code, seat=2, bot_name="random")
+    manager.add_bot(table.table_code, seat=3, bot_name="random")
+
+    manager.advance_one_action(table.table_code, player_secret=host_secret)
+    current = manager.get_table(table.table_code)
+    snapshot = table_snapshot(current, viewer_secret=host_secret)
+    assert snapshot["debug_last_bot_decision"] is None

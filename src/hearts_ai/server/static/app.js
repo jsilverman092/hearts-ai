@@ -29,6 +29,7 @@ const appState = {
   prePassHandByHand: {},
   receivedPassCardsByHand: {},
   beginHandPendingByHand: {},
+  debugReasonEnabled: false,
 };
 
 const SEAT_POSITIONS = ["south", "west", "north", "east"];
@@ -86,6 +87,8 @@ const dom = {
   passHint: document.getElementById("passHint"),
   submitPassBtn: document.getElementById("submitPassBtn"),
   beginHandBtn: document.getElementById("beginHandBtn"),
+  debugReasonToggle: document.getElementById("debugReasonToggle"),
+  debugReasonContent: document.getElementById("debugReasonContent"),
 };
 
 function seatPositionForViewer(seat, viewerSeat) {
@@ -189,6 +192,67 @@ function passDirectionLabel(direction) {
     return normalized;
   }
   return "";
+}
+
+function formatDebugScore(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return String(value);
+  }
+  return numeric.toFixed(3);
+}
+
+function renderDebugReason(snapshot = appState.snapshot) {
+  if (!dom.debugReasonContent) {
+    return;
+  }
+  if (!appState.debugReasonEnabled) {
+    dom.debugReasonContent.textContent = "Enable the toggle to inspect latest heuristic_v2 decision.";
+    return;
+  }
+  if (!snapshot || !snapshot.debug_last_bot_decision) {
+    dom.debugReasonContent.textContent = "No heuristic_v2 decision captured yet.";
+    return;
+  }
+
+  const decision = snapshot.debug_last_bot_decision;
+  const lines = [
+    `Seat P${decision.seat} (${decision.bot_name})`,
+    `Kind ${decision.decision_kind}  Hand ${decision.hand_number}  Trick ${decision.trick_number}`,
+  ];
+  const payload = decision.payload || {};
+
+  if (decision.decision_kind === "pass") {
+    const selected = Array.isArray(payload.selected_cards) ? payload.selected_cards : [];
+    lines.push(`Selected: ${selected.join(" ") || "-"}`);
+    const candidates = Array.isArray(payload.candidates) ? payload.candidates : [];
+    const top = candidates.slice(0, 5);
+    lines.push("Top pass candidates:");
+    for (const candidate of top) {
+      const score = Array.isArray(candidate.score) ? candidate.score.join(",") : "";
+      lines.push(`- ${candidate.card} [${score}]`);
+    }
+  } else if (decision.decision_kind === "play") {
+    lines.push(`Mode: ${payload.mode || "-"}`);
+    lines.push(`Chosen: ${payload.chosen_card || "-"}`);
+    lines.push(`Moon target: ${payload.moon_defense_target ?? "-"}`);
+    const candidates = Array.isArray(payload.candidates) ? payload.candidates : [];
+    const top = candidates.slice(0, 3);
+    lines.push("Top play candidates:");
+    for (const candidate of top) {
+      const tags = Array.isArray(candidate.tags) ? candidate.tags.join(", ") : "";
+      lines.push(
+        `- ${candidate.card} total=${formatDebugScore(candidate.total_score)} ` +
+        `base=${formatDebugScore(candidate.base_score)} rollout=${formatDebugScore(candidate.rollout_score)}`
+      );
+      if (tags) {
+        lines.push(`  tags: ${tags}`);
+      }
+    }
+  } else {
+    lines.push("Unsupported decision payload.");
+  }
+  dom.debugReasonContent.textContent = lines.join("\n");
 }
 
 function applySnapshot(snapshot) {
@@ -1082,6 +1146,7 @@ function render(snapshot = appState.snapshot) {
     dom.beginHandBtn.classList.add("hidden");
     appState.hasRenderedSnapshot = false;
     updatePaceControls(null);
+    renderDebugReason(null);
     return;
   }
 
@@ -1139,6 +1204,7 @@ function render(snapshot = appState.snapshot) {
   renderPassPanel(snapshot);
   renderHand(snapshot);
   renderBeginHandButton(snapshot);
+  renderDebugReason(snapshot);
   updatePaceControls(snapshot);
   appState.hasRenderedSnapshot = true;
   scheduleAutoAdvance(snapshot);
@@ -1174,6 +1240,12 @@ function wireEvents() {
     updatePaceControls();
     scheduleAutoAdvance();
   });
+  if (dom.debugReasonToggle) {
+    dom.debugReasonToggle.addEventListener("change", () => {
+      appState.debugReasonEnabled = dom.debugReasonToggle.checked;
+      renderDebugReason();
+    });
+  }
 }
 
 function boot() {
@@ -1184,6 +1256,9 @@ function boot() {
   if (appState.tableCode) {
     dom.joinCode.value = appState.tableCode;
     dom.tableCodeValue.textContent = appState.tableCode;
+  }
+  if (dom.debugReasonToggle) {
+    dom.debugReasonToggle.checked = appState.debugReasonEnabled;
   }
   setConnectionStatus("offline", false);
   wireEvents();

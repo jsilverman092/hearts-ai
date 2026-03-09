@@ -83,6 +83,15 @@
           </div>
         </article>
 
+        <article class="card debug-card">
+          <h3>Bot Debug</h3>
+          <label class="toggle-row" for="debugReasonToggle">
+            <input id="debugReasonToggle" type="checkbox" />
+            <span>Show heuristic_v2 reasoning</span>
+          </label>
+          <pre id="debugReasonContent" class="mono debug-reason">Enable the toggle to inspect latest heuristic_v2 decision.</pre>
+        </article>
+
         <article class="card table-card">
           <h3>Table</h3>
           <div id="tableSurface" class="table-surface">
@@ -112,6 +121,6 @@
       </section>
     </main>
 
-    <script src="/static/app.js?v=19" defer></script>
+    <script src="/static/app.js?v=20" defer></script>
   </body>
 </html>

@@ -110,6 +110,7 @@ def table_snapshot(table: Table, *, viewer_secret: str | None = None) -> dict[st
         "viewer_hand": hand_cards,
         "viewer_legal_moves": legal_for_viewer,
         "pass_submissions": pass_status,
+        "debug_last_bot_decision": table.debug_last_bot_decision,
     }
 
 
