@@ -119,7 +119,7 @@ class HeuristicBotV2:
         )
         candidate_reasons: list[PlayCandidateReason] = []
         for card in legal:
-            base_score, tags = _score_base_v2(
+            base_score, tags = self._score_base(
                 state=state,
                 player_id=self.player_id,
                 legal=legal,
@@ -174,6 +174,24 @@ class HeuristicBotV2:
     def _peek_last_play_reason(self) -> PlayDecisionReason | None:
         return self._last_play_reason
 
+    def _score_base(
+        self,
+        state: GameState,
+        player_id: PlayerId,
+        legal: list[Card],
+        card: Card,
+        mode: Literal["lead", "follow", "discard"],
+        moon_target: PlayerId | None,
+    ) -> tuple[float, list[str]]:
+        return _score_base_v2(
+            state=state,
+            player_id=player_id,
+            legal=legal,
+            card=card,
+            mode=mode,
+            moon_target=moon_target,
+        )
+
 
 class HeuristicBotV3(HeuristicBotV2):
     def choose_pass(self, hand: Hand, state: GameState, rng: random.Random) -> list[Card]:
@@ -197,6 +215,24 @@ class HeuristicBotV3(HeuristicBotV2):
             ),
         )
         return list(selected)
+
+    def _score_base(
+        self,
+        state: GameState,
+        player_id: PlayerId,
+        legal: list[Card],
+        card: Card,
+        mode: Literal["lead", "follow", "discard"],
+        moon_target: PlayerId | None,
+    ) -> tuple[float, list[str]]:
+        return _score_base_v3(
+            state=state,
+            player_id=player_id,
+            legal=legal,
+            card=card,
+            mode=mode,
+            moon_target=moon_target,
+        )
 
 
 def _choose_lead(legal: list[Card]) -> Card:
@@ -409,6 +445,35 @@ def _score_base_v2(
     )
 
 
+def _score_base_v3(
+    state: GameState,
+    player_id: PlayerId,
+    legal: list[Card],
+    card: Card,
+    mode: Literal["lead", "follow", "discard"],
+    moon_target: PlayerId | None,
+) -> tuple[float, list[str]]:
+    if mode == "lead":
+        return _score_lead_v3(
+            state=state,
+            legal=legal,
+            hand=state.hands[player_id],
+            card=card,
+        )
+    if mode == "follow":
+        return _score_follow_v2(
+            state=state,
+            player_id=player_id,
+            card=card,
+            moon_target=moon_target,
+        )
+    return _score_discard_v2(
+        state=state,
+        card=card,
+        moon_target=moon_target,
+    )
+
+
 def _score_lead_v2(
     state: GameState,
     legal: list[Card],
@@ -468,6 +533,82 @@ def _score_lead_v2(
         # If we are effectively forced to lead spades, favor lower spades.
         score -= float(int(card.rank)) * 0.04
         tags.append("forced_spade_lead_prefer_low")
+    return score, tags
+
+
+def _score_lead_v3(
+    state: GameState,
+    legal: list[Card],
+    hand: Hand,
+    card: Card,
+) -> tuple[float, list[str]]:
+    score, tags = _score_lead_v2(state=state, legal=legal, card=card)
+    qs_seen_in_play = any(current == _QUEEN_SPADES for _, current in state.trick_in_progress)
+    qs_seen_in_taken = any(
+        current == _QUEEN_SPADES
+        for taken in state.taken_tricks.values()
+        for trick in taken
+        for _, current in trick
+    )
+    has_sub_queen_spade_lead = any(
+        candidate.suit == Suit.SPADES and int(candidate.rank) <= int(Rank.JACK)
+        for candidate in legal
+    )
+    if (
+        card.suit != Suit.SPADES
+        and _QUEEN_SPADES not in hand
+        and not qs_seen_in_play
+        and not qs_seen_in_taken
+        and has_sub_queen_spade_lead
+        and int(card.rank) >= int(Rank.TEN)
+    ):
+        # If QS is still live, mid/high off-suit leads can win awkward queen-dump tricks.
+        score -= 0.35
+        tags.append("v3_avoid_mid_offsuit_when_qs_live")
+        if int(card.rank) >= int(Rank.JACK):
+            score -= 0.15
+            tags.append("v3_extra_offsuit_win_risk")
+
+    if card.suit != Suit.SPADES:
+        return score, tags
+
+    if card == Card(Suit.SPADES, Rank.JACK):
+        # Jack of spades is not in the same control-risk class as Q/K/A spades.
+        score += 0.8
+        tags.append("v3_jack_spade_not_high_control")
+
+    non_spade_legal = [candidate for candidate in legal if candidate.suit != Suit.SPADES]
+    if not non_spade_legal:
+        return score, tags
+
+    spades = [current for current in hand if current.suit == Suit.SPADES]
+    spade_count = len(spades)
+    has_qs = _QUEEN_SPADES in spades
+    has_ks = _KING_SPADES in spades
+    has_as = _ACE_SPADES in spades
+    high_spade_count = int(has_as) + int(has_ks)
+    low_spade_cover = sum(1 for current in spades if current.rank <= Rank.NINE)
+
+    if has_qs and spade_count <= 4:
+        score -= 2.1
+        tags.append("v3_avoid_short_qs_shape_spade_lead")
+        if card == _QUEEN_SPADES:
+            score -= 1.4
+            tags.append("v3_avoid_qs_flush_lead")
+
+    fragile_protection_shape = (
+        not has_qs
+        and high_spade_count > 0
+        and (spade_count - high_spade_count) <= 2
+        and low_spade_cover <= 2
+    )
+    if fragile_protection_shape:
+        score -= 1.5
+        tags.append("v3_preserve_spade_protection_shape")
+        if card in (_ACE_SPADES, _KING_SPADES):
+            score -= 1.3
+            tags.append("v3_avoid_exposing_high_spade_protection")
+
     return score, tags
 
 

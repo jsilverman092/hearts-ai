@@ -254,6 +254,15 @@ Implementation targets:
   - with `5 or more` total spades, often keep `Q♠`
   - add `A♠` / `K♠` protection logic so they are not blindly passed when they function as cover
   - never pass low spades in normal v3 logic
+- Lead-play refinements:
+  - avoid leading spades when holding `Q♠` with short-ish spade length unless materially forced
+  - specifically, when holding `Q♠` and `4 or fewer` total spades, prefer a reasonable non-spade lead over flushing spades early
+  - avoid leading spades when not holding `Q♠` but holding `A♠` and/or `K♠` with fragile short spade shape
+  - specifically, when holding `A♠` / `K♠` without `Q♠` and only a small amount of low-spade cover, prefer a reasonable non-spade lead over exposing protection cards
+  - do not treat `J♠` as a true "high spade" in the same danger class as `Q♠` / `K♠` / `A♠`
+  - distinguish dangerous spade-control leads (`Q♠` / `K♠` / `A♠`) from safer sub-queen spade leads
+  - when `Q♠` is still live, allow `J♠` or lower spade leads to outrank riskier mid and mid-high off-suit leads that can win awkward queen-dump tricks
+  - implement these as strong context-sensitive penalties rather than absolute bans so forced-spade cases still behave sensibly
 - Optional small hand-shape adjustments:
   - short-suit honors become riskier pass candidates
   - lower cover beneath a card makes it safer to keep
@@ -266,6 +275,8 @@ Constraints:
 Acceptance criteria:
 - `heuristic_v3` no longer makes obviously bad low-heart / low-card pass decisions like passing `3H` over `JC` / `JD` in ordinary hands.
 - `heuristic_v3` avoids structurally wrong high-spade passes in long-spade hands.
+- `heuristic_v3` avoids short-spade opening leads that prematurely flush a suit containing `Q♠` or fragile `A♠` / `K♠` protection when a sane non-spade lead exists.
+- `heuristic_v3` no longer penalizes `J♠`-type leads as if they were `Q♠` / `K♠` / `A♠`, and can prefer sub-queen spade leads over riskier mid off-suit leads when `Q♠` is still out.
 - v3 remains deterministic and legal.
 - v3 can be benchmarked cleanly against `heuristic_v2`, `heuristic`, and `random`.
 
@@ -277,6 +288,8 @@ Update/add tests:
   - play-choice scenarios for lead/follow/off-suit
   - `heuristic_v2` regression scenarios for dangerous opening leads, broken-hearts low-heart escape leads, and unsafe high-spade dumps
   - `heuristic_v3` pass-structure scenarios for low-heart preservation, dangerous offsuit honors, and long-spade `Q♠` / `A♠` / `K♠` exceptions
+  - `heuristic_v3` lead-choice scenarios for short-spade `Q♠` avoidance and fragile `A♠` / `K♠` protection leads
+  - `heuristic_v3` lead-choice scenarios distinguishing `J♠` / sub-queen spades from true dangerous spade-control leads
 - integration/smoke:
   - deterministic full-game runs with heuristic bots
   - legal-move invariants remain enforced

@@ -627,3 +627,91 @@ def test_heuristic_v3_choose_pass_records_reason_payload() -> None:
     assert len(passed) == state.config.pass_count
     assert reason is not None
     assert tuple(passed) == reason.selected_cards
+
+
+def test_heuristic_v3_avoids_short_qs_shape_spade_lead_when_non_spade_available() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [
+            Card(Suit.SPADES, Rank.QUEEN),
+            Card(Suit.SPADES, Rank.SEVEN),
+            Card(Suit.SPADES, Rank.FOUR),
+            Card(Suit.DIAMONDS, Rank.JACK),
+            Card(Suit.CLUBS, Rank.KING),
+        ],
+        PlayerId(1): [Card(Suit.CLUBS, Rank.TWO)],
+        PlayerId(2): [Card(Suit.CLUBS, Rank.THREE)],
+        PlayerId(3): [Card(Suit.CLUBS, Rank.FOUR)],
+    }
+    state.hearts_broken = False
+    state.trick_number = 6
+
+    bot = HeuristicBotV3(player_id=PlayerId(0), rollout_samples=0)
+    card = bot.choose_play(state=state, rng=random.Random(90))
+
+    assert card == Card(Suit.DIAMONDS, Rank.JACK)
+
+
+def test_heuristic_v3_avoids_spade_lead_with_fragile_ak_protection_shape() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [
+            Card(Suit.SPADES, Rank.ACE),
+            Card(Suit.SPADES, Rank.KING),
+            Card(Suit.SPADES, Rank.FIVE),
+            Card(Suit.DIAMONDS, Rank.JACK),
+            Card(Suit.CLUBS, Rank.KING),
+        ],
+        PlayerId(1): [Card(Suit.CLUBS, Rank.TWO)],
+        PlayerId(2): [Card(Suit.CLUBS, Rank.THREE)],
+        PlayerId(3): [Card(Suit.CLUBS, Rank.FOUR)],
+    }
+    state.hearts_broken = False
+    state.trick_number = 6
+
+    bot = HeuristicBotV3(player_id=PlayerId(0), rollout_samples=0)
+    card = bot.choose_play(state=state, rng=random.Random(91))
+
+    assert card == Card(Suit.DIAMONDS, Rank.JACK)
+
+
+def test_heuristic_v3_short_qs_shape_penalty_is_not_absolute_on_forced_spade_lead() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [
+            Card(Suit.SPADES, Rank.QUEEN),
+            Card(Suit.SPADES, Rank.SEVEN),
+            Card(Suit.SPADES, Rank.FOUR),
+        ],
+        PlayerId(1): [Card(Suit.CLUBS, Rank.TWO)],
+        PlayerId(2): [Card(Suit.CLUBS, Rank.THREE)],
+        PlayerId(3): [Card(Suit.CLUBS, Rank.FOUR)],
+    }
+    state.hearts_broken = False
+    state.trick_number = 7
+
+    bot = HeuristicBotV3(player_id=PlayerId(0), rollout_samples=0)
+    card = bot.choose_play(state=state, rng=random.Random(92))
+
+    assert card == Card(Suit.SPADES, Rank.FOUR)
+
+
+def test_heuristic_v3_prefers_jack_spades_over_ten_clubs_when_qs_unseen() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [
+            Card(Suit.SPADES, Rank.JACK),
+            Card(Suit.CLUBS, Rank.TEN),
+            Card(Suit.HEARTS, Rank.KING),
+        ],
+        PlayerId(1): [Card(Suit.CLUBS, Rank.TWO)],
+        PlayerId(2): [Card(Suit.CLUBS, Rank.THREE)],
+        PlayerId(3): [Card(Suit.CLUBS, Rank.FOUR)],
+    }
+    state.hearts_broken = False
+    state.trick_number = 5
+
+    bot = HeuristicBotV3(player_id=PlayerId(0), rollout_samples=0)
+    card = bot.choose_play(state=state, rng=random.Random(93))
+
+    assert card == Card(Suit.SPADES, Rank.JACK)
