@@ -193,6 +193,36 @@ Acceptance criteria:
 - Benchmark results remain at least competitive with v1 and clearly above random.
 - Phase 3 reason payload hooks remain intact for future UI explanation mode.
 
+## Phase 3.6: HeuristicBot v2 Debug Explanations
+
+Scope:
+- Expose existing internal `heuristic_v2` decision-reason payloads for debugging.
+- Keep this phase developer-facing and lightweight, not polished end-user UX.
+- Limit explanation support to `heuristic_v2`; do not backfill `heuristic` v1 unless it is nearly free.
+
+Implementation targets:
+- Server/API:
+  - include latest `heuristic_v2` pass/play reason payload in a debug-safe snapshot field or dedicated debug endpoint
+  - keep payload optional so non-`heuristic_v2` seats do not need explanation data
+  - avoid changing gameplay behavior or pacing
+- UI:
+  - add a toggleable debug inspector for the latest bot decision
+  - show chosen card, play mode, top candidate alternatives, and score components
+  - render rationale tags directly from payload (for example: `avoid_qs_lead`, `low_heart_escape_lead`)
+- Reuse:
+  - preserve payload shape so later search-bot explanations can use the same or similar presentation
+
+Constraints:
+- Do not generate natural-language prose explanations in this phase.
+- Do not expose explanation data by default in a noisy way during normal play.
+- Keep payload generation side-effect-free and cheap enough for normal simulations.
+
+Acceptance criteria:
+- A developer can inspect the latest `heuristic_v2` decision in the UI without reading logs.
+- Exposed data clearly separates chosen move, alternatives, base score, rollout score, and tags.
+- Non-`heuristic_v2` seats continue to work without explanation payloads.
+- Existing tests remain green; add focused server/UI coverage only where useful.
+
 ## Test Plan
 
 Update/add tests:
@@ -206,6 +236,7 @@ Update/add tests:
 - server/UI path:
   - bot seat type selection and persistence in table state
   - deterministic auto-advance behavior when seats use `heuristic`
+  - optional debug payload exposure for `heuristic_v2` decisions
 
 Do not make benchmark win-rate assertions brittle in CI:
 - Keep strict assertions for determinism/legality.
@@ -217,6 +248,7 @@ Start complex methods (determinized search) only after:
 - Heuristic v2 is stable and well-tested.
 - Benchmark harness is automated and trusted.
 - Heuristic bot has a clear margin over random across enough games/seeds.
+- Heuristic v2 debug explanations are available for fast behavior inspection.
 
 ## Suggested Implementation Order
 
@@ -227,4 +259,5 @@ Start complex methods (determinized search) only after:
 5. Phase 2.6 UI gameplay polish
 6. Phase 3 HeuristicBot v2
 7. Phase 3.5 HeuristicBot v2 stabilization
-8. Compare v1/v2 and decide on search transition
+8. Phase 3.6 HeuristicBot v2 debug explanations
+9. Compare v1/v2 and decide on search transition
