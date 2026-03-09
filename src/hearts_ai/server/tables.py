@@ -389,7 +389,8 @@ class Table:
         return create_bot(self.bot_name_for_seat(player_id), player_id=player_id)
 
     def _capture_bot_debug_decision(self, *, player_id: PlayerId, bot: Any, decision_kind: str) -> None:
-        if self.bot_name_for_seat(player_id) != "heuristic_v2":
+        bot_name = self.bot_name_for_seat(player_id)
+        if bot_name not in {"heuristic_v2", "heuristic_v3"}:
             return
         if decision_kind == "pass":
             payload = _serialize_heuristic_v2_pass_reason(bot)
@@ -401,7 +402,7 @@ class Table:
             return
         self.debug_last_bot_decision = {
             "seat": int(player_id),
-            "bot_name": "heuristic_v2",
+            "bot_name": bot_name,
             "decision_kind": decision_kind,
             "hand_number": self.state.hand_number,
             "trick_number": self.state.trick_number,

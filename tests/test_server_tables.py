@@ -390,3 +390,26 @@ def test_snapshot_debug_decision_is_none_when_no_heuristic_v2_action() -> None:
     current = manager.get_table(table.table_code)
     snapshot = table_snapshot(current, viewer_secret=host_secret)
     assert snapshot["debug_last_bot_decision"] is None
+
+
+def test_snapshot_exposes_heuristic_v3_debug_decision_payload() -> None:
+    manager = TableManager()
+    table, host_secret = manager.create_table(display_name="Host", target_score=30, seed=35)
+    manager.add_bot(table.table_code, seat=0, bot_name="heuristic_v3")
+    manager.add_bot(table.table_code, seat=1, bot_name="heuristic_v3")
+    manager.add_bot(table.table_code, seat=2, bot_name="heuristic_v3")
+    manager.add_bot(table.table_code, seat=3, bot_name="heuristic_v3")
+
+    for _ in range(16):
+        result = manager.advance_one_action(table.table_code, player_secret=host_secret)
+        if result.action in {"bot_pass_submitted", "bot_card_played"}:
+            break
+    else:
+        raise AssertionError("Did not capture a heuristic_v3 decision action.")
+
+    current = manager.get_table(table.table_code)
+    snapshot = table_snapshot(current, viewer_secret=host_secret)
+    debug = snapshot["debug_last_bot_decision"]
+
+    assert isinstance(debug, dict)
+    assert debug["bot_name"] == "heuristic_v3"

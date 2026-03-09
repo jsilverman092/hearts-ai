@@ -4,7 +4,7 @@ const DEFAULT_PACE_MS = 900;
 const FAST_FORWARD_PACE_MS = 220;
 const PASS_AUTOPLAY_DELAY_MS = 20;
 const TRICK_HOLD_MS = 1500;
-const BOT_OPTIONS = ["heuristic_v2", "heuristic", "random"];
+const BOT_OPTIONS = ["heuristic_v3", "heuristic_v2", "heuristic", "random"];
 
 const appState = {
   tableCode: null,
@@ -161,7 +161,7 @@ function wsUrl() {
 
 function globalBotType() {
   if (!dom.botType || !dom.botType.value) {
-    return "heuristic_v2";
+    return "heuristic_v3";
   }
   return dom.botType.value;
 }
@@ -207,11 +207,11 @@ function renderDebugReason(snapshot = appState.snapshot) {
     return;
   }
   if (!appState.debugReasonEnabled) {
-    dom.debugReasonContent.textContent = "Enable the toggle to inspect latest heuristic_v2 decision.";
+    dom.debugReasonContent.textContent = "Enable the toggle to inspect latest heuristic_v2/v3 decision.";
     return;
   }
   if (!snapshot || !snapshot.debug_last_bot_decision) {
-    dom.debugReasonContent.textContent = "No heuristic_v2 decision captured yet.";
+    dom.debugReasonContent.textContent = "No heuristic_v2/v3 decision captured yet.";
     return;
   }
 

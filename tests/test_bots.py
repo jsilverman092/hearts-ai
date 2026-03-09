@@ -2,7 +2,7 @@ import random
 
 import pytest
 
-from hearts_ai.bots.heuristic_bot import HeuristicBot, HeuristicBotV2
+from hearts_ai.bots.heuristic_bot import HeuristicBot, HeuristicBotV2, HeuristicBotV3
 from hearts_ai.bots.random_bot import RandomBot
 from hearts_ai.engine.cards import Card, Rank, Suit
 from hearts_ai.engine.errors import InvalidStateError
@@ -527,3 +527,103 @@ def test_heuristic_v2_broken_hearts_prefers_low_heart_escape_over_king_spades() 
     card = bot.choose_play(state=state, rng=random.Random(73))
 
     assert card == Card(Suit.HEARTS, Rank.THREE)
+
+
+def test_heuristic_v3_preserves_three_hearts_over_dangerous_offsuit_honors() -> None:
+    state = GameState()
+    state.pass_direction = "left"
+    hand = [
+        Card(Suit.HEARTS, Rank.THREE),
+        Card(Suit.HEARTS, Rank.FIVE),
+        Card(Suit.DIAMONDS, Rank.JACK),
+        Card(Suit.CLUBS, Rank.JACK),
+        Card(Suit.CLUBS, Rank.TWO),
+        Card(Suit.CLUBS, Rank.FOUR),
+    ]
+    bot = HeuristicBotV3(player_id=PlayerId(0))
+
+    passed = bot.choose_pass(hand=hand, state=state, rng=random.Random(81))
+
+    assert Card(Suit.DIAMONDS, Rank.JACK) in passed
+    assert Card(Suit.CLUBS, Rank.JACK) in passed
+    assert Card(Suit.HEARTS, Rank.THREE) not in passed
+
+
+def test_heuristic_v3_passes_queen_spades_when_short_spades() -> None:
+    state = GameState()
+    state.pass_direction = "left"
+    hand = [
+        Card(Suit.SPADES, Rank.QUEEN),
+        Card(Suit.SPADES, Rank.NINE),
+        Card(Suit.SPADES, Rank.FOUR),
+        Card(Suit.HEARTS, Rank.ACE),
+        Card(Suit.DIAMONDS, Rank.KING),
+        Card(Suit.CLUBS, Rank.JACK),
+    ]
+    bot = HeuristicBotV3(player_id=PlayerId(0))
+
+    passed = bot.choose_pass(hand=hand, state=state, rng=random.Random(82))
+
+    assert Card(Suit.SPADES, Rank.QUEEN) in passed
+
+
+def test_heuristic_v3_keeps_queen_spades_with_long_spade_shape() -> None:
+    state = GameState()
+    state.pass_direction = "left"
+    hand = [
+        Card(Suit.SPADES, Rank.QUEEN),
+        Card(Suit.SPADES, Rank.NINE),
+        Card(Suit.SPADES, Rank.SEVEN),
+        Card(Suit.SPADES, Rank.FIVE),
+        Card(Suit.SPADES, Rank.THREE),
+        Card(Suit.HEARTS, Rank.ACE),
+        Card(Suit.HEARTS, Rank.KING),
+        Card(Suit.DIAMONDS, Rank.ACE),
+    ]
+    bot = HeuristicBotV3(player_id=PlayerId(0))
+
+    passed = bot.choose_pass(hand=hand, state=state, rng=random.Random(83))
+
+    assert Card(Suit.SPADES, Rank.QUEEN) not in passed
+
+
+def test_heuristic_v3_keeps_as_ks_with_cover_when_no_queen_spades() -> None:
+    state = GameState()
+    state.pass_direction = "left"
+    hand = [
+        Card(Suit.SPADES, Rank.ACE),
+        Card(Suit.SPADES, Rank.KING),
+        Card(Suit.SPADES, Rank.NINE),
+        Card(Suit.SPADES, Rank.SIX),
+        Card(Suit.SPADES, Rank.THREE),
+        Card(Suit.HEARTS, Rank.ACE),
+        Card(Suit.HEARTS, Rank.KING),
+        Card(Suit.DIAMONDS, Rank.QUEEN),
+    ]
+    bot = HeuristicBotV3(player_id=PlayerId(0))
+
+    passed = bot.choose_pass(hand=hand, state=state, rng=random.Random(84))
+
+    assert Card(Suit.SPADES, Rank.ACE) not in passed
+    assert Card(Suit.SPADES, Rank.KING) not in passed
+
+
+def test_heuristic_v3_choose_pass_records_reason_payload() -> None:
+    state = GameState()
+    state.pass_direction = "left"
+    hand = [
+        Card(Suit.SPADES, Rank.QUEEN),
+        Card(Suit.SPADES, Rank.NINE),
+        Card(Suit.SPADES, Rank.FOUR),
+        Card(Suit.HEARTS, Rank.ACE),
+        Card(Suit.DIAMONDS, Rank.KING),
+        Card(Suit.CLUBS, Rank.JACK),
+    ]
+    bot = HeuristicBotV3(player_id=PlayerId(0))
+
+    passed = bot.choose_pass(hand=hand, state=state, rng=random.Random(85))
+    reason = bot._peek_last_pass_reason()
+
+    assert len(passed) == state.config.pass_count
+    assert reason is not None
+    assert tuple(passed) == reason.selected_cards

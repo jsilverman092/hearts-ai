@@ -3,13 +3,14 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from hearts_ai.bots.base import Bot
-from hearts_ai.bots.heuristic_bot import HeuristicBot, HeuristicBotV2
+from hearts_ai.bots.heuristic_bot import HeuristicBot, HeuristicBotV2, HeuristicBotV3
 from hearts_ai.bots.random_bot import RandomBot
 from hearts_ai.engine.types import PLAYER_COUNT, PLAYER_IDS, PlayerId
 
 _BOT_BUILDERS = {
     "heuristic": HeuristicBot,
     "heuristic_v2": HeuristicBotV2,
+    "heuristic_v3": HeuristicBotV3,
     "random": RandomBot,
 }
 

@@ -29,7 +29,8 @@
           <input id="seed" type="number" placeholder="Auto" />
           <label for="botType">Bot Type</label>
           <select id="botType">
-            <option value="heuristic_v2" selected>heuristic_v2</option>
+            <option value="heuristic_v3" selected>heuristic_v3</option>
+            <option value="heuristic_v2">heuristic_v2</option>
             <option value="heuristic">heuristic</option>
             <option value="random">random</option>
           </select>
@@ -87,9 +88,9 @@
           <h3>Bot Debug</h3>
           <label class="toggle-row" for="debugReasonToggle">
             <input id="debugReasonToggle" type="checkbox" />
-            <span>Show heuristic_v2 reasoning</span>
+            <span>Show heuristic_v2/v3 reasoning</span>
           </label>
-          <pre id="debugReasonContent" class="mono debug-reason">Enable the toggle to inspect latest heuristic_v2 decision.</pre>
+          <pre id="debugReasonContent" class="mono debug-reason">Enable the toggle to inspect latest heuristic_v2/v3 decision.</pre>
         </article>
 
         <article class="card table-card">
@@ -121,6 +122,6 @@
       </section>
     </main>
 
-    <script src="/static/app.js?v=20" defer></script>
+    <script src="/static/app.js?v=22" defer></script>
   </body>
 </html>

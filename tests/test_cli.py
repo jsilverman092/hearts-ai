@@ -78,3 +78,11 @@ def test_benchmark_games_supports_heuristic_v2_bot_name() -> None:
         "BENCHMARK GAMES 3 SEED_START 2 TARGET 30 "
         "BOTS heuristic_v2,heuristic_v2,heuristic_v2,heuristic_v2"
     )
+
+
+def test_benchmark_games_supports_heuristic_v3_bot_name() -> None:
+    lines = benchmark_games(seed=2, games=3, target_score=30, bot_spec="heuristic_v3")
+    assert lines[0] == (
+        "BENCHMARK GAMES 3 SEED_START 2 TARGET 30 "
+        "BOTS heuristic_v3,heuristic_v3,heuristic_v3,heuristic_v3"
+    )

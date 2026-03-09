@@ -175,6 +175,30 @@ class HeuristicBotV2:
         return self._last_play_reason
 
 
+class HeuristicBotV3(HeuristicBotV2):
+    def choose_pass(self, hand: Hand, state: GameState, rng: random.Random) -> list[Card]:
+        del rng
+        pass_count = state.config.pass_count
+        if state.pass_direction == "hold" or pass_count == 0:
+            self._last_pass_reason = PassDecisionReason(selected_cards=(), candidates=())
+            return []
+        if pass_count > len(hand):
+            raise InvalidStateError(
+                f"Cannot pass {pass_count} cards from hand of size {len(hand)} for player {int(self.player_id)}."
+            )
+
+        ranked = sorted(hand, key=lambda card: _pass_priority_v3(card=card, hand=hand), reverse=True)
+        selected = tuple(sorted(ranked[:pass_count]))
+        self._last_pass_reason = PassDecisionReason(
+            selected_cards=selected,
+            candidates=tuple(
+                PassCandidateReason(card=card, score=_pass_priority_v3(card=card, hand=hand))
+                for card in ranked
+            ),
+        )
+        return list(selected)
+
+
 def _choose_lead(legal: list[Card]) -> Card:
     non_hearts = [card for card in legal if card.suit != Suit.HEARTS]
     candidates = non_hearts if non_hearts else legal
@@ -225,6 +249,112 @@ def _pass_priority(card: Card) -> tuple[int, int, int]:
     if card.suit in (Suit.CLUBS, Suit.DIAMONDS):
         return (2, int(card.rank), int(card.suit))
     return (1, int(card.rank), int(card.suit))
+
+
+def _pass_priority_v3(card: Card, hand: Hand) -> tuple[int, int, int]:
+    spades = [current for current in hand if current.suit == Suit.SPADES]
+    spade_count = len(spades)
+    has_qs = _QUEEN_SPADES in spades
+    has_ks = _KING_SPADES in spades
+    has_as = _ACE_SPADES in spades
+    low_spade_cover = sum(1 for current in spades if current.rank <= Rank.NINE)
+    suit_count = sum(1 for current in hand if current.suit == card.suit)
+    rank_value = int(card.rank)
+
+    if card == _QUEEN_SPADES:
+        if spade_count <= 3:
+            primary = 980
+        elif spade_count == 4:
+            primary = 920
+        elif spade_count == 5:
+            primary = 350
+        else:
+            primary = 260
+        if low_spade_cover >= 3:
+            primary -= 40
+        return (primary, rank_value, int(card.suit))
+
+    if card in (_ACE_SPADES, _KING_SPADES):
+        primary = 720 if card == _ACE_SPADES else 690
+        if spade_count >= 5:
+            primary -= 220
+        # In longer non-queen spade holdings, keep A/K as future queen protection.
+        if not has_qs and spade_count >= 3:
+            primary -= 140
+        if low_spade_cover >= 3:
+            primary -= 70
+        if has_as and has_ks:
+            if low_spade_cover < 3:
+                primary += 80 if card == _KING_SPADES else 30
+            else:
+                primary -= 30
+        lower_cover_for_card = sum(1 for current in spades if current.rank < card.rank)
+        if lower_cover_for_card == 0:
+            primary += 70
+        elif lower_cover_for_card >= 2:
+            primary -= 60
+        return (primary, rank_value, int(card.suit))
+
+    if card.suit == Suit.SPADES:
+        if card.rank <= Rank.THREE:
+            primary = 5
+        elif card.rank == Rank.FOUR:
+            primary = 35
+        elif card.rank == Rank.FIVE:
+            primary = 90
+        elif card.rank == Rank.SIX:
+            primary = 140
+        elif card.rank <= Rank.NINE:
+            primary = 230 + (rank_value - int(Rank.SEVEN)) * 20
+        elif card.rank == Rank.TEN:
+            primary = 320
+        else:
+            primary = 380
+        if spade_count >= 5:
+            primary -= 80
+        if suit_count >= 6:
+            primary -= 40
+        return (primary, rank_value, int(card.suit))
+
+    if card.suit == Suit.HEARTS:
+        if card.rank <= Rank.FOUR:
+            primary = 70 + (rank_value * 2)
+        elif card.rank == Rank.FIVE:
+            primary = 220
+        elif card.rank == Rank.SIX:
+            primary = 320
+        else:
+            primary = 460 + (rank_value - int(Rank.SEVEN)) * 40
+        if suit_count >= 5 and card.rank <= Rank.SIX:
+            primary -= 30
+        if suit_count <= 2 and card.rank >= Rank.TEN:
+            primary += 30
+        return (primary, rank_value, int(card.suit))
+
+    if card.suit == Suit.CLUBS:
+        if card.rank <= Rank.FOUR:
+            primary = 60
+        elif card.rank == Rank.FIVE:
+            primary = 180
+        elif card.rank <= Rank.NINE:
+            primary = 250 + (rank_value - int(Rank.SIX)) * 25
+        else:
+            primary = 520 + (rank_value - int(Rank.JACK)) * 45
+    else:
+        if card.rank <= Rank.THREE:
+            primary = 55
+        elif card.rank == Rank.FOUR:
+            primary = 175
+        elif card.rank <= Rank.NINE:
+            primary = 245 + (rank_value - int(Rank.FIVE)) * 24
+        else:
+            primary = 515 + (rank_value - int(Rank.JACK)) * 45
+
+    if card.rank >= Rank.JACK and suit_count <= 2:
+        primary += 45
+    if suit_count >= 5 and card.rank <= Rank.FIVE:
+        primary -= 30
+    return (primary, rank_value, int(card.suit))
 
 
 def _discard_priority(card: Card) -> tuple[int, int, int]:
@@ -520,6 +650,7 @@ def _full_deck() -> tuple[Card, ...]:
 __all__ = [
     "HeuristicBot",
     "HeuristicBotV2",
+    "HeuristicBotV3",
     "PassCandidateReason",
     "PassDecisionReason",
     "PlayCandidateReason",

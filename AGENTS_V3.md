@@ -223,6 +223,52 @@ Acceptance criteria:
 - Non-`heuristic_v2` seats continue to work without explanation payloads.
 - Existing tests remain green; add focused server/UI coverage only where useful.
 
+## Phase 4: HeuristicBot v3 (Hand-Structure-Aware Upgrade)
+
+Scope:
+- Keep `heuristic_v2` intact as the stabilized benchmarked baseline.
+- Implement `heuristic_v3` as a new bot with stronger hand-structure-aware pass logic and targeted follow-on play refinements.
+- Focus on fixing remaining obviously bad pass judgments exposed by the debug inspector before moving to search.
+
+Implementation targets:
+- Bot/versioning:
+  - add `HeuristicBotV3` alongside `HeuristicBotV2`
+  - expose `heuristic_v3` through bot factory, CLI, server, and UI bot selectors
+  - preserve v2 reason/debug hooks as the reference baseline
+- Pass heuristics:
+  - replace flat card-only pass ordering with suit-sensitive low-card preservation
+  - preserve truly safe low cards aggressively:
+    - clubs: `2C-4C`
+    - diamonds/spades: `2-3`
+    - hearts: `2H-4H` usually preserved
+  - treat next-band cards as context-sensitive rather than auto-safe:
+    - `5C`
+    - `4D/4S`
+    - `5H`
+    - `6H`
+  - treat higher hearts as normal pass candidates by default
+  - rank dangerous clubs/diamonds honors above tiny hearts when appropriate
+- Spade-structure logic:
+  - add `Q♠` pass exceptions based on total spade length
+  - with `4 or fewer` total spades, usually pass `Q♠`
+  - with `5 or more` total spades, often keep `Q♠`
+  - add `A♠` / `K♠` protection logic so they are not blindly passed when they function as cover
+  - never pass low spades in normal v3 logic
+- Optional small hand-shape adjustments:
+  - short-suit honors become riskier pass candidates
+  - lower cover beneath a card makes it safer to keep
+
+Constraints:
+- Keep the logic heuristic and testable; do not turn v3 into a large exception pile.
+- Prefer general structural rules over player-style-specific one-offs.
+- Reuse the same debug explanation pattern where practical so v2 vs v3 can be inspected consistently.
+
+Acceptance criteria:
+- `heuristic_v3` no longer makes obviously bad low-heart / low-card pass decisions like passing `3H` over `JC` / `JD` in ordinary hands.
+- `heuristic_v3` avoids structurally wrong high-spade passes in long-spade hands.
+- v3 remains deterministic and legal.
+- v3 can be benchmarked cleanly against `heuristic_v2`, `heuristic`, and `random`.
+
 ## Test Plan
 
 Update/add tests:
@@ -230,6 +276,7 @@ Update/add tests:
   - pass-priority scenarios (`Q♠`, high spades, high hearts)
   - play-choice scenarios for lead/follow/off-suit
   - `heuristic_v2` regression scenarios for dangerous opening leads, broken-hearts low-heart escape leads, and unsafe high-spade dumps
+  - `heuristic_v3` pass-structure scenarios for low-heart preservation, dangerous offsuit honors, and long-spade `Q♠` / `A♠` / `K♠` exceptions
 - integration/smoke:
   - deterministic full-game runs with heuristic bots
   - legal-move invariants remain enforced
@@ -249,6 +296,7 @@ Start complex methods (determinized search) only after:
 - Benchmark harness is automated and trusted.
 - Heuristic bot has a clear margin over random across enough games/seeds.
 - Heuristic v2 debug explanations are available for fast behavior inspection.
+- We have decided whether `heuristic_v3` is worth keeping as the stronger scripted baseline before search.
 
 ## Suggested Implementation Order
 
@@ -260,4 +308,5 @@ Start complex methods (determinized search) only after:
 6. Phase 3 HeuristicBot v2
 7. Phase 3.5 HeuristicBot v2 stabilization
 8. Phase 3.6 HeuristicBot v2 debug explanations
-9. Compare v1/v2 and decide on search transition
+9. Phase 4 HeuristicBot v3
+10. Compare v2/v3 and decide on search transition
