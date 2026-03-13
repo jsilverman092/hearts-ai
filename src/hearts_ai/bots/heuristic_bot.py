@@ -515,11 +515,9 @@ def _score_lead_v2(
     else:
         if not state.hearts_broken:
             score -= 2.5
-            tags.append("avoid_heart_lead")
         else:
             # Once hearts are broken, low hearts are often useful escape leads.
             score -= 0.5
-            tags.append("hearts_broken_heart_lead")
             if int(card.rank) <= int(Rank.FIVE):
                 score += 1.9
                 tags.append("low_heart_escape_lead")
