@@ -669,6 +669,28 @@ def test_heuristic_v3_keeps_as_ks_with_cover_when_no_queen_spades() -> None:
     assert Card(Suit.SPADES, Rank.KING) not in passed
 
 
+def test_heuristic_v3_rarely_passes_subqueen_spades_when_other_risks_exist() -> None:
+    state = GameState()
+    state.pass_direction = "left"
+    hand = [
+        Card(Suit.SPADES, Rank.JACK),
+        Card(Suit.SPADES, Rank.TWO),
+        Card(Suit.DIAMONDS, Rank.JACK),
+        Card(Suit.CLUBS, Rank.TEN),
+        Card(Suit.CLUBS, Rank.SIX),
+        Card(Suit.HEARTS, Rank.SEVEN),
+        Card(Suit.HEARTS, Rank.THREE),
+        Card(Suit.SPADES, Rank.ACE),
+    ]
+    bot = HeuristicBotV3(player_id=PlayerId(0))
+
+    passed = bot.choose_pass(hand=hand, state=state, rng=random.Random(86))
+
+    assert Card(Suit.SPADES, Rank.JACK) not in passed
+    assert Card(Suit.SPADES, Rank.TWO) not in passed
+    assert Card(Suit.DIAMONDS, Rank.JACK) in passed
+
+
 def test_heuristic_v3_choose_pass_records_reason_payload() -> None:
     state = GameState()
     state.pass_direction = "left"
@@ -864,6 +886,64 @@ def test_heuristic_v3_lead_prefers_floor_over_trap_and_boss_in_same_suit() -> No
     assert "v3_trap_card_lead_risk" in ten_entry.tags
     assert "v3_boss_card_lead_risk" in ace_entry.tags
     assert ten_entry.total_score > ace_entry.total_score
+
+
+def test_heuristic_v3_subqueen_spade_discard_is_qs_conditional() -> None:
+    def build_state(*, qs_seen: bool) -> GameState:
+        state = GameState()
+        state.hands = {
+            PlayerId(0): [
+                Card(Suit.SPADES, Rank.JACK),
+                Card(Suit.CLUBS, Rank.QUEEN),
+                Card(Suit.CLUBS, Rank.NINE),
+            ],
+            PlayerId(1): [Card(Suit.HEARTS, Rank.TWO)],
+            PlayerId(2): [Card(Suit.HEARTS, Rank.THREE)],
+            PlayerId(3): [Card(Suit.HEARTS, Rank.FOUR)],
+        }
+        state.taken_tricks = {
+            PlayerId(0): [[
+                (PlayerId(0), Card(Suit.CLUBS, Rank.TWO)),
+                (PlayerId(1), Card(Suit.CLUBS, Rank.FIVE)),
+                (PlayerId(2), Card(Suit.CLUBS, Rank.EIGHT)),
+                (PlayerId(3), Card(Suit.CLUBS, Rank.THREE)),
+            ]],
+            PlayerId(1): [[
+                (PlayerId(1), Card(Suit.SPADES, Rank.TWO)),
+                (PlayerId(2), Card(Suit.SPADES, Rank.QUEEN) if qs_seen else Card(Suit.SPADES, Rank.TEN)),
+                (PlayerId(3), Card(Suit.SPADES, Rank.THREE)),
+                (PlayerId(0), Card(Suit.SPADES, Rank.FOUR)),
+            ]],
+            PlayerId(2): [],
+            PlayerId(3): [],
+        }
+        state.trick_in_progress = [(PlayerId(1), Card(Suit.HEARTS, Rank.TWO))]
+        state.hearts_broken = True
+        state.trick_number = 7
+        return state
+
+    state_qs_live = build_state(qs_seen=False)
+    bot_qs_live = HeuristicBotV3(player_id=PlayerId(0), rollout_samples=0)
+    bot_qs_live.choose_play(state=state_qs_live, rng=random.Random(98))
+    reason_qs_live = bot_qs_live._peek_last_play_reason()
+    assert reason_qs_live is not None
+    js_live = next(
+        entry for entry in reason_qs_live.candidates if entry.card == Card(Suit.SPADES, Rank.JACK)
+    )
+
+    state_qs_dead = build_state(qs_seen=True)
+    bot_qs_dead = HeuristicBotV3(player_id=PlayerId(0), rollout_samples=0)
+    bot_qs_dead.choose_play(state=state_qs_dead, rng=random.Random(98))
+    reason_qs_dead = bot_qs_dead._peek_last_play_reason()
+    assert reason_qs_dead is not None
+    js_dead = next(
+        entry for entry in reason_qs_dead.candidates if entry.card == Card(Suit.SPADES, Rank.JACK)
+    )
+
+    assert "v3_preserve_subqueen_spade_while_qs_live" in js_live.tags
+    assert "v3_qs_dead_subqueen_spade_as_black_suit" not in js_live.tags
+    assert "v3_qs_dead_subqueen_spade_as_black_suit" in js_dead.tags
+    assert js_dead.base_score > js_live.base_score + 2.5
 
 
 def test_heuristic_v3_reduces_ks_discard_premium_after_qs_is_dead() -> None:
