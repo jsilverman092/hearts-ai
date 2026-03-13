@@ -90,7 +90,7 @@ class PublicInfoV3:
 @dataclass(slots=True)
 class HeuristicBotV2:
     player_id: PlayerId
-    rollout_samples: int = 4
+    rollout_samples: int = 12
     rollout_weight: float = 0.35
     moon_defense_threshold: int = 12
     _last_pass_reason: PassDecisionReason | None = field(init=False, default=None, repr=False)
@@ -562,31 +562,44 @@ def _score_lead_v3(
     score, tags = _score_lead_v2(state=state, legal=legal, card=card)
     public_info = _build_public_info_v3(state=state)
     players_ahead = _remaining_players_after(player_id=player_id, already_played=1)
-    lower_unseen_count = _count_lower_unseen_ranks(
+    outside_lower_count, outside_higher_count = _outside_rank_counts_for_card(
+        state=state,
         public_info=public_info,
-        suit=card.suit,
-        rank_value=int(card.rank),
+        player_id=player_id,
+        card=card,
     )
+    outside_count = outside_lower_count + outside_higher_count
     voids_ahead = _void_count_in_players(
         public_info=public_info,
         suit=card.suit,
         players=players_ahead,
     )
-    if int(card.rank) >= int(Rank.NINE):
-        if lower_unseen_count <= 3:
-            score -= 0.4
-            tags.append("v3_avoid_depleted_suit_lead")
-            if lower_unseen_count <= 1:
-                score -= 0.35
-                tags.append("v3_very_few_lower_cards_remain")
-        if voids_ahead > 0:
-            score -= 0.22 * float(voids_ahead)
-            tags.append("v3_avoid_high_lead_with_voids_ahead")
+    is_floor = outside_count > 0 and outside_lower_count == 0
+    is_boss = outside_count > 0 and outside_higher_count == 0
+    is_trap = outside_lower_count > 0 and 0 < outside_higher_count <= 2
 
-    lowest_unseen_rank = public_info.lowest_unseen_rank_by_suit[card.suit]
-    if lowest_unseen_rank is not None and int(card.rank) == lowest_unseen_rank:
-        score += 0.2
-        tags.append("v3_lead_current_lowest_unseen")
+    if is_floor:
+        score += 0.45
+        tags.append("v3_floor_card_lead_safe")
+    elif is_boss:
+        score -= 0.78
+        tags.append("v3_boss_card_lead_risk")
+    elif is_trap:
+        score -= 0.5 + (0.2 * float(2 - outside_higher_count))
+        tags.append("v3_trap_card_lead_risk")
+
+    if outside_count == 0:
+        # If we hold all remaining cards in suit, leading it always yields control.
+        score -= 0.9
+        tags.append("v3_lead_owned_suit_control_risk")
+
+    if int(card.rank) >= int(Rank.NINE) and voids_ahead > 0 and not is_floor:
+        score -= 0.22 * float(voids_ahead)
+        tags.append("v3_avoid_high_lead_with_voids_ahead")
+
+    if voids_ahead > 0 and (is_boss or is_trap or outside_count == 0):
+        score -= 0.14 * float(voids_ahead)
+        tags.append("v3_lead_void_amplifies_control_risk")
 
     has_sub_queen_spade_lead = any(
         candidate.suit == Suit.SPADES and int(candidate.rank) <= int(Rank.JACK)
@@ -748,10 +761,6 @@ def _infer_void_suits_by_player(state: GameState) -> dict[PlayerId, frozenset[Su
             if card.suit != led_suit:
                 inferred[player_id].add(led_suit)
     return {player_id: frozenset(suits) for player_id, suits in inferred.items()}
-
-
-def _count_lower_unseen_ranks(public_info: PublicInfoV3, suit: Suit, rank_value: int) -> int:
-    return sum(1 for unseen in public_info.unseen_ranks_by_suit[suit] if unseen < rank_value)
 
 
 def _outside_rank_counts_for_card(

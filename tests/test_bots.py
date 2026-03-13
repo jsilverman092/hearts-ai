@@ -778,7 +778,7 @@ def test_heuristic_v3_prefers_jack_spades_over_ten_clubs_when_qs_unseen() -> Non
     assert card == Card(Suit.SPADES, Rank.JACK)
 
 
-def test_heuristic_v3_lead_uses_void_and_suit_depletion_public_info() -> None:
+def test_heuristic_v3_lead_uses_void_and_public_suit_position_info() -> None:
     state = GameState()
     state.hands = {
         PlayerId(0): [
@@ -813,6 +813,57 @@ def test_heuristic_v3_lead_uses_void_and_suit_depletion_public_info() -> None:
     card = bot.choose_play(state=state, rng=random.Random(94))
 
     assert card == Card(Suit.CLUBS, Rank.TEN)
+
+
+def test_heuristic_v3_lead_prefers_floor_over_trap_and_boss_in_same_suit() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [
+            Card(Suit.DIAMONDS, Rank.SEVEN),
+            Card(Suit.DIAMONDS, Rank.TEN),
+            Card(Suit.DIAMONDS, Rank.ACE),
+        ],
+        PlayerId(1): [Card(Suit.CLUBS, Rank.FOUR)],
+        PlayerId(2): [Card(Suit.CLUBS, Rank.FIVE)],
+        PlayerId(3): [Card(Suit.CLUBS, Rank.SIX)],
+    }
+    state.taken_tricks = {
+        PlayerId(0): [[
+            (PlayerId(0), Card(Suit.DIAMONDS, Rank.TWO)),
+            (PlayerId(1), Card(Suit.DIAMONDS, Rank.THREE)),
+            (PlayerId(2), Card(Suit.DIAMONDS, Rank.FOUR)),
+            (PlayerId(3), Card(Suit.DIAMONDS, Rank.SIX)),
+        ]],
+        PlayerId(1): [[
+            (PlayerId(1), Card(Suit.CLUBS, Rank.TWO)),
+            (PlayerId(2), Card(Suit.DIAMONDS, Rank.FIVE)),
+            (PlayerId(3), Card(Suit.DIAMONDS, Rank.JACK)),
+            (PlayerId(0), Card(Suit.CLUBS, Rank.THREE)),
+        ]],
+        PlayerId(2): [[
+            (PlayerId(2), Card(Suit.CLUBS, Rank.SEVEN)),
+            (PlayerId(3), Card(Suit.DIAMONDS, Rank.QUEEN)),
+            (PlayerId(0), Card(Suit.CLUBS, Rank.EIGHT)),
+            (PlayerId(1), Card(Suit.CLUBS, Rank.NINE)),
+        ]],
+        PlayerId(3): [],
+    }
+    state.hearts_broken = False
+    state.trick_number = 8
+
+    bot = HeuristicBotV3(player_id=PlayerId(0), rollout_samples=0)
+    card = bot.choose_play(state=state, rng=random.Random(96))
+
+    assert card == Card(Suit.DIAMONDS, Rank.SEVEN)
+    reason = bot._peek_last_play_reason()
+    assert reason is not None
+    seven_entry = next(entry for entry in reason.candidates if entry.card == Card(Suit.DIAMONDS, Rank.SEVEN))
+    ten_entry = next(entry for entry in reason.candidates if entry.card == Card(Suit.DIAMONDS, Rank.TEN))
+    ace_entry = next(entry for entry in reason.candidates if entry.card == Card(Suit.DIAMONDS, Rank.ACE))
+    assert "v3_floor_card_lead_safe" in seven_entry.tags
+    assert "v3_trap_card_lead_risk" in ten_entry.tags
+    assert "v3_boss_card_lead_risk" in ace_entry.tags
+    assert ten_entry.total_score > ace_entry.total_score
 
 
 def test_heuristic_v3_discard_prefers_trap_over_floor_card_within_suit() -> None:

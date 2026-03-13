@@ -282,6 +282,8 @@ Implementation targets:
   - a `trap card` is a card with only a few higher outside cards but still some lower outside cards; trap cards are often among the most dangerous cards to keep because they can still win ugly tricks without being true floor cards
   - for off-suit discard evaluation, reward dumping `boss` and `trap` cards and avoid rewarding `floor` cards merely because the suit is depleted
   - for lead evaluation, strongly prefer true `floor` leads when they exist, and treat `boss` / `trap` leads as riskier especially when nearby voids make cheap overcalls less likely
+  - replace the current rough "depleted suit lead" proxy with the same `floor` / `trap` / `boss` framing so lead heuristics no longer produce unintuitive cases where a true control card outranks a trap card for the wrong reason
+  - use this lead cleanup to retire or rename misleading tags that only approximate the intended idea, especially where the current tag implies generic suit depletion rather than actual public suit position
   - when computing these signals, distinguish public outside cards from cards still held in our own hand so we do not misclassify a card as "safe" merely because we also hold adjacent cover in the same suit
   - keep debug tags semantically accurate and tied to the actual signal being measured, for example `floor_card_keep_safe`, `boss_card_dump_risk`, or `trap_card_dump_risk`
   - keep this phase to hard public-info inference only; do not add speculative opponent-reading or pass-memory logic yet
@@ -300,9 +302,46 @@ Acceptance criteria:
 - `heuristic_v3` avoids short-spade opening leads that prematurely flush a suit containing `Q♠` or fragile `A♠` / `K♠` protection when a sane non-spade lead exists.
 - `heuristic_v3` no longer penalizes `J♠`-type leads as if they were `Q♠` / `K♠` / `A♠`, and can prefer sub-queen spade leads over riskier mid off-suit leads when `Q♠` is still out.
 - `heuristic_v3` can use public trick history to recognize basic void information and suit depletion when evaluating lead safety.
+- `heuristic_v3` lead scoring uses `floor` / `trap` / `boss` concepts directly rather than a vague depleted-suit proxy.
 - `heuristic_v3` treats public suit position correctly: floor cards are generally kept, while boss/trap cards become stronger dump candidates.
 - v3 remains deterministic and legal.
 - v3 can be benchmarked cleanly against `heuristic_v2`, `heuristic`, and `random`.
+
+## Phase 4.5: UI Review Rewind
+
+Scope:
+- Add a lightweight rewind/review control in the web UI so a user can step backward through recently seen snapshots while inspecting bot behavior.
+- Keep this as a client-side review tool only; do not implement server-side undo or mutation of live game state.
+- Focus on debugging/inspection value, not replay authoring or persistent game history.
+
+Implementation targets:
+- Snapshot history:
+  - keep a bounded in-memory history of recent table snapshots in the browser
+  - record snapshots after each received state update / advance response
+  - track whether the user is viewing a historical snapshot vs live state
+- Controls:
+  - add a `Back` / rewind button adjacent to the existing `Step` control
+  - disable rewind when there is no earlier snapshot to inspect
+  - provide a clear way to return to live state, either explicit `Live` / `Jump to Live` control or automatic snap-back on next live update if that proves cleaner
+- Review behavior:
+  - when rewound, pause autoplay and prevent accidental confusion between review mode and live mode
+  - render historical snapshots as read-only review state; no pass/play actions should fire while viewing history
+  - preserve bot debug panel contents for the reviewed snapshot so users can inspect prior candidate scores/tags
+- UX constraints:
+  - keep the control minimal and local to the pace/debug workflow
+  - do not block normal live play for users who never use rewind
+  - do not attempt to reconstruct speculative animation state while rewinding; snapshot rendering is enough for this phase
+
+Constraints:
+- No engine/game-state undo.
+- No new server API for rewind unless a later need clearly justifies it.
+- Keep history bounded so browser memory usage stays predictable.
+
+Acceptance criteria:
+- A user can step back one or more recently observed snapshots in the UI.
+- Rewound state is visibly non-live/read-only and does not submit actions.
+- A user can return to live state cleanly.
+- Existing pace controls and live gameplay still work normally when rewind is not used.
 
 ## Test Plan
 
@@ -314,6 +353,7 @@ Update/add tests:
   - `heuristic_v3` pass-structure scenarios for low-heart preservation, dangerous offsuit honors, and long-spade `Q♠` / `A♠` / `K♠` exceptions
   - `heuristic_v3` lead-choice scenarios for short-spade `Q♠` avoidance and fragile `A♠` / `K♠` protection leads
   - `heuristic_v3` lead-choice scenarios distinguishing `J♠` / sub-queen spades from true dangerous spade-control leads
+  - `heuristic_v3` lead regression scenarios covering `floor card` vs `trap card` vs `boss card` ordering within the same suit
   - `heuristic_v3` public-info scenarios for suit depletion and inferred player voids affecting lead/discard choices
   - `heuristic_v3` discard regression scenarios covering `floor card` vs `trap card` vs `boss card` choices within the same suit
 - integration/smoke:
@@ -323,6 +363,7 @@ Update/add tests:
   - bot seat type selection and persistence in table state
   - deterministic auto-advance behavior when seats use `heuristic`
   - optional debug payload exposure for `heuristic_v2` decisions
+  - client-side rewind/review control preserves read-only historical inspection without affecting live table state
 
 Do not make benchmark win-rate assertions brittle in CI:
 - Keep strict assertions for determinism/legality.
@@ -349,3 +390,4 @@ Start complex methods (determinized search) only after:
 8. Phase 3.6 HeuristicBot v2 debug explanations
 9. Phase 4 HeuristicBot v3
 10. Compare v2/v3 and decide on search transition
+11. Phase 4.5 UI review rewind
