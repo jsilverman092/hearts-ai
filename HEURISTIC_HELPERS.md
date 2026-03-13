@@ -48,7 +48,6 @@ Notes:
 | --- | --- | --- | --- | --- |
 | `_pass_priority` | module-level | `v1`, `v2` | Simple card-only pass ranking used by the legacy heuristic pass logic. |  |
 | `_pass_priority_v3` | module-level | `v3` | Hand-aware pass ranking used by the `v3` pass logic. |  |
-| `_discard_priority` | module-level | `v1`, `v2` | Legacy discard ranking that currently reuses simple pass priority buckets. |  |
 
 ## Shared Play-Selection Plumbing
 
@@ -71,6 +70,7 @@ Notes:
 
 | Current name | Scope | Versions | Description | New name |
 | --- | --- | --- | --- | --- |
+| `_score_discard_priority_v2` | module-level | `v1`, `v2`, tie-breaks in `v2`/`v3` | Legacy discard-priority buckets used for scripted shedding, `v2` discard base scoring, and non-lead tie-break ordering. |  |
 | `_score_discard_v2` | module-level | `v2`, base of `v3` | Core discard heuristic used directly by `v2` and as the starting point for `v3`. |  |
 | `_score_discard_v3` | module-level | `v3` | Extends `v2` discard scoring with public card tracking and moon-defense stopper logic. |  |
 

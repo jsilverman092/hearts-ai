@@ -299,7 +299,7 @@ def _choose_follow_or_discard(trick: Trick, legal: list[Card], first_trick: bool
     follow_cards = [card for card in legal if card.suit == led_suit]
     if follow_cards:
         return _choose_follow(trick=trick, follow_cards=follow_cards, first_trick=first_trick)
-    return max(legal, key=_discard_priority)
+    return max(legal, key=_score_discard_priority_v2)
 
 
 def _choose_follow(trick: Trick, follow_cards: list[Card], first_trick: bool) -> Card:
@@ -311,14 +311,14 @@ def _choose_follow(trick: Trick, follow_cards: list[Card], first_trick: bool) ->
     trick_has_points = any(is_point_card(card) for _, card in trick)
 
     if trick_has_points and losing_cards:
-        return max(losing_cards, key=_discard_priority)
+        return max(losing_cards, key=_score_discard_priority_v2)
     if trick_has_points:
         return min(follow_cards, key=_low_key)
     if first_trick and not losing_cards:
         # First trick without points: if we must win, shed the highest club now.
-        return max(follow_cards, key=_discard_priority)
+        return max(follow_cards, key=_score_discard_priority_v2)
     if losing_cards:
-        return max(losing_cards, key=_discard_priority)
+        return max(losing_cards, key=_score_discard_priority_v2)
     return min(follow_cards, key=_low_key)
 
 
@@ -437,8 +437,19 @@ def _pass_priority_v3(card: Card, hand: Hand) -> tuple[int, int, int]:
     return (primary, rank_value, int(card.suit))
 
 
-def _discard_priority(card: Card) -> tuple[int, int, int]:
-    return _pass_priority(card)
+def _score_discard_priority_v2(card: Card) -> tuple[int, int, int]:
+    # Keep current v2 behavior stable while decoupling discard naming/ownership from pass scoring.
+    if card == _QUEEN_SPADES:
+        return (6, int(card.rank), int(card.suit))
+    if card == _ACE_SPADES:
+        return (5, int(card.rank), int(card.suit))
+    if card == _KING_SPADES:
+        return (4, int(card.rank), int(card.suit))
+    if card.suit == Suit.HEARTS:
+        return (3, int(card.rank), int(card.suit))
+    if card.suit in (Suit.CLUBS, Suit.DIAMONDS):
+        return (2, int(card.rank), int(card.suit))
+    return (1, int(card.rank), int(card.suit))
 
 
 # ---------------------------------------------------------------------------
@@ -750,9 +761,9 @@ def _score_discard_v3(
             score += 1.8
             tags.append("v3_qs_dead_subqueen_spade_as_black_suit")
     if card in (_ACE_SPADES, _KING_SPADES) and not public_info.qs_live:
-        # _score_discard_v2 includes a large queen-protection premium for A/K spades via
-        # shared discard/pass priority buckets. Once QS is dead, remove most of it.
-        queen_premium_buckets = max(_pass_priority(card)[0] - 2, 0)
+        # _score_discard_v2 includes a large queen-protection premium for A/K spades
+        # via v2 discard-priority buckets. Once QS is dead, remove most of it.
+        queen_premium_buckets = max(_score_discard_priority_v2(card)[0] - 2, 0)
         score -= 1.8 * float(queen_premium_buckets)
         tags.append("v3_qs_dead_reduce_ak_spade_dump_premium")
 
@@ -969,7 +980,7 @@ def _score_discard_v2(
 ) -> tuple[float, list[str]]:
     score = 0.0
     tags: list[str] = []
-    priority = _discard_priority(card)
+    priority = _score_discard_priority_v2(card)
     score += (float(priority[0]) * 1.8) + (float(priority[1]) * 0.04)
     tags.append("discard_priority")
 
@@ -1115,7 +1126,7 @@ def _move_tiebreak(mode: Literal["lead", "follow", "discard"], card: Card) -> tu
     if mode == "lead":
         # Prefer lower lead cards on ties.
         return (-int(card.rank), -int(card.suit), 0)
-    priority = _discard_priority(card)
+    priority = _score_discard_priority_v2(card)
     return (priority[0], priority[1], priority[2])
 
 

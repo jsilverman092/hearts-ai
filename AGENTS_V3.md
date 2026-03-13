@@ -435,6 +435,12 @@ Suggested substeps:
    - decide whether to retire or hide `heuristic_v2` from active runtime/UI paths
    - keep `heuristic` v1 available as the simple baseline
    - verify server/UI bot selection remains coherent
+7. Heuristic module split
+   - split `src/hearts_ai/bots/heuristic_bot.py` into a small `heuristic/` package once naming and ownership boundaries are clear
+   - separate major concerns such as shared bot base/plumbing, `v1`, `v2`, `v3`, public-info helpers, and rollout helpers
+   - preserve import compatibility at the factory/runtime layer unless and until a dedicated cleanup step changes those imports
+   - keep behavior unchanged
+   - verify with full test suite plus a mixed-field benchmark spot check
 
 ## Test Plan
 
