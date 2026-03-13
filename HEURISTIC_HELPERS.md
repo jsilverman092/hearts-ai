@@ -1,102 +1,100 @@
 # Heuristic Bot Helpers
 
-Reference file for helper methods and module-level helper functions in
-`src/hearts_ai/bots/heuristic/` (split from the old `heuristic_bot.py` single-file layout).
+Reference map for helper methods and module-level helper functions in:
+- `src/hearts_ai/bots/heuristic/`
+- compatibility entrypoint: `src/hearts_ai/bots/heuristic_bot.py`
 
 Purpose:
-- make ownership clearer while the heuristic bots are being refactored
-- provide a single place to review naming consistency
-- leave a blank `New name` field for any helpers that should be renamed later
+- make ownership clear after the Phase 4.6 module split
+- provide one place to review naming consistency
+- leave a blank `New name` field for any helpers you want to rename later
 
 Notes:
 - `Versions` describes which bot versions currently rely on the helper
-- `Scope` distinguishes class methods from module-level helpers (now spread across multiple files)
+- `Location` is the current module or class owner
 - blank `New name` cells are intentional
 
-## Base Class Helper Methods
+## Package Map
 
-| Current name | Scope | Versions | Description | New name |
+| Module | Role |
+| --- | --- |
+| `heuristic/bots.py` | Bot classes and class-owned helper methods |
+| `heuristic/scoring.py` | Scripted v1 helpers and pass/lead/follow/discard scoring helpers |
+| `heuristic/shared.py` | Shared play-loop plumbing (`mode`, moon target, candidate assembly, tie-break) |
+| `heuristic/public_info.py` | v3 public-card/void inference helpers |
+| `heuristic/rollout.py` | Rollout simulation helpers |
+| `heuristic/models.py` | Reason payload dataclasses and shared card constants |
+| `heuristic_bot.py` | Compatibility re-export module |
+
+## Class Methods
+
+| Current name | Location | Versions | Description | New name |
 | --- | --- | --- | --- | --- |
-| `_peek_last_pass_reason` | `_HeuristicScoringBotBase` method | `v2`, `v3` | Returns the cached pass explanation payload for debug/UI use. |  |
-| `_peek_last_play_reason` | `_HeuristicScoringBotBase` method | `v2`, `v3` | Returns the cached play explanation payload for debug/UI use. |  |
-| `_score_lead_candidate` | `_HeuristicScoringBotBase` method | `v2`, `v3` | Abstract lead-scoring hook implemented by each bot version. |  |
-| `_score_play_candidate` | `_HeuristicScoringBotBase` method | `v2`, `v3` | Dispatches one candidate into the lead/follow/discard scoring path. |  |
-| `_score_follow_candidate` | `_HeuristicScoringBotBase` method | `v2`, `v3` | Shared follow-scoring hook that currently routes to `v2` follow logic. |  |
-| `_score_discard_candidate` | `_HeuristicScoringBotBase` method | `v2`, `v3` | Abstract discard-scoring hook implemented by each bot version. |  |
+| `_peek_last_pass_reason` | `_HeuristicScoringBotBase` (`heuristic/bots.py`) | `v2`, `v3` | Returns cached pass explanation payload. |  |
+| `_peek_last_play_reason` | `_HeuristicScoringBotBase` (`heuristic/bots.py`) | `v2`, `v3` | Returns cached play explanation payload. |  |
+| `_score_play_candidate` | `_HeuristicScoringBotBase` (`heuristic/bots.py`) | `v2`, `v3` | Dispatches one candidate to lead/follow/discard scoring. |  |
+| `_score_follow_candidate` | `_HeuristicScoringBotBase` (`heuristic/bots.py`) | `v2`, `v3` | Shared follow scoring hook (routes to `_score_follow_v2`). |  |
+| `_score_lead_candidate` | `_HeuristicScoringBotBase` (`heuristic/bots.py`) | `v2`, `v3` | Abstract lead-scoring hook implemented by versioned bots. |  |
+| `_score_discard_candidate` | `_HeuristicScoringBotBase` (`heuristic/bots.py`) | `v2`, `v3` | Abstract discard-scoring hook implemented by versioned bots. |  |
+| `_score_lead_candidate` | `HeuristicBotV2` (`heuristic/bots.py`) | `v2` | v2 lead hook (`_score_lead_v2`). |  |
+| `_score_discard_candidate` | `HeuristicBotV2` (`heuristic/bots.py`) | `v2` | v2 discard hook (`_score_discard_v2`). |  |
+| `_score_lead_candidate` | `HeuristicBotV3` (`heuristic/bots.py`) | `v3` | v3 lead hook (`_score_lead_v3`). |  |
+| `_score_discard_candidate` | `HeuristicBotV3` (`heuristic/bots.py`) | `v3` | v3 discard hook (`_score_discard_v3`). |  |
 
-## Version-Specific Class Helper Methods
+## Scripted v1 Helpers
 
-| Current name | Scope | Versions | Description | New name |
+| Current name | Location | Versions | Description | New name |
 | --- | --- | --- | --- | --- |
-| `_score_lead_candidate` | `HeuristicBotV2` method | `v2` | `v2` lead hook that routes to the `v2` lead scoring function. |  |
-| `_score_discard_candidate` | `HeuristicBotV2` method | `v2` | `v2` discard hook that routes to the `v2` discard scoring function. |  |
-| `_score_lead_candidate` | `HeuristicBotV3` method | `v3` | `v3` lead hook that routes to the richer public-info lead scoring function. |  |
-| `_score_discard_candidate` | `HeuristicBotV3` method | `v3` | `v3` discard hook that routes to the richer public-info discard scoring function. |  |
+| `_choose_lead` | `heuristic/scoring.py` | `v1` | Scripted lead choice for simple heuristic bot. |  |
+| `_choose_follow_or_discard` | `heuristic/scoring.py` | `v1` | Scripted branch between follow and discard. |  |
+| `_choose_follow` | `heuristic/scoring.py` | `v1` | Scripted follow-suit decision. |  |
+| `_low_key` | `heuristic/scoring.py` | shared | Low-card sort key used by scripted helpers. |  |
 
-## Scripted v1 Helper Mechanics
+## Pass Helpers
 
-| Current name | Scope | Versions | Description | New name |
+| Current name | Location | Versions | Description | New name |
 | --- | --- | --- | --- | --- |
-| `_choose_lead` | module-level | `v1` | Picks the scripted lead for the simple heuristic bot. |  |
-| `_choose_follow_or_discard` | module-level | `v1` | Chooses whether the scripted bot should follow suit or discard. |  |
-| `_choose_follow` | module-level | `v1` | Picks the scripted follow-suit play for the simple heuristic bot. |  |
-| `_low_key` | module-level | shared | Low-card sort key used by the scripted bot and some tie logic. |  |
+| `_pass_priority` | `heuristic/scoring.py` | `v1`, `v2` | Legacy card-only pass priority. |  |
+| `_pass_priority_v3` | `heuristic/scoring.py` | `v3` | Hand-aware pass priority for v3. |  |
 
-## Pass Scoring Helpers
+## Shared Play Plumbing
 
-| Current name | Scope | Versions | Description | New name |
+| Current name | Location | Versions | Description | New name |
 | --- | --- | --- | --- | --- |
-| `_pass_priority` | module-level | `v1`, `v2` | Simple card-only pass ranking used by the legacy heuristic pass logic. |  |
-| `_pass_priority_v3` | module-level | `v3` | Hand-aware pass ranking used by the `v3` pass logic. |  |
+| `_play_mode` | `heuristic/shared.py` | `v2`, `v3` | Determines lead/follow/discard scoring mode. |  |
+| `_moon_defense_target` | `heuristic/shared.py` | `v2`, `v3` | Detects active moon threat target. |  |
+| `_choose_play_with_reason` | `heuristic/shared.py` | `v2`, `v3` | Shared scoring play loop and reason payload assembly. |  |
+| `_move_tiebreak` | `heuristic/shared.py` | `v2`, `v3` | Deterministic tie-break among equal total scores. |  |
 
-## Shared Play-Selection Plumbing
+## Lead, Follow, Discard Scoring
 
-| Current name | Scope | Versions | Description | New name |
+| Current name | Location | Versions | Description | New name |
 | --- | --- | --- | --- | --- |
-| `_play_mode` | module-level | `v2`, `v3` | Determines whether a legal move is being scored as lead, follow, or discard. |  |
-| `_moon_defense_target` | module-level | `v2`, `v3` | Detects whether one opponent currently looks like a live moon threat. |  |
-| `_choose_play_with_reason` | module-level | `v2`, `v3` | Shared play loop that scores candidates, applies rollout, orders them, and builds the reason payload. |  |
-| `_move_tiebreak` | module-level | `v2`, `v3` | Provides deterministic tie-breaking when candidate totals match. |  |
-| `_full_deck` | module-level | `v2`, `v3` | Returns the cached full deck tuple for rollout sampling. |  |
-
-## Lead Scoring Helpers
-
-| Current name | Scope | Versions | Description | New name |
-| --- | --- | --- | --- | --- |
-| `_score_lead_v2` | module-level | `v2`, base of `v3` | Core lead heuristic used directly by `v2` and as the starting point for `v3`. |  |
-| `_score_lead_v3` | module-level | `v3` | Extends `v2` lead scoring with public card tracking and spade-shape refinements. |  |
-
-## Discard Scoring Helpers
-
-| Current name | Scope | Versions | Description | New name |
-| --- | --- | --- | --- | --- |
-| `_score_discard_priority_v2` | module-level | `v1`, `v2`, tie-breaks in `v2`/`v3` | Legacy discard-priority buckets used for scripted shedding, `v2` discard base scoring, and non-lead tie-break ordering. |  |
-| `_score_discard_v2` | module-level | `v2`, base of `v3` | Core discard heuristic used directly by `v2` and as the starting point for `v3`. |  |
-| `_score_discard_v3` | module-level | `v3` | Extends `v2` discard scoring with public card tracking and moon-defense stopper logic. |  |
-
-## Follow Scoring Helpers
-
-| Current name | Scope | Versions | Description | New name |
-| --- | --- | --- | --- | --- |
-| `_score_follow_v2` | module-level | `v2`, `v3` | Shared follow-suit heuristic for both scoring-based heuristic bots. |  |
+| `_score_lead_v2` | `heuristic/scoring.py` | `v2`, base of `v3` | Base lead scoring system. |  |
+| `_score_lead_v3` | `heuristic/scoring.py` | `v3` | v3 lead refinements over v2 base. |  |
+| `_score_follow_v2` | `heuristic/scoring.py` | `v2`, `v3` | Shared follow scoring system (with explicit second-seat/later-seat branch). |  |
+| `_score_discard_priority_v2` | `heuristic/scoring.py` | `v1`, `v2`, tie-break in `v2`/`v3` | Discard priority buckets for scripted shedding, discard base scoring, and non-lead tie-breaks. |  |
+| `_score_discard_v2` | `heuristic/scoring.py` | `v2`, base of `v3` | Base discard scoring system. |  |
+| `_score_discard_v3` | `heuristic/scoring.py` | `v3` | v3 discard refinements over v2 base. |  |
 
 ## v3 Public-Info Helpers
 
-| Current name | Scope | Versions | Description | New name |
+| Current name | Location | Versions | Description | New name |
 | --- | --- | --- | --- | --- |
-| `_build_public_info_v3` | module-level | `v3` | Builds the public-info snapshot used by `v3` lead/discard scoring. |  |
-| `_all_public_tricks` | module-level | `v3` | Collects completed public tricks plus the current trick-in-progress. |  |
-| `_infer_void_suits_by_player` | module-level | `v3` | Infers player voids from past public trick play. |  |
-| `_outside_rank_counts_for_card` | module-level | `v3` | Counts lower and higher unseen outside cards for a candidate card. |  |
-| `_void_count_in_players` | module-level | `v3` | Counts how many specified players are publicly known to be void in a suit. |  |
+| `_build_public_info_v3` | `heuristic/public_info.py` | `v3` | Builds public-info snapshot for v3 scoring. |  |
+| `_all_public_tricks` | `heuristic/public_info.py` | `v3` | Collects public trick history + current trick. |  |
+| `_infer_void_suits_by_player` | `heuristic/public_info.py` | `v3` | Infers player void suits from public play. |  |
+| `_outside_rank_counts_for_card` | `heuristic/public_info.py` | `v3` | Counts outside lower/higher unseen ranks for candidate card. |  |
+| `_void_count_in_players` | `heuristic/public_info.py` | `v3` | Counts known voids for a suit among target players. |  |
 
 ## Rollout Helpers
 
-| Current name | Scope | Versions | Description | New name |
+| Current name | Location | Versions | Description | New name |
 | --- | --- | --- | --- | --- |
-| `_rollout_score_v2` | module-level | `v2`, `v3` | Samples completions of the current trick to adjust candidate scores. |  |
-| `_evaluate_rollout_trick` | module-level | `v2`, `v3` | Scores one fully specified trick outcome for rollout purposes. |  |
-| `_skip_rollout_for_follow_candidate` | module-level | `v2`, `v3` | Skips rollout in guaranteed-losing follow spots where rollout adds only noise. |  |
-| `_shared_rollout_sample_seeds` | module-level | `v2`, `v3` | Generates shared sample seeds so candidates see the same sampled futures. |  |
-| `_remaining_players_after` | module-level | `v2`, `v3` | Computes which players still need to act in the current trick. |  |
-| `_sample_unknown_card_for_trick` | module-level | `v2`, `v3` | Samples one plausible unknown card for the remainder of a rollout trick. |  |
+| `_rollout_score_v2` | `heuristic/rollout.py` | `v2`, `v3` | Samples continuation cards for rest-of-trick rollout score. |  |
+| `_evaluate_rollout_trick` | `heuristic/rollout.py` | `v2`, `v3` | Scores one fully resolved trick outcome. |  |
+| `_skip_rollout_for_follow_candidate` | `heuristic/rollout.py` | `v2`, `v3` | Skips rollout for guaranteed-losing non-point follows. |  |
+| `_shared_rollout_sample_seeds` | `heuristic/rollout.py` | `v2`, `v3` | Generates shared sample seeds per decision. |  |
+| `_remaining_players_after` | `heuristic/rollout.py` | `v2`, `v3` | Computes remaining players to act in current trick. |  |
+| `_sample_unknown_card_for_trick` | `heuristic/rollout.py` | `v2`, `v3` | Samples plausible unknown card for trick completion. |  |
+| `_full_deck` | `heuristic/rollout.py` | `v2`, `v3` | Returns full deck tuple used by rollout sampling. |  |
