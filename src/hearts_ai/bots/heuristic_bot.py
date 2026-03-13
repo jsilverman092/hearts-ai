@@ -126,6 +126,10 @@ class HeuristicBotV2:
             player_id=self.player_id,
             threshold=self.moon_defense_threshold,
         )
+        shared_rollout_sample_seeds = _shared_rollout_sample_seeds(
+            samples=self.rollout_samples,
+            rng=rng,
+        )
         candidate_reasons: list[PlayCandidateReason] = []
         for card in legal:
             base_score, tags = self._score_base(
@@ -143,6 +147,7 @@ class HeuristicBotV2:
                 mode=mode,
                 moon_target=moon_target,
                 samples=self.rollout_samples,
+                sample_seeds=shared_rollout_sample_seeds,
                 rng=rng,
             )
             total_score = base_score + (self.rollout_weight * rollout_score)
@@ -820,6 +825,7 @@ def _rollout_score_v2(
     mode: Literal["lead", "follow", "discard"],
     moon_target: PlayerId | None,
     samples: int,
+    sample_seeds: tuple[int, ...] | None,
     rng: random.Random,
 ) -> float:
     if samples <= 0:
@@ -843,8 +849,12 @@ def _rollout_score_v2(
         return 0.0
 
     remaining_players = _remaining_players_after(player_id=player_id, already_played=len(base_trick))
+    seeds = sample_seeds if sample_seeds is not None else _shared_rollout_sample_seeds(samples, rng)
+    if not seeds:
+        return 0.0
     total = 0.0
-    for _ in range(samples):
+    for sample_seed in seeds:
+        sample_rng = random.Random(sample_seed)
         sample_pool = list(unknown_pool)
         sample_trick = list(base_trick)
         for _pid in remaining_players:
@@ -854,7 +864,7 @@ def _rollout_score_v2(
                 trick=sample_trick,
                 pool=sample_pool,
                 first_trick=state.trick_number == 0,
-                rng=rng,
+                rng=sample_rng,
             )
             sample_pool.remove(sampled)
             sample_trick.append((_pid, sampled))
@@ -864,7 +874,7 @@ def _rollout_score_v2(
                 player_id=player_id,
                 moon_target=moon_target,
             )
-    return total / float(samples)
+    return total / float(len(seeds))
 
 
 def _evaluate_rollout_trick(trick: Trick, player_id: PlayerId, moon_target: PlayerId | None) -> float:
@@ -903,6 +913,12 @@ def _skip_rollout_for_follow_candidate(
     # If we are guaranteed to lose with a non-point follow card, rollout cannot
     # change card-winning outcome for this trick and should not add sampling noise.
     return card.suit == led_suit and card.rank < current_highest
+
+
+def _shared_rollout_sample_seeds(samples: int, rng: random.Random) -> tuple[int, ...]:
+    if samples <= 0:
+        return ()
+    return tuple(rng.randrange(0, 2**63) for _ in range(samples))
 
 
 def _remaining_players_after(player_id: PlayerId, already_played: int) -> list[PlayerId]:

@@ -174,6 +174,8 @@ Focus areas:
   - rebalance base heuristics so unsupported bonuses cannot dominate obvious tactical risk
   - skip rollout for guaranteed-losing, non-point follow cards when rollout cannot change whether the card wins the current trick
   - preserve deterministic "highest losing follow" behavior in those spots instead of letting rollout noise break ties between equally safe losing cards
+  - use shared rollout samples per decision so outcome-equivalent candidates are evaluated against the same sampled futures
+  - avoid candidate-by-candidate RNG drift creating fake tactical differences between cards with identical rest-of-trick risk
 - Moon-defense cleanup:
   - keep moon-blocking logic from distorting normal, non-moon play too aggressively
 
@@ -187,6 +189,7 @@ Testing additions:
   - opening-lead comparisons across low cards vs dangerous honors
   - broken-hearts lead comparisons across low hearts vs dangerous high spades
   - guaranteed-losing non-point follow choices where rollout should not override the base highest-losing-card heuristic
+  - outcome-equivalent follow choices where shared rollout samples should prevent random preference flips
   - moon-defense behavior not overriding obvious local safety
 
 Acceptance criteria:
@@ -194,6 +197,7 @@ Acceptance criteria:
 - Regression tests cover the known high-spade lead failure mode.
 - Regression tests cover the broken-hearts low-heart-vs-high-spade lead case.
 - Rollout no longer introduces noise into guaranteed-losing, non-point follow decisions.
+- Rollout no longer invents differences between outcome-equivalent candidates purely because they saw different sampled futures.
 - Benchmark results remain at least competitive with v1 and clearly above random.
 - Phase 3 reason payload hooks remain intact for future UI explanation mode.
 
