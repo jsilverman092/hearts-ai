@@ -361,6 +361,52 @@ Acceptance criteria:
 - A user can return to live state cleanly.
 - Existing pace controls and live gameplay still work normally when rewind is not used.
 
+## Phase 4.6: HeuristicBot v3 Structural Cleanup
+
+Scope:
+- Keep this phase behavior-preserving by default; do not call it `v4` unless scoring judgments or move choices intentionally change.
+- Make `heuristic_v3` structurally independent from `heuristic_v2` so the current stronger heuristic baseline does not inherit its play loop from an older version.
+- Clarify the code around the three distinct play systems:
+  - `lead`
+  - `follow`
+  - `discard`
+- Reduce architecture debt before moving on to search-based bots.
+
+Implementation targets:
+- Bot structure:
+  - stop treating `HeuristicBotV2` as the parent implementation for `HeuristicBotV3`
+  - make `HeuristicBotV3` own its own `choose_play` path directly, or move shared mechanics into a small neutral helper/base that neither bot semantically "inherits strategy" from
+  - keep `HeuristicBot` v1 intact as the simple scripted baseline
+- Scoring structure:
+  - treat `pass` as its own scoring system, separate from in-hand play decisions
+  - make the lead/follow/discard split explicit in both code organization and naming
+  - avoid describing or tuning "play scoring" as one blended system when there are actually three distinct play systems
+  - separate discard-base logic from pass-priority language so pass and discard heuristics are no longer coupled by old naming or shared buckets unless intentionally desired
+  - keep `follow` as one scoring family, but make trick position and follow context more explicit inside it
+  - do not split follow into separate top-level `second-seat` / `third-seat` / `fourth-seat` systems unless later tuning proves that structure is actually necessary
+  - preserve current `heuristic_v3` behavior initially; structural cleanup first, retuning second
+- Debug / explanation structure:
+  - keep debug payloads and tags aligned with the actual scoring system that produced them
+  - remove or de-emphasize stale generic tags that are misleading after v3 refinements
+  - document tag meanings and cleanup candidates in a dedicated reference file
+- Version cleanup:
+  - after `heuristic_v3` is structurally independent, decide whether `heuristic_v2` should remain available in runtime codepaths
+  - prefer removing or deprecating `heuristic_v2` from active factory / UI / server options once its benchmark role has been served and report/history coverage is sufficient
+  - do not remove `heuristic` v1; it remains useful as the intentionally simple baseline
+
+Constraints:
+- Do not accidentally change `heuristic_v3` behavior while refactoring structure.
+- If behavior changes are discovered to be necessary, treat those as follow-on `v4` work rather than silently mixing them into the cleanup.
+- Preserve determinism, legality, and debug-inspector support throughout the refactor.
+
+Acceptance criteria:
+- `heuristic_v3` no longer depends on `HeuristicBotV2` for its play-selection control flow.
+- The code clearly exposes four separate decision-scoring systems: pass, lead, follow, and discard.
+- Discard scoring is no longer conceptually framed as pass-priority reuse unless that reuse is explicitly justified.
+- Follow scoring makes trick position/context explicit without fragmenting into unnecessary top-level modes.
+- Existing `heuristic_v3` benchmark behavior remains materially unchanged after the structural cleanup.
+- The runtime bot list is simpler, or there is a documented deprecation path for `heuristic_v2`.
+
 ## Test Plan
 
 Update/add tests:
@@ -377,6 +423,8 @@ Update/add tests:
   - `heuristic_v3` discard regression scenarios covering `floor card` vs `trap card` vs `boss card` choices within the same suit
   - `heuristic_v3` moon-defense discard scenarios where preserving a last stopper in a live suit should outrank a locally attractive dump
   - `heuristic_v3` moon-threat detection scenarios covering hearts-heavy accumulation, `Q♠`-only starts, and `Q♠` plus hearts starts
+  - `heuristic_v3` follow-position scenarios confirming that second-seat vs later-seat logic is explicit where needed but still belongs to one follow-scoring family
+  - `heuristic_v3` behavior-preservation scenarios around lead / follow / discard choices before and after structural cleanup
 - integration/smoke:
   - deterministic full-game runs with heuristic bots
   - legal-move invariants remain enforced
@@ -385,6 +433,7 @@ Update/add tests:
   - deterministic auto-advance behavior when seats use `heuristic`
   - optional debug payload exposure for `heuristic_v2` decisions
   - client-side rewind/review control preserves read-only historical inspection without affecting live table state
+  - if `heuristic_v2` is retired or hidden, server / UI bot selection remains coherent and existing saved flows still degrade gracefully
 
 Do not make benchmark win-rate assertions brittle in CI:
 - Keep strict assertions for determinism/legality.
@@ -398,6 +447,7 @@ Start complex methods (determinized search) only after:
 - Heuristic bot has a clear margin over random across enough games/seeds.
 - Heuristic v2 debug explanations are available for fast behavior inspection.
 - We have decided whether `heuristic_v3` is worth keeping as the stronger scripted baseline before search.
+- `heuristic_v3` has a clean enough internal structure that future search bots do not need to inherit around heuristic-version debt.
 
 ## Suggested Implementation Order
 
@@ -410,5 +460,6 @@ Start complex methods (determinized search) only after:
 7. Phase 3.5 HeuristicBot v2 stabilization
 8. Phase 3.6 HeuristicBot v2 debug explanations
 9. Phase 4 HeuristicBot v3
-10. Compare v2/v3 and decide on search transition
-11. Phase 4.5 UI review rewind
+10. Phase 4.5 UI review rewind
+11. Phase 4.6 HeuristicBot v3 structural cleanup
+12. Compare v2/v3 and decide on search transition
