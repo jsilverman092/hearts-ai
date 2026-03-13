@@ -261,7 +261,8 @@ Implementation targets:
   - with `4 or fewer` total spades, usually pass `Q♠`
   - with `5 or more` total spades, often keep `Q♠`
   - add `A♠` / `K♠` protection logic so they are not blindly passed when they function as cover
-  - never pass low spades in normal v3 logic
+  - essentially never pass sub-queen spades (`2♠-J♠`) in normal v3 logic
+  - treat `2♠-J♠` as protection/escape cards rather than ordinary risk cards during pass selection
 - Lead-play refinements:
   - avoid leading spades when holding `Q♠` with short-ish spade length unless materially forced
   - specifically, when holding `Q♠` and `4 or fewer` total spades, prefer a reasonable non-spade lead over flushing spades early
@@ -281,7 +282,9 @@ Implementation targets:
   - a `boss card` is a card with no higher outside cards still unplayed in that suit; boss cards are dangerous control cards and strong dump candidates
   - a `trap card` is a card with only a few higher outside cards but still some lower outside cards; trap cards are often among the most dangerous cards to keep because they can still win ugly tricks without being true floor cards
   - for off-suit discard evaluation, reward dumping `boss` and `trap` cards and avoid rewarding `floor` cards merely because the suit is depleted
+  - before `Q♠` is dead, essentially never dump sub-queen spades (`2♠-J♠`) off-suit; they function as queen-protection and future escape cards
   - treat `A♠` / `K♠` as specially dangerous discard candidates primarily while `Q♠` is still live; once `Q♠` has been played, remove most of that queen-protection premium and let normal spade position / control logic drive the score
+  - once `Q♠` has been played, treat sub-queen spades (`2♠-J♠`) like ordinary black-suit cards for discard purposes rather than preserving them artificially
   - for lead evaluation, strongly prefer true `floor` leads when they exist, and treat `boss` / `trap` leads as riskier especially when nearby voids make cheap overcalls less likely
   - replace the current rough "depleted suit lead" proxy with the same `floor` / `trap` / `boss` framing so lead heuristics no longer produce unintuitive cases where a true control card outranks a trap card for the wrong reason
   - use this lead cleanup to retire or rename misleading tags that only approximate the intended idea, especially where the current tag implies generic suit depletion rather than actual public suit position
@@ -305,6 +308,8 @@ Acceptance criteria:
 - `heuristic_v3` can use public trick history to recognize basic void information and suit depletion when evaluating lead safety.
 - `heuristic_v3` lead scoring uses `floor` / `trap` / `boss` concepts directly rather than a vague depleted-suit proxy.
 - `heuristic_v3` treats public suit position correctly: floor cards are generally kept, while boss/trap cards become stronger dump candidates.
+- `heuristic_v3` essentially never passes or pre-`Q♠` dumps sub-queen spades (`2♠-J♠`) in ordinary hands.
+- `heuristic_v3` treats sub-queen spades like ordinary black-suit cards again once `Q♠` is already dead.
 - `heuristic_v3` no longer gives `A♠` / `K♠` an outsized discard premium after `Q♠` is already dead.
 - v3 remains deterministic and legal.
 - v3 can be benchmarked cleanly against `heuristic_v2`, `heuristic`, and `random`.
@@ -353,6 +358,7 @@ Update/add tests:
   - play-choice scenarios for lead/follow/off-suit
   - `heuristic_v2` regression scenarios for dangerous opening leads, broken-hearts low-heart escape leads, and unsafe high-spade dumps
   - `heuristic_v3` pass-structure scenarios for low-heart preservation, dangerous offsuit honors, and long-spade `Q♠` / `A♠` / `K♠` exceptions
+  - `heuristic_v3` pass/discard regression scenarios proving sub-queen spades (`2♠-J♠`) are preserved while `Q♠` is live and stop receiving special preservation after `Q♠` is dead
   - `heuristic_v3` lead-choice scenarios for short-spade `Q♠` avoidance and fragile `A♠` / `K♠` protection leads
   - `heuristic_v3` lead-choice scenarios distinguishing `J♠` / sub-queen spades from true dangerous spade-control leads
   - `heuristic_v3` lead regression scenarios covering `floor card` vs `trap card` vs `boss card` ordering within the same suit

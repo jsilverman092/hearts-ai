@@ -346,24 +346,13 @@ def _pass_priority_v3(card: Card, hand: Hand) -> tuple[int, int, int]:
         return (primary, rank_value, int(card.suit))
 
     if card.suit == Suit.SPADES:
-        if card.rank <= Rank.THREE:
-            primary = 5
-        elif card.rank == Rank.FOUR:
-            primary = 35
-        elif card.rank == Rank.FIVE:
-            primary = 90
-        elif card.rank == Rank.SIX:
-            primary = 140
-        elif card.rank <= Rank.NINE:
-            primary = 230 + (rank_value - int(Rank.SEVEN)) * 20
-        elif card.rank == Rank.TEN:
-            primary = 320
-        else:
-            primary = 380
-        if spade_count >= 5:
-            primary -= 80
-        if suit_count >= 6:
-            primary -= 40
+        # Keep sub-queen spades as protection/escape cards in normal pass logic.
+        # They should only be passed when effectively forced by hand composition.
+        primary = -220 + rank_value
+        if spade_count >= 7:
+            primary += 80
+        elif spade_count >= 6:
+            primary += 50
         return (primary, rank_value, int(card.suit))
 
     if card.suit == Suit.HEARTS:
@@ -670,6 +659,14 @@ def _score_discard_v3(
 ) -> tuple[float, list[str]]:
     score, tags = _score_discard_v2(state=state, card=card, moon_target=moon_target)
     public_info = _build_public_info_v3(state=state)
+    if card.suit == Suit.SPADES and int(card.rank) <= int(Rank.JACK):
+        if public_info.qs_live:
+            score -= 1.8
+            tags.append("v3_preserve_subqueen_spade_while_qs_live")
+        else:
+            # Bring 2S-JS back to ordinary black-suit treatment once QS is gone.
+            score += 1.8
+            tags.append("v3_qs_dead_subqueen_spade_as_black_suit")
     if card in (_ACE_SPADES, _KING_SPADES) and not public_info.qs_live:
         # _score_discard_v2 includes a large queen-protection premium for A/K spades via
         # shared discard/pass priority buckets. Once QS is dead, remove most of it.
