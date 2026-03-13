@@ -939,35 +939,57 @@ def _score_follow_v2(
     current_highest = max(current.rank for _, current in trick if current.suit == led_suit)
     losing = card.rank < current_highest
     trick_has_points = any(is_point_card(current) for _, current in trick)
+    cards_already_played = len(trick)
+    is_second_seat = cards_already_played == 1
+
+    # Keep follow as one scoring family while making seat context explicit.
+    if is_second_seat:
+        losing_follow_bonus = 3.0
+        forced_win_follow_penalty = 2.0
+        avoid_point_capture_bonus = 1.2
+        point_trick_win_penalty = 7.5
+        first_trick_forced_win_rank_factor = 0.22
+        moon_target_still_wins_penalty = 5.0
+        block_moon_target_bonus = 2.4
+    else:
+        # Later-seat branch (third/fourth seat) intentionally uses the same
+        # weights today; branch remains explicit for future follow tuning.
+        losing_follow_bonus = 3.0
+        forced_win_follow_penalty = 2.0
+        avoid_point_capture_bonus = 1.2
+        point_trick_win_penalty = 7.5
+        first_trick_forced_win_rank_factor = 0.22
+        moon_target_still_wins_penalty = 5.0
+        block_moon_target_bonus = 2.4
 
     score = 0.0
     tags: list[str] = []
     if losing:
-        score += 3.0 + (float(int(card.rank)) * 0.08)
+        score += losing_follow_bonus + (float(int(card.rank)) * 0.08)
         tags.append("prefer_high_losing_follow")
     else:
-        score -= 2.0
+        score -= forced_win_follow_penalty
         tags.append("forced_win_follow")
 
     if trick_has_points:
         if losing:
-            score += 1.2
+            score += avoid_point_capture_bonus
             tags.append("avoid_point_capture")
         else:
-            score -= 7.5
+            score -= point_trick_win_penalty
             tags.append("point_trick_win_penalty")
     elif state.trick_number == 0 and not losing:
         # First trick has no points; if we must win, shed high club now.
-        score += float(int(card.rank)) * 0.22
+        score += float(int(card.rank)) * first_trick_forced_win_rank_factor
         tags.append("first_trick_forced_win_shed_high")
 
     if moon_target is not None and trick_has_points:
         projected_winner = trick_winner([*trick, (player_id, card)])
         if projected_winner == moon_target:
-            score -= 5.0
+            score -= moon_target_still_wins_penalty
             tags.append("moon_target_still_wins")
         elif projected_winner == player_id:
-            score += 2.4
+            score += block_moon_target_bonus
             tags.append("block_moon_target")
 
     return score, tags

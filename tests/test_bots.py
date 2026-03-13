@@ -594,6 +594,61 @@ def test_heuristic_v2_rollout_skips_guaranteed_losing_non_point_follows() -> Non
     assert all(candidate.rollout_score == 0.0 for candidate in reason.candidates)
 
 
+def test_heuristic_v3_follow_position_second_seat_prefers_high_losing_follow() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [
+            Card(Suit.CLUBS, Rank.TWO),
+            Card(Suit.CLUBS, Rank.SEVEN),
+        ],
+        PlayerId(1): [Card(Suit.CLUBS, Rank.NINE)],
+        PlayerId(2): [Card(Suit.SPADES, Rank.THREE)],
+        PlayerId(3): [Card(Suit.DIAMONDS, Rank.FOUR)],
+    }
+    state.trick_in_progress = [(PlayerId(1), Card(Suit.CLUBS, Rank.NINE))]
+    state.hearts_broken = True
+    state.trick_number = 6
+
+    bot = HeuristicBotV3(player_id=PlayerId(0), rollout_samples=0)
+    card = bot.choose_play(state=state, rng=random.Random(141))
+    reason = bot._peek_last_play_reason()
+
+    assert reason is not None
+    assert reason.mode == "follow"
+    assert card == Card(Suit.CLUBS, Rank.SEVEN)
+    assert reason.candidates[0].card == Card(Suit.CLUBS, Rank.SEVEN)
+    assert "prefer_high_losing_follow" in reason.candidates[0].tags
+
+
+def test_heuristic_v3_follow_position_later_seat_prefers_high_losing_follow() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [
+            Card(Suit.CLUBS, Rank.TWO),
+            Card(Suit.CLUBS, Rank.SEVEN),
+        ],
+        PlayerId(1): [Card(Suit.CLUBS, Rank.NINE)],
+        PlayerId(2): [Card(Suit.CLUBS, Rank.FIVE)],
+        PlayerId(3): [Card(Suit.DIAMONDS, Rank.FOUR)],
+    }
+    state.trick_in_progress = [
+        (PlayerId(1), Card(Suit.CLUBS, Rank.NINE)),
+        (PlayerId(2), Card(Suit.CLUBS, Rank.FIVE)),
+    ]
+    state.hearts_broken = True
+    state.trick_number = 6
+
+    bot = HeuristicBotV3(player_id=PlayerId(0), rollout_samples=0)
+    card = bot.choose_play(state=state, rng=random.Random(142))
+    reason = bot._peek_last_play_reason()
+
+    assert reason is not None
+    assert reason.mode == "follow"
+    assert card == Card(Suit.CLUBS, Rank.SEVEN)
+    assert reason.candidates[0].card == Card(Suit.CLUBS, Rank.SEVEN)
+    assert "prefer_high_losing_follow" in reason.candidates[0].tags
+
+
 def test_heuristic_v2_broken_hearts_prefers_low_heart_escape_over_king_spades() -> None:
     state = GameState()
     state.hands = {
