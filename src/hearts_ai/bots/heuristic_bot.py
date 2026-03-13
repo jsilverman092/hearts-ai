@@ -286,6 +286,8 @@ class HeuristicBotV3(_HeuristicScoringBotBase):
         )
 
 
+# ---------------------------------------------------------------------------
+# Scripted v1 helper mechanics.
 def _choose_lead(legal: list[Card]) -> Card:
     non_hearts = [card for card in legal if card.suit != Suit.HEARTS]
     candidates = non_hearts if non_hearts else legal
@@ -324,6 +326,8 @@ def _low_key(card: Card) -> tuple[int, int]:
     return (int(card.rank), int(card.suit))
 
 
+# ---------------------------------------------------------------------------
+# Pass scoring helpers used by the heuristic bot versions.
 def _pass_priority(card: Card) -> tuple[int, int, int]:
     if card == _QUEEN_SPADES:
         return (6, int(card.rank), int(card.suit))
@@ -437,6 +441,8 @@ def _discard_priority(card: Card) -> tuple[int, int, int]:
     return _pass_priority(card)
 
 
+# ---------------------------------------------------------------------------
+# Shared play-selection plumbing for scoring-based heuristic bots.
 def _play_mode(state: GameState, legal: list[Card]) -> Literal["lead", "follow", "discard"]:
     if not state.trick_in_progress:
         return "lead"
@@ -554,6 +560,8 @@ def _choose_play_with_reason(
     return chosen, play_reason
 
 
+# ---------------------------------------------------------------------------
+# Lead scoring systems.
 def _score_lead_v2(
     state: GameState,
     legal: list[Card],
@@ -723,6 +731,8 @@ def _score_lead_v3(
     return score, tags
 
 
+# ---------------------------------------------------------------------------
+# Discard scoring systems.
 def _score_discard_v3(
     state: GameState,
     player_id: PlayerId,
@@ -816,6 +826,8 @@ def _score_discard_v3(
     return score, tags
 
 
+# ---------------------------------------------------------------------------
+# Public-info helpers used by v3 lead/discard scoring.
 def _build_public_info_v3(state: GameState) -> PublicInfoV3:
     seen_cards = {
         current
@@ -903,6 +915,8 @@ def _void_count_in_players(
     )
 
 
+# ---------------------------------------------------------------------------
+# Follow scoring system.
 def _score_follow_v2(
     state: GameState,
     player_id: PlayerId,
@@ -968,6 +982,8 @@ def _score_discard_v2(
     return score, tags
 
 
+# ---------------------------------------------------------------------------
+# Rollout helpers used by v2/v3 play evaluation.
 def _rollout_score_v2(
     state: GameState,
     player_id: PlayerId,
