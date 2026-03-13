@@ -657,10 +657,11 @@ def _score_discard_v3(
 ) -> tuple[float, list[str]]:
     score, tags = _score_discard_v2(state=state, card=card, moon_target=moon_target)
     public_info = _build_public_info_v3(state=state)
-    lower_unseen_count = _count_lower_unseen_ranks(
+    outside_lower_count, outside_higher_count = _outside_rank_counts_for_card(
+        state=state,
         public_info=public_info,
-        suit=card.suit,
-        rank_value=int(card.rank),
+        player_id=player_id,
+        card=card,
     )
     opponents = [PlayerId(index) for index in range(PLAYER_COUNT) if PlayerId(index) != player_id]
     voids_in_opponents = _void_count_in_players(
@@ -668,17 +669,29 @@ def _score_discard_v3(
         suit=card.suit,
         players=opponents,
     )
+    outside_count = outside_lower_count + outside_higher_count
+    is_floor = outside_count > 0 and outside_lower_count == 0
+    is_boss = outside_count > 0 and outside_higher_count == 0
+    is_trap = outside_lower_count > 0 and 0 < outside_higher_count <= 2
 
-    if int(card.rank) >= int(Rank.EIGHT):
-        if lower_unseen_count <= 3:
-            score += 0.45
-            tags.append("v3_discard_depleted_suit_card")
-            if lower_unseen_count <= 1:
-                score += 0.25
-                tags.append("v3_discard_suit_near_top")
-        if voids_in_opponents >= 2:
-            score += 0.35 + (0.15 * float(voids_in_opponents - 2))
-            tags.append("v3_discard_suit_with_known_voids")
+    if is_floor:
+        # Floor cards are often reliable escape cards; avoid dumping them early.
+        score -= 0.75
+        tags.append("v3_floor_card_keep_safe")
+    elif is_boss:
+        score += 0.85
+        tags.append("v3_boss_card_dump_risk")
+    elif is_trap:
+        score += 0.55 + (0.2 * float(2 - outside_higher_count))
+        tags.append("v3_trap_card_dump_risk")
+
+    if voids_in_opponents >= 2:
+        if is_boss or is_trap:
+            score += 0.3 + (0.12 * float(voids_in_opponents - 2))
+            tags.append("v3_discard_void_pressure")
+        elif is_floor:
+            score -= 0.2
+            tags.append("v3_floor_card_void_keep")
     return score, tags
 
 
@@ -739,6 +752,26 @@ def _infer_void_suits_by_player(state: GameState) -> dict[PlayerId, frozenset[Su
 
 def _count_lower_unseen_ranks(public_info: PublicInfoV3, suit: Suit, rank_value: int) -> int:
     return sum(1 for unseen in public_info.unseen_ranks_by_suit[suit] if unseen < rank_value)
+
+
+def _outside_rank_counts_for_card(
+    state: GameState,
+    public_info: PublicInfoV3,
+    player_id: PlayerId,
+    card: Card,
+) -> tuple[int, int]:
+    rank_value = int(card.rank)
+    own_suit_ranks = {
+        int(current.rank) for current in state.hands[player_id] if current.suit == card.suit
+    }
+    unseen_ranks = public_info.unseen_ranks_by_suit[card.suit]
+    outside_lower = sum(
+        1 for unseen in unseen_ranks if unseen < rank_value and unseen not in own_suit_ranks
+    )
+    outside_higher = sum(
+        1 for unseen in unseen_ranks if unseen > rank_value and unseen not in own_suit_ranks
+    )
+    return outside_lower, outside_higher
 
 
 def _void_count_in_players(

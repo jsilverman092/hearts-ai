@@ -273,9 +273,17 @@ Implementation targets:
   - implement these as strong context-sensitive penalties rather than absolute bans so forced-spade cases still behave sensibly
 - Public-info tracking refinements:
   - add lightweight card-tracking helpers based only on public information already visible in trick history
-  - track whether `Q♠` is still live, how many cards in each suit have already been played, and the current lowest unseen ranks by suit where practical
+  - track whether `Q♠` is still live, how many cards in each suit have already been played, and enough public rank information to reason about where a card sits among the remaining cards in its suit
   - infer player voids from prior failure-to-follow-suit and make that information available to v3 lead/discard heuristics
   - use these signals to avoid obviously bad "safe lead" assumptions, especially when a mid off-suit lead is more likely to win because several lower cards are already gone or nearby players are void
+  - define discard/lead safety in terms of public suit position rather than vague "depletion":
+  - a `floor card` is a card with no lower outside cards still unplayed in that suit; floor cards are usually safe to keep and should rarely be preferred as off-suit dumps
+  - a `boss card` is a card with no higher outside cards still unplayed in that suit; boss cards are dangerous control cards and strong dump candidates
+  - a `trap card` is a card with only a few higher outside cards but still some lower outside cards; trap cards are often among the most dangerous cards to keep because they can still win ugly tricks without being true floor cards
+  - for off-suit discard evaluation, reward dumping `boss` and `trap` cards and avoid rewarding `floor` cards merely because the suit is depleted
+  - for lead evaluation, strongly prefer true `floor` leads when they exist, and treat `boss` / `trap` leads as riskier especially when nearby voids make cheap overcalls less likely
+  - when computing these signals, distinguish public outside cards from cards still held in our own hand so we do not misclassify a card as "safe" merely because we also hold adjacent cover in the same suit
+  - keep debug tags semantically accurate and tied to the actual signal being measured, for example `floor_card_keep_safe`, `boss_card_dump_risk`, or `trap_card_dump_risk`
   - keep this phase to hard public-info inference only; do not add speculative opponent-reading or pass-memory logic yet
 - Optional small hand-shape adjustments:
   - short-suit honors become riskier pass candidates
@@ -292,6 +300,7 @@ Acceptance criteria:
 - `heuristic_v3` avoids short-spade opening leads that prematurely flush a suit containing `Q♠` or fragile `A♠` / `K♠` protection when a sane non-spade lead exists.
 - `heuristic_v3` no longer penalizes `J♠`-type leads as if they were `Q♠` / `K♠` / `A♠`, and can prefer sub-queen spade leads over riskier mid off-suit leads when `Q♠` is still out.
 - `heuristic_v3` can use public trick history to recognize basic void information and suit depletion when evaluating lead safety.
+- `heuristic_v3` treats public suit position correctly: floor cards are generally kept, while boss/trap cards become stronger dump candidates.
 - v3 remains deterministic and legal.
 - v3 can be benchmarked cleanly against `heuristic_v2`, `heuristic`, and `random`.
 
@@ -306,6 +315,7 @@ Update/add tests:
   - `heuristic_v3` lead-choice scenarios for short-spade `Q♠` avoidance and fragile `A♠` / `K♠` protection leads
   - `heuristic_v3` lead-choice scenarios distinguishing `J♠` / sub-queen spades from true dangerous spade-control leads
   - `heuristic_v3` public-info scenarios for suit depletion and inferred player voids affecting lead/discard choices
+  - `heuristic_v3` discard regression scenarios covering `floor card` vs `trap card` vs `boss card` choices within the same suit
 - integration/smoke:
   - deterministic full-game runs with heuristic bots
   - legal-move invariants remain enforced

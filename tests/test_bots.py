@@ -815,39 +815,45 @@ def test_heuristic_v3_lead_uses_void_and_suit_depletion_public_info() -> None:
     assert card == Card(Suit.CLUBS, Rank.TEN)
 
 
-def test_heuristic_v3_discard_uses_void_and_suit_depletion_public_info() -> None:
+def test_heuristic_v3_discard_prefers_trap_over_floor_card_within_suit() -> None:
     state = GameState()
     state.hands = {
         PlayerId(0): [
-            Card(Suit.DIAMONDS, Rank.NINE),
-            Card(Suit.CLUBS, Rank.TEN),
-            Card(Suit.SPADES, Rank.TWO),
+            Card(Suit.CLUBS, Rank.SEVEN),
+            Card(Suit.CLUBS, Rank.NINE),
+            Card(Suit.CLUBS, Rank.QUEEN),
         ],
-        PlayerId(1): [Card(Suit.HEARTS, Rank.SEVEN)],
-        PlayerId(2): [Card(Suit.CLUBS, Rank.THREE)],
-        PlayerId(3): [Card(Suit.CLUBS, Rank.FOUR)],
+        PlayerId(1): [Card(Suit.DIAMONDS, Rank.TWO)],
+        PlayerId(2): [Card(Suit.DIAMONDS, Rank.JACK)],
+        PlayerId(3): [Card(Suit.DIAMONDS, Rank.ACE)],
     }
     state.taken_tricks = {
         PlayerId(0): [[
-            (PlayerId(0), Card(Suit.DIAMONDS, Rank.TWO)),
-            (PlayerId(1), Card(Suit.DIAMONDS, Rank.FIVE)),
-            (PlayerId(2), Card(Suit.CLUBS, Rank.THREE)),
-            (PlayerId(3), Card(Suit.DIAMONDS, Rank.EIGHT)),
+            (PlayerId(0), Card(Suit.CLUBS, Rank.TWO)),
+            (PlayerId(1), Card(Suit.CLUBS, Rank.FIVE)),
+            (PlayerId(2), Card(Suit.CLUBS, Rank.EIGHT)),
+            (PlayerId(3), Card(Suit.CLUBS, Rank.THREE)),
         ]],
         PlayerId(1): [[
-            (PlayerId(1), Card(Suit.DIAMONDS, Rank.THREE)),
-            (PlayerId(2), Card(Suit.DIAMONDS, Rank.SIX)),
-            (PlayerId(3), Card(Suit.SPADES, Rank.FOUR)),
-            (PlayerId(0), Card(Suit.DIAMONDS, Rank.KING)),
+            (PlayerId(1), Card(Suit.CLUBS, Rank.FOUR)),
+            (PlayerId(2), Card(Suit.CLUBS, Rank.SIX)),
+            (PlayerId(3), Card(Suit.HEARTS, Rank.ACE)),
+            (PlayerId(0), Card(Suit.SPADES, Rank.KING)),
         ]],
         PlayerId(2): [],
         PlayerId(3): [],
     }
-    state.trick_in_progress = [(PlayerId(1), Card(Suit.HEARTS, Rank.SEVEN))]
+    state.trick_in_progress = [(PlayerId(1), Card(Suit.DIAMONDS, Rank.TWO))]
     state.hearts_broken = True
-    state.trick_number = 9
+    state.trick_number = 6
 
     bot = HeuristicBotV3(player_id=PlayerId(0), rollout_samples=0)
     card = bot.choose_play(state=state, rng=random.Random(95))
 
-    assert card == Card(Suit.DIAMONDS, Rank.NINE)
+    assert card == Card(Suit.CLUBS, Rank.QUEEN)
+    reason = bot._peek_last_play_reason()
+    assert reason is not None
+    queen_entry = next(entry for entry in reason.candidates if entry.card == Card(Suit.CLUBS, Rank.QUEEN))
+    nine_entry = next(entry for entry in reason.candidates if entry.card == Card(Suit.CLUBS, Rank.NINE))
+    assert "v3_trap_card_dump_risk" in queen_entry.tags
+    assert "v3_floor_card_keep_safe" in nine_entry.tags
