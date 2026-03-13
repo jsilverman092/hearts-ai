@@ -2,19 +2,27 @@
 
 This file documents the debug tags currently emitted by the heuristic bots.
 
-Notes:
-- Tags are grouped by decision type, not by bot version.
-- `v3_` tags are additions specific to `heuristic_v3`.
+## Package Map
+
+- `src/hearts_ai/bots/heuristic/scoring.py`: all current tags are emitted here.
+- `src/hearts_ai/bots/heuristic/public_info.py`: builds the public-card / void snapshot used by several `heuristic_v3` tags, but emits no tags directly.
+- `src/hearts_ai/bots/heuristic/shared.py`: assembles `PlayDecisionReason` payloads, but emits no tags directly.
+- `src/hearts_ai/bots/heuristic/rollout.py`: contributes `rollout_score`, not tags.
+- `src/hearts_ai/bots/heuristic/models.py`: defines the reason payload types that carry tags to the UI/debug layer.
+
+## Notes
+
+- Tags are grouped by scoring-helper ownership, which matches the current heuristic package structure.
+- `v3_` tags are overlays specific to `heuristic_v3`.
 - Examples are illustrative, not exhaustive. They describe the kind of spot where a tag may appear.
 - "Cleaner name" is a suggested future rename for UI/debug readability. It is not implemented yet.
+- Pure rules-only constraints are intentionally omitted if they do not emit a tag.
 
-## Lead Tags
+## `scoring.py`: `_score_lead_base`
 
 | Current Tag | Meaning | Example | Cleaner Name |
 | --- | --- | --- | --- |
 | `lead_non_heart` | Leading a non-heart is preferred over leading hearts. | Hearts are not especially attractive, so a club or diamond lead gets a bonus. | `non_heart_lead` |
-| `avoid_heart_lead` | Leading hearts before hearts are broken is discouraged. | You are on lead early in the hand and a heart lead is legal only because your hand is constrained. | `dont_lead_hearts` |
-| `hearts_broken_heart_lead` | Hearts are already broken, so a heart lead is less inherently bad. | Hearts were played on a prior trick, so leading a heart is no longer treated like an illegal-style lead. | `heart_lead_after_break` |
 | `low_heart_escape_lead` | A low heart can be a good escape lead once hearts are broken. | Hearts are broken and leading `3H` is safer than burning `KS`. | `low_heart_escape` |
 | `avoid_high_heart_lead` | A high heart lead is risky. | Hearts are broken, but leading `QH` is more dangerous than leading `4H`. | `high_heart_lead_risk` |
 | `avoid_qs_lead` | Do not casually lead `QS`. | You hold `QS` and another spade, so opening `QS` is strongly discouraged. | `dont_lead_qs` |
@@ -25,7 +33,7 @@ Notes:
 | `avoid_qs_after_hearts_broken` | Leading `QS` is even worse once hearts are live. | Hearts are already broken, making a `QS` lead especially unattractive. | `dont_lead_qs_after_break` |
 | `forced_spade_lead_prefer_low` | If the bot is effectively forced to lead spades, it prefers the lower spade. | The entire legal lead set is spades, so `4S` is preferred over `9S`. | `forced_spade_lead_low` |
 
-## V3 Lead Shape / Public-Info Tags
+## `scoring.py`: `_score_lead_v3` with `public_info.py`
 
 | Current Tag | Meaning | Example | Cleaner Name |
 | --- | --- | --- | --- |
@@ -43,7 +51,7 @@ Notes:
 | `v3_preserve_spade_protection_shape` | Preserve a fragile `AS`/`KS` protection shape when spades are short. | You hold `AS`, `KS`, `5S`, and no queen; side-suit leads are preferred. | `keep_spade_protection_shape` |
 | `v3_avoid_exposing_high_spade_protection` | Avoid spending the actual `AS` or `KS` from that fragile protection shape. | `KS` gets an extra penalty beyond the generic short-shape penalty. | `dont_expose_spade_protection` |
 
-## Follow Tags
+## `scoring.py`: `_score_follow_base`
 
 | Current Tag | Meaning | Example | Cleaner Name |
 | --- | --- | --- | --- |
@@ -55,14 +63,14 @@ Notes:
 | `moon_target_still_wins` | This play still leaves the current moon target winning the trick. | A moon threat is live and your follow card does not overtake them. | `moon_target_still_ahead` |
 | `block_moon_target` | This play takes the current trick lead away from the moon target. | A moon threat is live and your follow card now becomes the projected winner. | `currently_block_moon` |
 
-## Discard / Generic Base Tags
+## `scoring.py`: `_score_discard_base`
 
 | Current Tag | Meaning | Example | Cleaner Name |
 | --- | --- | --- | --- |
 | `discard_priority` | Generic base discard score from the older heuristic ordering. | `QS` or a high heart ranks above a small safe card even before v3 refinements. | `base_discard_risk` |
 | `avoid_feeding_moon_target` | Do not dump point cards onto a trick currently being won by the moon target. | A moon target is winning a heart trick and you are deciding whether to slough `QH`. | `dont_feed_moon_target` |
 
-## V3 Discard / Suit-Position Tags
+## `scoring.py`: `_score_discard_v3` with `public_info.py`
 
 | Current Tag | Meaning | Example | Cleaner Name |
 | --- | --- | --- | --- |
@@ -75,16 +83,17 @@ Notes:
 | `v3_discard_void_pressure` | Opponent voids make dumping this dangerous control card even more attractive. | Many players are void in clubs, so dumping a boss/trap club gets extra value. | `voids_raise_dump_value` |
 | `v3_floor_card_void_keep` | Opponent voids make a floor card even more worth keeping. | Players are void in diamonds, which increases the value of retaining your safest low diamond. | `voids_strengthen_floor` |
 
-## V3 Moon-Defense Tags
+## `scoring.py`: `_score_discard_v3` moon-defense overlays
 
 | Current Tag | Meaning | Example | Cleaner Name |
 | --- | --- | --- | --- |
 | `v3_moon_defense_keep_suit_stopper` | Keep this card because it may stop a moon run later. | A sole moon threat is live and dumping `AC` would give up your likely future club stopper. | `keep_moon_stopper` |
 | `v3_moon_defense_no_backup_stopper` | Keep it even more strongly because it is your only stopper in that suit. | You hold `AC` but no other club stopper, so the preservation penalty is stronger. | `only_moon_stopper` |
 
-## Tags Most Likely To Be Removed Later
+## Likely Cleanup Candidates
 
 These are still documented because they exist in code now, but they are the most likely cleanup candidates:
+
 - `cautious_high_spade_lead`
 - `first_trick_conservative_lead`
 - `discard_priority`
