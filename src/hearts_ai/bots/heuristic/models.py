@@ -42,7 +42,7 @@ class PlayDecisionReason:
 
 
 @dataclass(slots=True, frozen=True)
-class PublicInfoV3:
+class PublicInfo:
     qs_live: bool
     played_count_by_suit: dict[Suit, int]
     lowest_unseen_rank_by_suit: dict[Suit, int | None]
@@ -55,5 +55,5 @@ __all__ = [
     "PassDecisionReason",
     "PlayCandidateReason",
     "PlayDecisionReason",
-    "PublicInfoV3",
+    "PublicInfo",
 ]

@@ -82,7 +82,7 @@ Notes:
 
 | Current name | Location | Versions | Description | New name |
 | --- | --- | --- | --- | --- |
-| `_build_public_info_v3` | `heuristic/public_info.py` | `v3` | Builds public-info snapshot for v3 scoring. |  |
+| `_build_public_info` | `heuristic/public_info.py` | `v3` | Builds shared public-info snapshot for heuristic scoring. |  |
 | `_all_public_tricks` | `heuristic/public_info.py` | `v3` | Collects public trick history + current trick. |  |
 | `_infer_void_suits_by_player` | `heuristic/public_info.py` | `v3` | Infers player void suits from public play. |  |
 | `_outside_rank_counts_for_card` | `heuristic/public_info.py` | `v3` | Counts outside lower/higher unseen ranks for candidate card. |  |

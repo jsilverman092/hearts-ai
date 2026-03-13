@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from hearts_ai.bots.heuristic.models import PublicInfoV3, _QUEEN_SPADES
+from hearts_ai.bots.heuristic.models import PublicInfo, _QUEEN_SPADES
 from hearts_ai.engine.cards import Card, Rank, Suit
 from hearts_ai.engine.state import GameState
 from hearts_ai.engine.types import PLAYER_COUNT, PlayerId, Trick
 
 
-def _build_public_info_v3(state: GameState) -> PublicInfoV3:
+def _build_public_info(state: GameState) -> PublicInfo:
     seen_cards = {
         current
         for trick in _all_public_tricks(state=state)
@@ -27,7 +27,7 @@ def _build_public_info_v3(state: GameState) -> PublicInfoV3:
         lowest_unseen_rank_by_suit[suit] = unseen[0] if unseen else None
 
     void_suits_by_player = _infer_void_suits_by_player(state=state)
-    return PublicInfoV3(
+    return PublicInfo(
         qs_live=_QUEEN_SPADES not in seen_cards,
         played_count_by_suit=played_count_by_suit,
         lowest_unseen_rank_by_suit=lowest_unseen_rank_by_suit,
@@ -63,7 +63,7 @@ def _infer_void_suits_by_player(state: GameState) -> dict[PlayerId, frozenset[Su
 
 def _outside_rank_counts_for_card(
     state: GameState,
-    public_info: PublicInfoV3,
+    public_info: PublicInfo,
     player_id: PlayerId,
     card: Card,
 ) -> tuple[int, int]:
@@ -82,7 +82,7 @@ def _outside_rank_counts_for_card(
 
 
 def _void_count_in_players(
-    public_info: PublicInfoV3,
+    public_info: PublicInfo,
     suit: Suit,
     players: list[PlayerId],
 ) -> int:
@@ -91,4 +91,3 @@ def _void_count_in_players(
         for player_id in players
         if suit in public_info.void_suits_by_player.get(player_id, frozenset())
     )
-

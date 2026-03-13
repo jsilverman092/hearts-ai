@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from hearts_ai.bots.heuristic.models import _ACE_SPADES, _KING_SPADES, _QUEEN_SPADES
 from hearts_ai.bots.heuristic.public_info import (
-    _build_public_info_v3,
+    _build_public_info,
     _outside_rank_counts_for_card,
     _void_count_in_players,
 )
@@ -246,7 +246,7 @@ def _score_lead_v3(
     card: Card,
 ) -> tuple[float, list[str]]:
     score, tags = _score_lead_base(state=state, legal=legal, card=card)
-    public_info = _build_public_info_v3(state=state)
+    public_info = _build_public_info(state=state)
     players_ahead = _remaining_players_after(player_id=player_id, already_played=1)
     outside_lower_count, outside_higher_count = _outside_rank_counts_for_card(
         state=state,
@@ -356,7 +356,7 @@ def _score_discard_v3(
     moon_target: PlayerId | None,
 ) -> tuple[float, list[str]]:
     score, tags = _score_discard_base(state=state, card=card, moon_target=moon_target)
-    public_info = _build_public_info_v3(state=state)
+    public_info = _build_public_info(state=state)
     if card.suit == Suit.SPADES and int(card.rank) <= int(Rank.JACK):
         if public_info.qs_live:
             score -= 1.8
