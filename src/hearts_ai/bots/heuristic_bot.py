@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import random
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -116,70 +117,17 @@ class HeuristicBotV2:
         return list(selected)
 
     def choose_play(self, state: GameState, rng: random.Random) -> Card:
-        legal = legal_moves(state=state, player_id=self.player_id)
-        if not legal:
-            raise InvalidStateError(f"No legal moves available for player {int(self.player_id)}.")
-
-        mode = _play_mode(state=state, legal=legal)
-        moon_target = _moon_defense_target(
+        chosen_card, play_reason = _choose_play_with_reason(
             state=state,
             player_id=self.player_id,
-            threshold=self.moon_defense_threshold,
-        )
-        shared_rollout_sample_seeds = _shared_rollout_sample_seeds(
-            samples=self.rollout_samples,
+            rollout_samples=self.rollout_samples,
+            rollout_weight=self.rollout_weight,
+            moon_defense_threshold=self.moon_defense_threshold,
+            score_play_candidate=self._score_play_candidate,
             rng=rng,
         )
-        candidate_reasons: list[PlayCandidateReason] = []
-        for card in legal:
-            base_score, tags = self._score_play_candidate(
-                state=state,
-                player_id=self.player_id,
-                legal=legal,
-                card=card,
-                mode=mode,
-                moon_target=moon_target,
-            )
-            rollout_score = _rollout_score_v2(
-                state=state,
-                player_id=self.player_id,
-                card=card,
-                mode=mode,
-                moon_target=moon_target,
-                samples=self.rollout_samples,
-                sample_seeds=shared_rollout_sample_seeds,
-                rng=rng,
-            )
-            total_score = base_score + (self.rollout_weight * rollout_score)
-            candidate_reasons.append(
-                PlayCandidateReason(
-                    card=card,
-                    base_score=base_score,
-                    rollout_score=rollout_score,
-                    total_score=total_score,
-                    tags=tuple(tags),
-                )
-            )
-
-        ordered_candidates = tuple(
-            sorted(
-                candidate_reasons,
-                key=lambda entry: (
-                    entry.total_score,
-                    *_move_tiebreak(mode=mode, card=entry.card),
-                ),
-                reverse=True,
-            )
-        )
-        chosen = ordered_candidates[0].card
-        self._last_play_reason = PlayDecisionReason(
-            mode=mode,
-            trick_number=state.trick_number,
-            chosen_card=chosen,
-            moon_defense_target=moon_target,
-            candidates=ordered_candidates,
-        )
-        return chosen
+        self._last_play_reason = play_reason
+        return chosen_card
 
     # Internal hooks for future debug UI integration.
     def _peek_last_pass_reason(self) -> PassDecisionReason | None:
@@ -283,6 +231,19 @@ class HeuristicBotV3(HeuristicBotV2):
             ),
         )
         return list(selected)
+
+    def choose_play(self, state: GameState, rng: random.Random) -> Card:
+        chosen_card, play_reason = _choose_play_with_reason(
+            state=state,
+            player_id=self.player_id,
+            rollout_samples=self.rollout_samples,
+            rollout_weight=self.rollout_weight,
+            moon_defense_threshold=self.moon_defense_threshold,
+            score_play_candidate=self._score_play_candidate,
+            rng=rng,
+        )
+        self._last_play_reason = play_reason
+        return chosen_card
 
     def _score_lead_candidate(
         self,
@@ -502,6 +463,84 @@ def _moon_defense_target(state: GameState, player_id: PlayerId, threshold: int) 
     if target_points >= high_total_trigger:
         return target
     return None
+
+
+def _choose_play_with_reason(
+    state: GameState,
+    player_id: PlayerId,
+    rollout_samples: int,
+    rollout_weight: float,
+    moon_defense_threshold: int,
+    score_play_candidate: Callable[
+        [GameState, PlayerId, list[Card], Card, Literal["lead", "follow", "discard"], PlayerId | None],
+        tuple[float, list[str]],
+    ],
+    rng: random.Random,
+) -> tuple[Card, PlayDecisionReason]:
+    legal = legal_moves(state=state, player_id=player_id)
+    if not legal:
+        raise InvalidStateError(f"No legal moves available for player {int(player_id)}.")
+
+    mode = _play_mode(state=state, legal=legal)
+    moon_target = _moon_defense_target(
+        state=state,
+        player_id=player_id,
+        threshold=moon_defense_threshold,
+    )
+    shared_rollout_sample_seeds = _shared_rollout_sample_seeds(
+        samples=rollout_samples,
+        rng=rng,
+    )
+    candidate_reasons: list[PlayCandidateReason] = []
+    for card in legal:
+        base_score, tags = score_play_candidate(
+            state=state,
+            player_id=player_id,
+            legal=legal,
+            card=card,
+            mode=mode,
+            moon_target=moon_target,
+        )
+        rollout_score = _rollout_score_v2(
+            state=state,
+            player_id=player_id,
+            card=card,
+            mode=mode,
+            moon_target=moon_target,
+            samples=rollout_samples,
+            sample_seeds=shared_rollout_sample_seeds,
+            rng=rng,
+        )
+        total_score = base_score + (rollout_weight * rollout_score)
+        candidate_reasons.append(
+            PlayCandidateReason(
+                card=card,
+                base_score=base_score,
+                rollout_score=rollout_score,
+                total_score=total_score,
+                tags=tuple(tags),
+            )
+        )
+
+    ordered_candidates = tuple(
+        sorted(
+            candidate_reasons,
+            key=lambda entry: (
+                entry.total_score,
+                *_move_tiebreak(mode=mode, card=entry.card),
+            ),
+            reverse=True,
+        )
+    )
+    chosen = ordered_candidates[0].card
+    play_reason = PlayDecisionReason(
+        mode=mode,
+        trick_number=state.trick_number,
+        chosen_card=chosen,
+        moon_defense_target=moon_target,
+        candidates=ordered_candidates,
+    )
+    return chosen, play_reason
 
 
 def _score_lead_v2(

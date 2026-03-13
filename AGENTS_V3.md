@@ -416,15 +416,22 @@ Suggested substeps:
    - move `heuristic_v3` onto its own play-selection path or a neutral shared helper
    - keep behavior unchanged
    - verify with tests plus a quick benchmark re-check against prior `v3` numbers
-3. Discard-base cleanup
+3. Neutral shared-base extraction
+   - remove the remaining `class HeuristicBotV3(HeuristicBotV2)` inheritance relationship
+   - move shared non-strategy mechanics into a small neutral base/helper layer
+   - shared pieces may include common dataclass fields, debug/reason payload storage, and generic play-candidate assembly
+   - keep `v2` and `v3` strategy ownership separate even if they still share plumbing
+   - keep behavior unchanged
+   - verify with targeted `heuristic_v2` / `heuristic_v3` regression tests and a quick benchmark spot check
+4. Discard-base cleanup
    - stop routing discard-base language through pass-priority concepts
    - preserve behavior if possible; if not, treat any intentional retuning as post-cleanup work
    - verify with discard regression tests and a benchmark spot check
-4. Follow-context cleanup
+5. Follow-context cleanup
    - make second-seat vs later-seat context explicit inside follow scoring
    - keep follow as one scoring family, not multiple top-level modes
    - verify with follow-position regression tests
-5. Runtime/version cleanup
+6. Runtime/version cleanup
    - decide whether to retire or hide `heuristic_v2` from active runtime/UI paths
    - keep `heuristic` v1 available as the simple baseline
    - verify server/UI bot selection remains coherent
