@@ -5,8 +5,8 @@ from collections.abc import Callable
 from typing import Literal
 
 from hearts_ai.bots.heuristic.models import PlayCandidateReason, PlayDecisionReason, _QUEEN_SPADES
-from hearts_ai.bots.heuristic.rollout import _rollout_score_v2, _shared_rollout_sample_seeds
-from hearts_ai.bots.heuristic.scoring import _score_discard_priority_v2
+from hearts_ai.bots.heuristic.rollout import _rollout_score_base, _shared_rollout_sample_seeds
+from hearts_ai.bots.heuristic.scoring import _score_discard_priority_base
 from hearts_ai.engine.cards import Card, Suit
 from hearts_ai.engine.errors import InvalidStateError
 from hearts_ai.engine.rules import legal_moves
@@ -90,7 +90,7 @@ def _choose_play_with_reason(
             mode=mode,
             moon_target=moon_target,
         )
-        rollout_score = _rollout_score_v2(
+        rollout_score = _rollout_score_base(
             state=state,
             player_id=player_id,
             card=card,
@@ -136,6 +136,5 @@ def _move_tiebreak(mode: Literal["lead", "follow", "discard"], card: Card) -> tu
     if mode == "lead":
         # Prefer lower lead cards on ties.
         return (-int(card.rank), -int(card.suit), 0)
-    priority = _score_discard_priority_v2(card)
+    priority = _score_discard_priority_base(card)
     return (priority[0], priority[1], priority[2])
-

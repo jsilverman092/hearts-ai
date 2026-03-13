@@ -405,6 +405,7 @@ Acceptance criteria:
 - Follow scoring makes trick position/context explicit without fragmenting into unnecessary top-level modes.
 - Existing `heuristic_v3` benchmark behavior remains materially unchanged after the structural cleanup.
 - `heuristic`, `heuristic_v2`, and `heuristic_v3` remain available and coherent in runtime/UI codepaths.
+- Shared helper names no longer imply false strategy ownership such as "`v3` depends on `v2`" when the helper is actually a neutral foundation reused by both.
 
 Suggested substeps:
 1. Explicit scoring-structure cleanup
@@ -436,6 +437,19 @@ Suggested substeps:
    - preserve import compatibility at the factory/runtime layer unless and until a dedicated cleanup step changes those imports
    - keep behavior unchanged
    - verify with full test suite plus a mixed-field benchmark spot check
+7. Shared-base naming cleanup
+   - rename shared helper foundations to neutral names now that package boundaries are stable
+   - keep `_v` suffixes only for helpers that are truly version-owned overlays rather than shared building blocks
+   - remove misleading semantic dependencies such as `v3` appearing to call `v2` helpers when the relationship is really `v2` + `v3` sharing one base helper
+   - preferred examples:
+     - `_score_pass_base` / `_score_pass_v3`
+     - `_score_lead_base` / `_score_lead_v3`
+     - `_score_follow_base` if follow remains shared with no `v3` overlay yet
+     - `_score_discard_priority_base`
+     - `_score_discard_base` / `_score_discard_v3`
+     - `_rollout_score_base` if rollout remains shared
+   - preserve behavior unchanged; this is a naming / ownership cleanup, not a heuristic retune
+   - verify with full tests plus a quick mixed-field benchmark spot check
 
 ## Test Plan
 

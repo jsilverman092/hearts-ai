@@ -10,7 +10,7 @@ from hearts_ai.engine.state import GameState
 from hearts_ai.engine.types import PLAYER_COUNT, PlayerId, Trick
 
 
-def _rollout_score_v2(
+def _rollout_score_base(
     state: GameState,
     player_id: PlayerId,
     card: Card,
@@ -143,4 +143,3 @@ def _full_deck() -> tuple[Card, ...]:
         for rank in Rank:
             deck.append(Card(suit=suit, rank=rank))
     return tuple(deck)
-

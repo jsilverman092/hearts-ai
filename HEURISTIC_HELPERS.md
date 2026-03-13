@@ -13,6 +13,7 @@ Notes:
 - `Versions` describes which bot versions currently rely on the helper
 - `Location` is the current module or class owner
 - blank `New name` cells are intentional
+- naming convention: use neutral names for shared foundations and reserve `_v` suffixes for genuinely version-owned helper variants
 
 ## Package Map
 
@@ -33,11 +34,11 @@ Notes:
 | `_peek_last_pass_reason` | `_HeuristicScoringBotBase` (`heuristic/bots.py`) | `v2`, `v3` | Returns cached pass explanation payload. |  |
 | `_peek_last_play_reason` | `_HeuristicScoringBotBase` (`heuristic/bots.py`) | `v2`, `v3` | Returns cached play explanation payload. |  |
 | `_score_play_candidate` | `_HeuristicScoringBotBase` (`heuristic/bots.py`) | `v2`, `v3` | Dispatches one candidate to lead/follow/discard scoring. |  |
-| `_score_follow_candidate` | `_HeuristicScoringBotBase` (`heuristic/bots.py`) | `v2`, `v3` | Shared follow scoring hook (routes to `_score_follow_v2`). |  |
+| `_score_follow_candidate` | `_HeuristicScoringBotBase` (`heuristic/bots.py`) | `v2`, `v3` | Shared follow scoring hook (routes to `_score_follow_base`). |  |
 | `_score_lead_candidate` | `_HeuristicScoringBotBase` (`heuristic/bots.py`) | `v2`, `v3` | Abstract lead-scoring hook implemented by versioned bots. |  |
 | `_score_discard_candidate` | `_HeuristicScoringBotBase` (`heuristic/bots.py`) | `v2`, `v3` | Abstract discard-scoring hook implemented by versioned bots. |  |
-| `_score_lead_candidate` | `HeuristicBotV2` (`heuristic/bots.py`) | `v2` | v2 lead hook (`_score_lead_v2`). |  |
-| `_score_discard_candidate` | `HeuristicBotV2` (`heuristic/bots.py`) | `v2` | v2 discard hook (`_score_discard_v2`). |  |
+| `_score_lead_candidate` | `HeuristicBotV2` (`heuristic/bots.py`) | `v2` | v2 lead hook (`_score_lead_base`). |  |
+| `_score_discard_candidate` | `HeuristicBotV2` (`heuristic/bots.py`) | `v2` | v2 discard hook (`_score_discard_base`). |  |
 | `_score_lead_candidate` | `HeuristicBotV3` (`heuristic/bots.py`) | `v3` | v3 lead hook (`_score_lead_v3`). |  |
 | `_score_discard_candidate` | `HeuristicBotV3` (`heuristic/bots.py`) | `v3` | v3 discard hook (`_score_discard_v3`). |  |
 
@@ -54,8 +55,8 @@ Notes:
 
 | Current name | Location | Versions | Description | New name |
 | --- | --- | --- | --- | --- |
-| `_pass_priority` | `heuristic/scoring.py` | `v1`, `v2` | Legacy card-only pass priority. |  |
-| `_pass_priority_v3` | `heuristic/scoring.py` | `v3` | Hand-aware pass priority for v3. |  |
+| `_score_pass_base` | `heuristic/scoring.py` | `v1`, `v2` | Shared card-only pass priority foundation for v1/v2. |  |
+| `_score_pass_v3` | `heuristic/scoring.py` | `v3` | Hand-aware pass priority for v3. |  |
 
 ## Shared Play Plumbing
 
@@ -70,12 +71,12 @@ Notes:
 
 | Current name | Location | Versions | Description | New name |
 | --- | --- | --- | --- | --- |
-| `_score_lead_v2` | `heuristic/scoring.py` | `v2`, base of `v3` | Base lead scoring system. |  |
-| `_score_lead_v3` | `heuristic/scoring.py` | `v3` | v3 lead refinements over v2 base. |  |
-| `_score_follow_v2` | `heuristic/scoring.py` | `v2`, `v3` | Shared follow scoring system (with explicit second-seat/later-seat branch). |  |
-| `_score_discard_priority_v2` | `heuristic/scoring.py` | `v1`, `v2`, tie-break in `v2`/`v3` | Discard priority buckets for scripted shedding, discard base scoring, and non-lead tie-breaks. |  |
-| `_score_discard_v2` | `heuristic/scoring.py` | `v2`, base of `v3` | Base discard scoring system. |  |
-| `_score_discard_v3` | `heuristic/scoring.py` | `v3` | v3 discard refinements over v2 base. |  |
+| `_score_lead_base` | `heuristic/scoring.py` | `v2`, base of `v3` | Shared lead scoring foundation. |  |
+| `_score_lead_v3` | `heuristic/scoring.py` | `v3` | v3 lead refinements over shared lead base. |  |
+| `_score_follow_base` | `heuristic/scoring.py` | `v2`, `v3` | Shared follow scoring system (with explicit second-seat/later-seat branch). |  |
+| `_score_discard_priority_base` | `heuristic/scoring.py` | `v1`, `v2`, tie-break in `v2`/`v3` | Discard priority buckets for scripted shedding, discard base scoring, and non-lead tie-breaks. |  |
+| `_score_discard_base` | `heuristic/scoring.py` | `v2`, base of `v3` | Shared discard scoring foundation. |  |
+| `_score_discard_v3` | `heuristic/scoring.py` | `v3` | v3 discard refinements over shared discard base. |  |
 
 ## v3 Public-Info Helpers
 
@@ -91,7 +92,7 @@ Notes:
 
 | Current name | Location | Versions | Description | New name |
 | --- | --- | --- | --- | --- |
-| `_rollout_score_v2` | `heuristic/rollout.py` | `v2`, `v3` | Samples continuation cards for rest-of-trick rollout score. |  |
+| `_rollout_score_base` | `heuristic/rollout.py` | `v2`, `v3` | Samples continuation cards for rest-of-trick rollout score. |  |
 | `_evaluate_rollout_trick` | `heuristic/rollout.py` | `v2`, `v3` | Scores one fully resolved trick outcome. |  |
 | `_skip_rollout_for_follow_candidate` | `heuristic/rollout.py` | `v2`, `v3` | Skips rollout for guaranteed-losing non-point follows. |  |
 | `_shared_rollout_sample_seeds` | `heuristic/rollout.py` | `v2`, `v3` | Generates shared sample seeds per decision. |  |

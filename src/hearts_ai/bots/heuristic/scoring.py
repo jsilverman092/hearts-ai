@@ -26,7 +26,7 @@ def _choose_follow_or_discard(trick: Trick, legal: list[Card], first_trick: bool
     follow_cards = [card for card in legal if card.suit == led_suit]
     if follow_cards:
         return _choose_follow(trick=trick, follow_cards=follow_cards, first_trick=first_trick)
-    return max(legal, key=_score_discard_priority_v2)
+    return max(legal, key=_score_discard_priority_base)
 
 
 def _choose_follow(trick: Trick, follow_cards: list[Card], first_trick: bool) -> Card:
@@ -38,14 +38,14 @@ def _choose_follow(trick: Trick, follow_cards: list[Card], first_trick: bool) ->
     trick_has_points = any(is_point_card(card) for _, card in trick)
 
     if trick_has_points and losing_cards:
-        return max(losing_cards, key=_score_discard_priority_v2)
+        return max(losing_cards, key=_score_discard_priority_base)
     if trick_has_points:
         return min(follow_cards, key=_low_key)
     if first_trick and not losing_cards:
         # First trick without points: if we must win, shed the highest club now.
-        return max(follow_cards, key=_score_discard_priority_v2)
+        return max(follow_cards, key=_score_discard_priority_base)
     if losing_cards:
-        return max(losing_cards, key=_score_discard_priority_v2)
+        return max(losing_cards, key=_score_discard_priority_base)
     return min(follow_cards, key=_low_key)
 
 
@@ -54,7 +54,7 @@ def _low_key(card: Card) -> tuple[int, int]:
 
 
 # Pass scoring helpers used by the heuristic bot versions.
-def _pass_priority(card: Card) -> tuple[int, int, int]:
+def _score_pass_base(card: Card) -> tuple[int, int, int]:
     if card == _QUEEN_SPADES:
         return (6, int(card.rank), int(card.suit))
     if card == _ACE_SPADES:
@@ -68,7 +68,7 @@ def _pass_priority(card: Card) -> tuple[int, int, int]:
     return (1, int(card.rank), int(card.suit))
 
 
-def _pass_priority_v3(card: Card, hand: Hand) -> tuple[int, int, int]:
+def _score_pass_v3(card: Card, hand: Hand) -> tuple[int, int, int]:
     spades = [current for current in hand if current.suit == Suit.SPADES]
     spade_count = len(spades)
     has_qs = _QUEEN_SPADES in spades
@@ -163,7 +163,7 @@ def _pass_priority_v3(card: Card, hand: Hand) -> tuple[int, int, int]:
     return (primary, rank_value, int(card.suit))
 
 
-def _score_discard_priority_v2(card: Card) -> tuple[int, int, int]:
+def _score_discard_priority_base(card: Card) -> tuple[int, int, int]:
     # Keep current v2 behavior stable while decoupling discard naming/ownership from pass scoring.
     if card == _QUEEN_SPADES:
         return (6, int(card.rank), int(card.suit))
@@ -179,7 +179,7 @@ def _score_discard_priority_v2(card: Card) -> tuple[int, int, int]:
 
 
 # Lead scoring systems.
-def _score_lead_v2(
+def _score_lead_base(
     state: GameState,
     legal: list[Card],
     card: Card,
@@ -245,7 +245,7 @@ def _score_lead_v3(
     hand: Hand,
     card: Card,
 ) -> tuple[float, list[str]]:
-    score, tags = _score_lead_v2(state=state, legal=legal, card=card)
+    score, tags = _score_lead_base(state=state, legal=legal, card=card)
     public_info = _build_public_info_v3(state=state)
     players_ahead = _remaining_players_after(player_id=player_id, already_played=1)
     outside_lower_count, outside_higher_count = _outside_rank_counts_for_card(
@@ -355,7 +355,7 @@ def _score_discard_v3(
     card: Card,
     moon_target: PlayerId | None,
 ) -> tuple[float, list[str]]:
-    score, tags = _score_discard_v2(state=state, card=card, moon_target=moon_target)
+    score, tags = _score_discard_base(state=state, card=card, moon_target=moon_target)
     public_info = _build_public_info_v3(state=state)
     if card.suit == Suit.SPADES and int(card.rank) <= int(Rank.JACK):
         if public_info.qs_live:
@@ -366,9 +366,9 @@ def _score_discard_v3(
             score += 1.8
             tags.append("v3_qs_dead_subqueen_spade_as_black_suit")
     if card in (_ACE_SPADES, _KING_SPADES) and not public_info.qs_live:
-        # _score_discard_v2 includes a large queen-protection premium for A/K spades
+        # _score_discard_base includes a large queen-protection premium for A/K spades
         # via v2 discard-priority buckets. Once QS is dead, remove most of it.
-        queen_premium_buckets = max(_score_discard_priority_v2(card)[0] - 2, 0)
+        queen_premium_buckets = max(_score_discard_priority_base(card)[0] - 2, 0)
         score -= 1.8 * float(queen_premium_buckets)
         tags.append("v3_qs_dead_reduce_ak_spade_dump_premium")
 
@@ -443,7 +443,7 @@ def _score_discard_v3(
 
 
 # Follow scoring system.
-def _score_follow_v2(
+def _score_follow_base(
     state: GameState,
     player_id: PlayerId,
     card: Card,
@@ -510,14 +510,14 @@ def _score_follow_v2(
     return score, tags
 
 
-def _score_discard_v2(
+def _score_discard_base(
     state: GameState,
     card: Card,
     moon_target: PlayerId | None,
 ) -> tuple[float, list[str]]:
     score = 0.0
     tags: list[str] = []
-    priority = _score_discard_priority_v2(card)
+    priority = _score_discard_priority_base(card)
     score += (float(priority[0]) * 1.8) + (float(priority[1]) * 0.04)
     tags.append("discard_priority")
 
@@ -528,4 +528,3 @@ def _score_discard_v2(
             score -= 4.5
             tags.append("avoid_feeding_moon_target")
     return score, tags
-

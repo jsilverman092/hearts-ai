@@ -12,13 +12,13 @@ from hearts_ai.bots.heuristic.models import (
 from hearts_ai.bots.heuristic.scoring import (
     _choose_follow_or_discard,
     _choose_lead,
-    _pass_priority,
-    _pass_priority_v3,
-    _score_discard_v2,
+    _score_discard_base,
     _score_discard_v3,
-    _score_follow_v2,
-    _score_lead_v2,
+    _score_follow_base,
+    _score_lead_base,
     _score_lead_v3,
+    _score_pass_base,
+    _score_pass_v3,
 )
 from hearts_ai.bots.heuristic.shared import _choose_play_with_reason
 from hearts_ai.engine.cards import Card
@@ -42,7 +42,7 @@ class HeuristicBot:
                 f"Cannot pass {pass_count} cards from hand of size {len(hand)} for player {int(self.player_id)}."
             )
 
-        by_risk = sorted(hand, key=_pass_priority, reverse=True)
+        by_risk = sorted(hand, key=_score_pass_base, reverse=True)
         return sorted(by_risk[:pass_count])
 
     def choose_play(self, state: GameState, rng: random.Random) -> Card:
@@ -136,7 +136,7 @@ class _HeuristicScoringBotBase:
         card: Card,
         moon_target: PlayerId | None,
     ) -> tuple[float, list[str]]:
-        return _score_follow_v2(
+        return _score_follow_base(
             state=state,
             player_id=player_id,
             card=card,
@@ -167,11 +167,11 @@ class HeuristicBotV2(_HeuristicScoringBotBase):
                 f"Cannot pass {pass_count} cards from hand of size {len(hand)} for player {int(self.player_id)}."
             )
 
-        ranked = sorted(hand, key=_pass_priority, reverse=True)
+        ranked = sorted(hand, key=_score_pass_base, reverse=True)
         selected = tuple(sorted(ranked[:pass_count]))
         self._last_pass_reason = PassDecisionReason(
             selected_cards=selected,
-            candidates=tuple(PassCandidateReason(card=card, score=_pass_priority(card)) for card in ranked),
+            candidates=tuple(PassCandidateReason(card=card, score=_score_pass_base(card)) for card in ranked),
         )
         return list(selected)
 
@@ -183,7 +183,7 @@ class HeuristicBotV2(_HeuristicScoringBotBase):
         card: Card,
     ) -> tuple[float, list[str]]:
         del player_id
-        return _score_lead_v2(
+        return _score_lead_base(
             state=state,
             legal=legal,
             card=card,
@@ -197,7 +197,7 @@ class HeuristicBotV2(_HeuristicScoringBotBase):
         moon_target: PlayerId | None,
     ) -> tuple[float, list[str]]:
         del player_id
-        return _score_discard_v2(
+        return _score_discard_base(
             state=state,
             card=card,
             moon_target=moon_target,
@@ -217,12 +217,12 @@ class HeuristicBotV3(_HeuristicScoringBotBase):
                 f"Cannot pass {pass_count} cards from hand of size {len(hand)} for player {int(self.player_id)}."
             )
 
-        ranked = sorted(hand, key=lambda card: _pass_priority_v3(card=card, hand=hand), reverse=True)
+        ranked = sorted(hand, key=lambda card: _score_pass_v3(card=card, hand=hand), reverse=True)
         selected = tuple(sorted(ranked[:pass_count]))
         self._last_pass_reason = PassDecisionReason(
             selected_cards=selected,
             candidates=tuple(
-                PassCandidateReason(card=card, score=_pass_priority_v3(card=card, hand=hand))
+                PassCandidateReason(card=card, score=_score_pass_v3(card=card, hand=hand))
                 for card in ranked
             ),
         )
@@ -256,4 +256,3 @@ class HeuristicBotV3(_HeuristicScoringBotBase):
             card=card,
             moon_target=moon_target,
         )
-
