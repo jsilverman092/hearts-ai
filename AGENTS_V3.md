@@ -390,9 +390,8 @@ Implementation targets:
   - remove or de-emphasize stale generic tags that are misleading after v3 refinements
   - document tag meanings and cleanup candidates in a dedicated reference file
 - Version cleanup:
-  - after `heuristic_v3` is structurally independent, decide whether `heuristic_v2` should remain available in runtime codepaths
-  - prefer removing or deprecating `heuristic_v2` from active factory / UI / server options once its benchmark role has been served and report/history coverage is sufficient
-  - do not remove `heuristic` v1; it remains useful as the intentionally simple baseline
+  - keep `heuristic`, `heuristic_v2`, and `heuristic_v3` available in runtime codepaths for continued comparison, mixed-field benchmarking, and UI testing
+  - do not treat legacy heuristic bots as deprecation targets during Phase 4.6; revisit only after later product decisions make that worthwhile
 
 Constraints:
 - Do not accidentally change `heuristic_v3` behavior while refactoring structure.
@@ -405,7 +404,7 @@ Acceptance criteria:
 - Discard scoring is no longer conceptually framed as pass-priority reuse unless that reuse is explicitly justified.
 - Follow scoring makes trick position/context explicit without fragmenting into unnecessary top-level modes.
 - Existing `heuristic_v3` benchmark behavior remains materially unchanged after the structural cleanup.
-- The runtime bot list is simpler, or there is a documented deprecation path for `heuristic_v2`.
+- `heuristic`, `heuristic_v2`, and `heuristic_v3` remain available and coherent in runtime/UI codepaths.
 
 Suggested substeps:
 1. Explicit scoring-structure cleanup
@@ -431,11 +430,7 @@ Suggested substeps:
    - make second-seat vs later-seat context explicit inside follow scoring
    - keep follow as one scoring family, not multiple top-level modes
    - verify with follow-position regression tests
-6. Runtime/version cleanup
-   - decide whether to retire or hide `heuristic_v2` from active runtime/UI paths
-   - keep `heuristic` v1 available as the simple baseline
-   - verify server/UI bot selection remains coherent
-7. Heuristic module split
+6. Heuristic module split
    - split `src/hearts_ai/bots/heuristic_bot.py` into a small `heuristic/` package once naming and ownership boundaries are clear
    - separate major concerns such as shared bot base/plumbing, `v1`, `v2`, `v3`, public-info helpers, and rollout helpers
    - preserve import compatibility at the factory/runtime layer unless and until a dedicated cleanup step changes those imports
@@ -468,7 +463,7 @@ Update/add tests:
   - deterministic auto-advance behavior when seats use `heuristic`
   - optional debug payload exposure for `heuristic_v2` decisions
   - client-side rewind/review control preserves read-only historical inspection without affecting live table state
-  - if `heuristic_v2` is retired or hidden, server / UI bot selection remains coherent and existing saved flows still degrade gracefully
+  - `heuristic`, `heuristic_v2`, and `heuristic_v3` remain coherent and selectable in server / UI paths
 
 Do not make benchmark win-rate assertions brittle in CI:
 - Keep strict assertions for determinism/legality.

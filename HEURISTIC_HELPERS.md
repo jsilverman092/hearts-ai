@@ -1,7 +1,7 @@
 # Heuristic Bot Helpers
 
 Reference file for helper methods and module-level helper functions in
-`src/hearts_ai/bots/heuristic_bot.py`.
+`src/hearts_ai/bots/heuristic/` (split from the old `heuristic_bot.py` single-file layout).
 
 Purpose:
 - make ownership clearer while the heuristic bots are being refactored
@@ -10,7 +10,7 @@ Purpose:
 
 Notes:
 - `Versions` describes which bot versions currently rely on the helper
-- `Scope` distinguishes class methods from module-level helpers
+- `Scope` distinguishes class methods from module-level helpers (now spread across multiple files)
 - blank `New name` cells are intentional
 
 ## Base Class Helper Methods

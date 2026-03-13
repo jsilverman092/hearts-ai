@@ -1,11 +1,7 @@
 from __future__ import annotations
 
-# Compatibility re-export module. The implementation now lives in
-# hearts_ai.bots.heuristic.* after the Phase 4.6 module split.
-from hearts_ai.bots.heuristic import (
-    HeuristicBot,
-    HeuristicBotV2,
-    HeuristicBotV3,
+from hearts_ai.bots.heuristic.bots import HeuristicBot, HeuristicBotV2, HeuristicBotV3
+from hearts_ai.bots.heuristic.models import (
     PassCandidateReason,
     PassDecisionReason,
     PlayCandidateReason,
