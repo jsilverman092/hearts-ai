@@ -407,6 +407,28 @@ Acceptance criteria:
 - Existing `heuristic_v3` benchmark behavior remains materially unchanged after the structural cleanup.
 - The runtime bot list is simpler, or there is a documented deprecation path for `heuristic_v2`.
 
+Suggested substeps:
+1. Explicit scoring-structure cleanup
+   - make `pass`, `lead`, `follow`, and `discard` naming / dispatch explicit
+   - keep behavior unchanged
+   - verify with targeted `heuristic_v3` behavior-preservation tests
+2. `heuristic_v3` decoupling from `heuristic_v2`
+   - move `heuristic_v3` onto its own play-selection path or a neutral shared helper
+   - keep behavior unchanged
+   - verify with tests plus a quick benchmark re-check against prior `v3` numbers
+3. Discard-base cleanup
+   - stop routing discard-base language through pass-priority concepts
+   - preserve behavior if possible; if not, treat any intentional retuning as post-cleanup work
+   - verify with discard regression tests and a benchmark spot check
+4. Follow-context cleanup
+   - make second-seat vs later-seat context explicit inside follow scoring
+   - keep follow as one scoring family, not multiple top-level modes
+   - verify with follow-position regression tests
+5. Runtime/version cleanup
+   - decide whether to retire or hide `heuristic_v2` from active runtime/UI paths
+   - keep `heuristic` v1 available as the simple baseline
+   - verify server/UI bot selection remains coherent
+
 ## Test Plan
 
 Update/add tests:
