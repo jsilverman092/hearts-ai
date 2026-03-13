@@ -832,7 +832,7 @@ def test_heuristic_v3_moon_defense_requires_sole_point_holder() -> None:
     assert "moon_target_still_wins" not in only_entry.tags
 
 
-def test_heuristic_v3_blocks_sole_moon_candidate_when_threshold_met() -> None:
+def test_heuristic_v3_moon_defense_does_not_trigger_for_qs_only_start() -> None:
     state = GameState()
     state.hands = {
         PlayerId(0): [Card(Suit.CLUBS, Rank.TWO)],
@@ -855,9 +855,80 @@ def test_heuristic_v3_blocks_sole_moon_candidate_when_threshold_met() -> None:
     reason = bot._peek_last_play_reason()
 
     assert reason is not None
+    assert reason.moon_defense_target is None
+    only_entry = reason.candidates[0]
+    assert "block_moon_target" not in only_entry.tags
+
+
+def test_heuristic_v3_moon_defense_triggers_for_qs_plus_hearts_shape() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [Card(Suit.CLUBS, Rank.TWO)],
+        PlayerId(1): [Card(Suit.CLUBS, Rank.THREE)],
+        PlayerId(2): [Card(Suit.CLUBS, Rank.FOUR)],
+        PlayerId(3): [Card(Suit.HEARTS, Rank.FIVE)],
+    }
+    state.taken_tricks = {
+        PlayerId(0): [],
+        PlayerId(1): [[
+            (PlayerId(1), Card(Suit.SPADES, Rank.QUEEN)),
+            (PlayerId(2), Card(Suit.HEARTS, Rank.TWO)),
+            (PlayerId(3), Card(Suit.HEARTS, Rank.THREE)),
+            (PlayerId(0), Card(Suit.CLUBS, Rank.SIX)),
+        ]],
+        PlayerId(2): [],
+        PlayerId(3): [],
+    }
+    state.trick_in_progress = [(PlayerId(2), Card(Suit.HEARTS, Rank.FOUR))]
+    state.hearts_broken = True
+    state.trick_number = 5
+
+    bot = HeuristicBotV3(player_id=PlayerId(3), rollout_samples=0)
+    bot.choose_play(state=state, rng=random.Random(78))
+    reason = bot._peek_last_play_reason()
+
+    assert reason is not None
     assert reason.moon_defense_target == PlayerId(1)
     only_entry = reason.candidates[0]
-    assert "block_moon_target" in only_entry.tags
+    assert "moon_target_still_wins" not in only_entry.tags
+
+
+def test_heuristic_v3_moon_defense_triggers_for_hearts_heavy_without_qs() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [Card(Suit.CLUBS, Rank.TWO)],
+        PlayerId(1): [Card(Suit.CLUBS, Rank.THREE)],
+        PlayerId(2): [Card(Suit.CLUBS, Rank.FOUR)],
+        PlayerId(3): [Card(Suit.HEARTS, Rank.FIVE)],
+    }
+    state.taken_tricks = {
+        PlayerId(0): [],
+        PlayerId(1): [[
+            (PlayerId(1), Card(Suit.HEARTS, Rank.TWO)),
+            (PlayerId(2), Card(Suit.HEARTS, Rank.THREE)),
+            (PlayerId(3), Card(Suit.HEARTS, Rank.FOUR)),
+            (PlayerId(0), Card(Suit.HEARTS, Rank.SIX)),
+        ], [
+            (PlayerId(1), Card(Suit.HEARTS, Rank.SEVEN)),
+            (PlayerId(2), Card(Suit.HEARTS, Rank.EIGHT)),
+            (PlayerId(3), Card(Suit.HEARTS, Rank.NINE)),
+            (PlayerId(0), Card(Suit.HEARTS, Rank.TEN)),
+        ]],
+        PlayerId(2): [],
+        PlayerId(3): [],
+    }
+    state.trick_in_progress = [(PlayerId(2), Card(Suit.HEARTS, Rank.JACK))]
+    state.hearts_broken = True
+    state.trick_number = 5
+
+    bot = HeuristicBotV3(player_id=PlayerId(3), rollout_samples=0)
+    bot.choose_play(state=state, rng=random.Random(79))
+    reason = bot._peek_last_play_reason()
+
+    assert reason is not None
+    assert reason.moon_defense_target == PlayerId(1)
+    only_entry = reason.candidates[0]
+    assert "moon_target_still_wins" not in only_entry.tags
 
 
 def test_heuristic_v3_moon_defense_preserves_lone_suit_stopper_on_discard() -> None:

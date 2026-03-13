@@ -293,6 +293,10 @@ Implementation targets:
   - keep this phase to hard public-info inference only; do not add speculative opponent-reading or pass-memory logic yet
 - Moon-defense refinements:
   - while a sole moon target is live, preserve future stoppers rather than evaluating only the current trick in isolation
+  - detect moon threats using point composition, not just raw hand points
+  - keep the requirement that exactly one player currently owns all points in the hand so far
+  - distinguish `hearts-only` accumulation from `Q♠`-driven accumulation when deciding how early to switch into moon defense
+  - trigger earlier for clearly dangerous consolidated shapes such as many hearts already captured, or `Q♠` plus additional hearts, rather than waiting for an arbitrary near-26 total
   - strongly discourage discarding the last `boss` or near-`boss` control card in a still-live suit when that card may be needed to break a run
   - treat this as a bias, not an absolute rule, so the bot can still spend a stopper if doing so immediately blocks the moon attempt
   - make the preservation strongest when the bot has no comparable secondary cover left in that suit
@@ -316,6 +320,7 @@ Acceptance criteria:
 - `heuristic_v3` essentially never passes or pre-`Q♠` dumps sub-queen spades (`2♠-J♠`) in ordinary hands.
 - `heuristic_v3` treats sub-queen spades like ordinary black-suit cards again once `Q♠` is already dead.
 - `heuristic_v3` no longer gives `A♠` / `K♠` an outsized discard premium after `Q♠` is already dead.
+- `heuristic_v3` recognizes a consolidated hearts-heavy moon threat before the target is almost at `26`, and distinguishes that from a weaker early `Q♠`-only start.
 - `heuristic_v3` does not casually discard a suit stopper such as `A♣` into a live moon run when that card may be needed to break the target's control later.
 - v3 remains deterministic and legal.
 - v3 can be benchmarked cleanly against `heuristic_v2`, `heuristic`, and `random`.
@@ -371,6 +376,7 @@ Update/add tests:
   - `heuristic_v3` public-info scenarios for suit depletion and inferred player voids affecting lead/discard choices
   - `heuristic_v3` discard regression scenarios covering `floor card` vs `trap card` vs `boss card` choices within the same suit
   - `heuristic_v3` moon-defense discard scenarios where preserving a last stopper in a live suit should outrank a locally attractive dump
+  - `heuristic_v3` moon-threat detection scenarios covering hearts-heavy accumulation, `Q♠`-only starts, and `Q♠` plus hearts starts
 - integration/smoke:
   - deterministic full-game runs with heuristic bots
   - legal-move invariants remain enforced

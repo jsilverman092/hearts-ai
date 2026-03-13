@@ -420,7 +420,21 @@ def _moon_defense_target(state: GameState, player_id: PlayerId, threshold: int) 
     if target == player_id:
         return None
     target_points = hand_points[target]
-    if target_points >= threshold:
+    target_tricks = state.taken_tricks[target]
+    hearts_taken = sum(
+        1 for trick in target_tricks for _, card in trick if card.suit == Suit.HEARTS
+    )
+    qs_taken = any(
+        card == _QUEEN_SPADES for trick in target_tricks for _, card in trick
+    )
+    hearts_heavy_trigger = 8
+    qs_plus_hearts_trigger = 2
+    high_total_trigger = max(threshold + 4, 16)
+    if hearts_taken >= hearts_heavy_trigger:
+        return target
+    if qs_taken and hearts_taken >= qs_plus_hearts_trigger:
+        return target
+    if target_points >= high_total_trigger:
         return target
     return None
 
