@@ -824,6 +824,8 @@ def _rollout_score_v2(
 ) -> float:
     if samples <= 0:
         return 0.0
+    if _skip_rollout_for_follow_candidate(state=state, mode=mode, card=card):
+        return 0.0
 
     base_trick = [*state.trick_in_progress, (player_id, card)]
     if len(base_trick) >= PLAYER_COUNT:
@@ -882,6 +884,25 @@ def _evaluate_rollout_trick(trick: Trick, player_id: PlayerId, moon_target: Play
         else:
             score += float(points) * 0.7
     return score
+
+
+def _skip_rollout_for_follow_candidate(
+    state: GameState,
+    mode: Literal["lead", "follow", "discard"],
+    card: Card,
+) -> bool:
+    if mode != "follow":
+        return False
+    if is_point_card(card):
+        return False
+    trick = state.trick_in_progress
+    if not trick:
+        return False
+    led_suit = trick[0][1].suit
+    current_highest = max(current.rank for _, current in trick if current.suit == led_suit)
+    # If we are guaranteed to lose with a non-point follow card, rollout cannot
+    # change card-winning outcome for this trick and should not add sampling noise.
+    return card.suit == led_suit and card.rank < current_highest
 
 
 def _remaining_players_after(player_id: PlayerId, already_played: int) -> list[PlayerId]:

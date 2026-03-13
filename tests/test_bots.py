@@ -509,6 +509,32 @@ def test_heuristic_v2_rollout_scores_lead_candidates() -> None:
     assert abs(queen_entry.rollout_score) > 0.01
 
 
+def test_heuristic_v2_rollout_skips_guaranteed_losing_non_point_follows() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [
+            Card(Suit.SPADES, Rank.TWO),
+            Card(Suit.SPADES, Rank.FOUR),
+            Card(Suit.SPADES, Rank.SIX),
+        ],
+        PlayerId(1): [Card(Suit.SPADES, Rank.JACK)],
+        PlayerId(2): [Card(Suit.SPADES, Rank.ACE)],
+        PlayerId(3): [Card(Suit.SPADES, Rank.KING)],
+    }
+    state.trick_in_progress = [(PlayerId(1), Card(Suit.SPADES, Rank.JACK))]
+    state.hearts_broken = True
+    state.trick_number = 6
+
+    bot = HeuristicBotV2(player_id=PlayerId(0), rollout_samples=8, rollout_weight=0.5)
+    card = bot.choose_play(state=state, rng=random.Random(74))
+    reason = bot._peek_last_play_reason()
+
+    assert card == Card(Suit.SPADES, Rank.SIX)
+    assert reason is not None
+    assert reason.mode == "follow"
+    assert all(candidate.rollout_score == 0.0 for candidate in reason.candidates)
+
+
 def test_heuristic_v2_broken_hearts_prefers_low_heart_escape_over_king_spades() -> None:
     state = GameState()
     state.hands = {
