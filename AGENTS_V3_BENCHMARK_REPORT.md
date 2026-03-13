@@ -82,3 +82,70 @@ Conclusion: both heuristic bots crush random; v2 has a modest edge over v1 in th
 ## Recommended Decision
 
 Mark Step 8 complete and treat `heuristic_v2` as the current baseline for next-phase bot work.
+
+## Addendum: 2026-03-13 Heuristic v3 Head-to-Head
+
+Scope:
+- seat-rotated head-to-head validation for `heuristic_v3`
+- compare against `heuristic_v2` and `heuristic` v1
+
+Method:
+- four seat rotations, `300` games each, `1200` total candidate-seat games per matchup
+- `heuristic_v3` vs `heuristic_v2` seeds: `5000`, `5300`, `5600`, `5900`
+- `heuristic_v3` vs `heuristic` seeds: `7000`, `7300`, `7600`, `7900`
+
+### `heuristic_v3` vs `heuristic_v2` (4 x 300 games, seat-rotated)
+
+Aggregate for the single `heuristic_v3` seat across all `1200` games:
+- win rate `0.432`
+- avg points `27.031`
+- avg rank `2.009`
+
+Aggregate for `heuristic_v2` opponents:
+- win rate `0.189`
+- avg points `36.598`
+- avg rank `2.663`
+
+Conclusion:
+- `heuristic_v3` materially outperformed `heuristic_v2` in this comparison.
+
+### `heuristic_v3` vs `heuristic` (4 x 300 games, seat-rotated)
+
+Aggregate for the single `heuristic_v3` seat across all `1200` games:
+- win rate `0.488`
+- avg points `23.110`
+- avg rank `1.782`
+
+Aggregate for `heuristic` opponents:
+- win rate `0.171`
+- avg points `37.732`
+- avg rank `2.739`
+
+Conclusion:
+- `heuristic_v3` decisively outperformed `heuristic` v1 in this comparison.
+
+## Addendum: 2026-03-13 Mixed-Field Quick Check
+
+Scope:
+- quick seat-rotated mixed-field comparison after `heuristic_v3` updates
+- one seat each of `heuristic_v3`, `heuristic_v2`, `heuristic`, and `random`
+
+Method:
+- four seat rotations, `200` games each, `800` total games per bot
+- benchmark specs:
+  - `heuristic_v3,heuristic_v2,heuristic,random`
+  - `heuristic_v2,heuristic,random,heuristic_v3`
+  - `heuristic,random,heuristic_v3,heuristic_v2`
+  - `random,heuristic_v3,heuristic_v2,heuristic`
+- seeds: `9000`, `9200`, `9400`, `9600`
+
+Aggregate results:
+- `heuristic_v3`: win rate `0.463`, avg points `16.692`, avg rank `1.743`
+- `heuristic_v2`: win rate `0.314`, avg points `21.567`, avg rank `2.129`
+- `heuristic`: win rate `0.162`, avg points `25.724`, avg rank `2.464`
+- `random`: win rate `0.061`, avg points `53.926`, avg rank `3.663`
+
+Conclusion:
+- `heuristic_v3` finished clearly ahead in this quick mixed-field check.
+- ordering was stable and sensible: `heuristic_v3` first, `heuristic_v2` second, `heuristic` third, `random` last.
+- this mixed-field result is consistent with the current head-to-head checks showing `heuristic_v3` materially ahead of both earlier heuristic bots.
