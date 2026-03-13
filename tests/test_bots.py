@@ -866,6 +866,63 @@ def test_heuristic_v3_lead_prefers_floor_over_trap_and_boss_in_same_suit() -> No
     assert ten_entry.total_score > ace_entry.total_score
 
 
+def test_heuristic_v3_reduces_ks_discard_premium_after_qs_is_dead() -> None:
+    def build_state(*, qs_seen: bool) -> GameState:
+        state = GameState()
+        state.hands = {
+            PlayerId(0): [
+                Card(Suit.SPADES, Rank.KING),
+                Card(Suit.CLUBS, Rank.QUEEN),
+                Card(Suit.CLUBS, Rank.NINE),
+            ],
+            PlayerId(1): [Card(Suit.HEARTS, Rank.TWO)],
+            PlayerId(2): [Card(Suit.HEARTS, Rank.THREE)],
+            PlayerId(3): [Card(Suit.HEARTS, Rank.FOUR)],
+        }
+        state.taken_tricks = {
+            PlayerId(0): [[
+                (PlayerId(0), Card(Suit.CLUBS, Rank.TWO)),
+                (PlayerId(1), Card(Suit.CLUBS, Rank.FIVE)),
+                (PlayerId(2), Card(Suit.CLUBS, Rank.EIGHT)),
+                (PlayerId(3), Card(Suit.CLUBS, Rank.THREE)),
+            ]],
+            PlayerId(1): [[
+                (PlayerId(1), Card(Suit.SPADES, Rank.TWO)),
+                (PlayerId(2), Card(Suit.SPADES, Rank.QUEEN) if qs_seen else Card(Suit.SPADES, Rank.JACK)),
+                (PlayerId(3), Card(Suit.SPADES, Rank.THREE)),
+                (PlayerId(0), Card(Suit.SPADES, Rank.FOUR)),
+            ]],
+            PlayerId(2): [],
+            PlayerId(3): [],
+        }
+        state.trick_in_progress = [(PlayerId(1), Card(Suit.HEARTS, Rank.TWO))]
+        state.hearts_broken = True
+        state.trick_number = 7
+        return state
+
+    state_qs_live = build_state(qs_seen=False)
+    bot_qs_live = HeuristicBotV3(player_id=PlayerId(0), rollout_samples=0)
+    bot_qs_live.choose_play(state=state_qs_live, rng=random.Random(97))
+    reason_qs_live = bot_qs_live._peek_last_play_reason()
+    assert reason_qs_live is not None
+    ks_live = next(
+        entry for entry in reason_qs_live.candidates if entry.card == Card(Suit.SPADES, Rank.KING)
+    )
+
+    state_qs_dead = build_state(qs_seen=True)
+    bot_qs_dead = HeuristicBotV3(player_id=PlayerId(0), rollout_samples=0)
+    bot_qs_dead.choose_play(state=state_qs_dead, rng=random.Random(97))
+    reason_qs_dead = bot_qs_dead._peek_last_play_reason()
+    assert reason_qs_dead is not None
+    ks_dead = next(
+        entry for entry in reason_qs_dead.candidates if entry.card == Card(Suit.SPADES, Rank.KING)
+    )
+
+    assert "v3_qs_dead_reduce_ak_spade_dump_premium" not in ks_live.tags
+    assert "v3_qs_dead_reduce_ak_spade_dump_premium" in ks_dead.tags
+    assert ks_dead.base_score < ks_live.base_score - 2.5
+
+
 def test_heuristic_v3_discard_prefers_trap_over_floor_card_within_suit() -> None:
     state = GameState()
     state.hands = {

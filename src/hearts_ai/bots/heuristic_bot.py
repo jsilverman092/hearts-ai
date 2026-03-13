@@ -670,6 +670,13 @@ def _score_discard_v3(
 ) -> tuple[float, list[str]]:
     score, tags = _score_discard_v2(state=state, card=card, moon_target=moon_target)
     public_info = _build_public_info_v3(state=state)
+    if card in (_ACE_SPADES, _KING_SPADES) and not public_info.qs_live:
+        # _score_discard_v2 includes a large queen-protection premium for A/K spades via
+        # shared discard/pass priority buckets. Once QS is dead, remove most of it.
+        queen_premium_buckets = max(_pass_priority(card)[0] - 2, 0)
+        score -= 1.8 * float(queen_premium_buckets)
+        tags.append("v3_qs_dead_reduce_ak_spade_dump_premium")
+
     outside_lower_count, outside_higher_count = _outside_rank_counts_for_card(
         state=state,
         public_info=public_info,
