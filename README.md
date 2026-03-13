@@ -34,6 +34,12 @@ Run live server UI:
 python -m hearts_ai serve --host 127.0.0.1 --port 8000
 ```
 
+Run live server UI with auto-reload during local iteration:
+
+```bash
+.\.venv\Scripts\python.exe -m uvicorn hearts_ai.server.app:create_app --factory --host 127.0.0.1 --port 8000 --reload
+```
+
 Then open:
 
 - `http://127.0.0.1:8000` on desktop.

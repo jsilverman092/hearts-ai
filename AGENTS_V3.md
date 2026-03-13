@@ -172,6 +172,8 @@ Focus areas:
 - Rollout / base-score interaction:
   - ensure rollout does not silently skip the exact situations where lead safety matters most
   - rebalance base heuristics so unsupported bonuses cannot dominate obvious tactical risk
+  - skip rollout for guaranteed-losing, non-point follow cards when rollout cannot change whether the card wins the current trick
+  - preserve deterministic "highest losing follow" behavior in those spots instead of letting rollout noise break ties between equally safe losing cards
 - Moon-defense cleanup:
   - keep moon-blocking logic from distorting normal, non-moon play too aggressively
 
@@ -184,12 +186,14 @@ Testing additions:
   - safe vs unsafe spade unload spots
   - opening-lead comparisons across low cards vs dangerous honors
   - broken-hearts lead comparisons across low hearts vs dangerous high spades
+  - guaranteed-losing non-point follow choices where rollout should not override the base highest-losing-card heuristic
   - moon-defense behavior not overriding obvious local safety
 
 Acceptance criteria:
 - `heuristic_v2` no longer makes obvious tactical self-owns in normal play.
 - Regression tests cover the known high-spade lead failure mode.
 - Regression tests cover the broken-hearts low-heart-vs-high-spade lead case.
+- Rollout no longer introduces noise into guaranteed-losing, non-point follow decisions.
 - Benchmark results remain at least competitive with v1 and clearly above random.
 - Phase 3 reason payload hooks remain intact for future UI explanation mode.
 
@@ -263,6 +267,12 @@ Implementation targets:
   - distinguish dangerous spade-control leads (`Q♠` / `K♠` / `A♠`) from safer sub-queen spade leads
   - when `Q♠` is still live, allow `J♠` or lower spade leads to outrank riskier mid and mid-high off-suit leads that can win awkward queen-dump tricks
   - implement these as strong context-sensitive penalties rather than absolute bans so forced-spade cases still behave sensibly
+- Public-info tracking refinements:
+  - add lightweight card-tracking helpers based only on public information already visible in trick history
+  - track whether `Q♠` is still live, how many cards in each suit have already been played, and the current lowest unseen ranks by suit where practical
+  - infer player voids from prior failure-to-follow-suit and make that information available to v3 lead/discard heuristics
+  - use these signals to avoid obviously bad "safe lead" assumptions, especially when a mid off-suit lead is more likely to win because several lower cards are already gone or nearby players are void
+  - keep this phase to hard public-info inference only; do not add speculative opponent-reading or pass-memory logic yet
 - Optional small hand-shape adjustments:
   - short-suit honors become riskier pass candidates
   - lower cover beneath a card makes it safer to keep
@@ -277,6 +287,7 @@ Acceptance criteria:
 - `heuristic_v3` avoids structurally wrong high-spade passes in long-spade hands.
 - `heuristic_v3` avoids short-spade opening leads that prematurely flush a suit containing `Q♠` or fragile `A♠` / `K♠` protection when a sane non-spade lead exists.
 - `heuristic_v3` no longer penalizes `J♠`-type leads as if they were `Q♠` / `K♠` / `A♠`, and can prefer sub-queen spade leads over riskier mid off-suit leads when `Q♠` is still out.
+- `heuristic_v3` can use public trick history to recognize basic void information and suit depletion when evaluating lead safety.
 - v3 remains deterministic and legal.
 - v3 can be benchmarked cleanly against `heuristic_v2`, `heuristic`, and `random`.
 
@@ -290,6 +301,7 @@ Update/add tests:
   - `heuristic_v3` pass-structure scenarios for low-heart preservation, dangerous offsuit honors, and long-spade `Q♠` / `A♠` / `K♠` exceptions
   - `heuristic_v3` lead-choice scenarios for short-spade `Q♠` avoidance and fragile `A♠` / `K♠` protection leads
   - `heuristic_v3` lead-choice scenarios distinguishing `J♠` / sub-queen spades from true dangerous spade-control leads
+  - `heuristic_v3` public-info scenarios for suit depletion and inferred player voids affecting lead/discard choices
 - integration/smoke:
   - deterministic full-game runs with heuristic bots
   - legal-move invariants remain enforced

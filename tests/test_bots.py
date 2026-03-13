@@ -715,3 +715,78 @@ def test_heuristic_v3_prefers_jack_spades_over_ten_clubs_when_qs_unseen() -> Non
     card = bot.choose_play(state=state, rng=random.Random(93))
 
     assert card == Card(Suit.SPADES, Rank.JACK)
+
+
+def test_heuristic_v3_lead_uses_void_and_suit_depletion_public_info() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [
+            Card(Suit.DIAMONDS, Rank.NINE),
+            Card(Suit.CLUBS, Rank.TEN),
+            Card(Suit.HEARTS, Rank.ACE),
+        ],
+        PlayerId(1): [Card(Suit.CLUBS, Rank.TWO)],
+        PlayerId(2): [Card(Suit.CLUBS, Rank.THREE)],
+        PlayerId(3): [Card(Suit.CLUBS, Rank.FOUR)],
+    }
+    state.taken_tricks = {
+        PlayerId(0): [[
+            (PlayerId(0), Card(Suit.DIAMONDS, Rank.TWO)),
+            (PlayerId(1), Card(Suit.DIAMONDS, Rank.FIVE)),
+            (PlayerId(2), Card(Suit.CLUBS, Rank.THREE)),
+            (PlayerId(3), Card(Suit.DIAMONDS, Rank.EIGHT)),
+        ]],
+        PlayerId(1): [[
+            (PlayerId(1), Card(Suit.DIAMONDS, Rank.THREE)),
+            (PlayerId(2), Card(Suit.DIAMONDS, Rank.SIX)),
+            (PlayerId(3), Card(Suit.SPADES, Rank.FOUR)),
+            (PlayerId(0), Card(Suit.DIAMONDS, Rank.KING)),
+        ]],
+        PlayerId(2): [],
+        PlayerId(3): [],
+    }
+    state.hearts_broken = False
+    state.trick_number = 7
+
+    bot = HeuristicBotV3(player_id=PlayerId(0), rollout_samples=0)
+    card = bot.choose_play(state=state, rng=random.Random(94))
+
+    assert card == Card(Suit.CLUBS, Rank.TEN)
+
+
+def test_heuristic_v3_discard_uses_void_and_suit_depletion_public_info() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [
+            Card(Suit.DIAMONDS, Rank.NINE),
+            Card(Suit.CLUBS, Rank.TEN),
+            Card(Suit.SPADES, Rank.TWO),
+        ],
+        PlayerId(1): [Card(Suit.HEARTS, Rank.SEVEN)],
+        PlayerId(2): [Card(Suit.CLUBS, Rank.THREE)],
+        PlayerId(3): [Card(Suit.CLUBS, Rank.FOUR)],
+    }
+    state.taken_tricks = {
+        PlayerId(0): [[
+            (PlayerId(0), Card(Suit.DIAMONDS, Rank.TWO)),
+            (PlayerId(1), Card(Suit.DIAMONDS, Rank.FIVE)),
+            (PlayerId(2), Card(Suit.CLUBS, Rank.THREE)),
+            (PlayerId(3), Card(Suit.DIAMONDS, Rank.EIGHT)),
+        ]],
+        PlayerId(1): [[
+            (PlayerId(1), Card(Suit.DIAMONDS, Rank.THREE)),
+            (PlayerId(2), Card(Suit.DIAMONDS, Rank.SIX)),
+            (PlayerId(3), Card(Suit.SPADES, Rank.FOUR)),
+            (PlayerId(0), Card(Suit.DIAMONDS, Rank.KING)),
+        ]],
+        PlayerId(2): [],
+        PlayerId(3): [],
+    }
+    state.trick_in_progress = [(PlayerId(1), Card(Suit.HEARTS, Rank.SEVEN))]
+    state.hearts_broken = True
+    state.trick_number = 9
+
+    bot = HeuristicBotV3(player_id=PlayerId(0), rollout_samples=0)
+    card = bot.choose_play(state=state, rng=random.Random(95))
+
+    assert card == Card(Suit.DIAMONDS, Rank.NINE)

@@ -78,6 +78,15 @@ class PlayDecisionReason:
     candidates: tuple[PlayCandidateReason, ...]
 
 
+@dataclass(slots=True, frozen=True)
+class PublicInfoV3:
+    qs_live: bool
+    played_count_by_suit: dict[Suit, int]
+    lowest_unseen_rank_by_suit: dict[Suit, int | None]
+    unseen_ranks_by_suit: dict[Suit, tuple[int, ...]]
+    void_suits_by_player: dict[PlayerId, frozenset[Suit]]
+
+
 @dataclass(slots=True)
 class HeuristicBotV2:
     player_id: PlayerId
@@ -456,6 +465,7 @@ def _score_base_v3(
     if mode == "lead":
         return _score_lead_v3(
             state=state,
+            player_id=player_id,
             legal=legal,
             hand=state.hands[player_id],
             card=card,
@@ -467,8 +477,9 @@ def _score_base_v3(
             card=card,
             moon_target=moon_target,
         )
-    return _score_discard_v2(
+    return _score_discard_v3(
         state=state,
+        player_id=player_id,
         card=card,
         moon_target=moon_target,
     )
@@ -538,18 +549,40 @@ def _score_lead_v2(
 
 def _score_lead_v3(
     state: GameState,
+    player_id: PlayerId,
     legal: list[Card],
     hand: Hand,
     card: Card,
 ) -> tuple[float, list[str]]:
     score, tags = _score_lead_v2(state=state, legal=legal, card=card)
-    qs_seen_in_play = any(current == _QUEEN_SPADES for _, current in state.trick_in_progress)
-    qs_seen_in_taken = any(
-        current == _QUEEN_SPADES
-        for taken in state.taken_tricks.values()
-        for trick in taken
-        for _, current in trick
+    public_info = _build_public_info_v3(state=state)
+    players_ahead = _remaining_players_after(player_id=player_id, already_played=1)
+    lower_unseen_count = _count_lower_unseen_ranks(
+        public_info=public_info,
+        suit=card.suit,
+        rank_value=int(card.rank),
     )
+    voids_ahead = _void_count_in_players(
+        public_info=public_info,
+        suit=card.suit,
+        players=players_ahead,
+    )
+    if int(card.rank) >= int(Rank.NINE):
+        if lower_unseen_count <= 3:
+            score -= 0.4
+            tags.append("v3_avoid_depleted_suit_lead")
+            if lower_unseen_count <= 1:
+                score -= 0.35
+                tags.append("v3_very_few_lower_cards_remain")
+        if voids_ahead > 0:
+            score -= 0.22 * float(voids_ahead)
+            tags.append("v3_avoid_high_lead_with_voids_ahead")
+
+    lowest_unseen_rank = public_info.lowest_unseen_rank_by_suit[card.suit]
+    if lowest_unseen_rank is not None and int(card.rank) == lowest_unseen_rank:
+        score += 0.2
+        tags.append("v3_lead_current_lowest_unseen")
+
     has_sub_queen_spade_lead = any(
         candidate.suit == Suit.SPADES and int(candidate.rank) <= int(Rank.JACK)
         for candidate in legal
@@ -557,8 +590,7 @@ def _score_lead_v3(
     if (
         card.suit != Suit.SPADES
         and _QUEEN_SPADES not in hand
-        and not qs_seen_in_play
-        and not qs_seen_in_taken
+        and public_info.qs_live
         and has_sub_queen_spade_lead
         and int(card.rank) >= int(Rank.TEN)
     ):
@@ -610,6 +642,110 @@ def _score_lead_v3(
             tags.append("v3_avoid_exposing_high_spade_protection")
 
     return score, tags
+
+
+def _score_discard_v3(
+    state: GameState,
+    player_id: PlayerId,
+    card: Card,
+    moon_target: PlayerId | None,
+) -> tuple[float, list[str]]:
+    score, tags = _score_discard_v2(state=state, card=card, moon_target=moon_target)
+    public_info = _build_public_info_v3(state=state)
+    lower_unseen_count = _count_lower_unseen_ranks(
+        public_info=public_info,
+        suit=card.suit,
+        rank_value=int(card.rank),
+    )
+    opponents = [PlayerId(index) for index in range(PLAYER_COUNT) if PlayerId(index) != player_id]
+    voids_in_opponents = _void_count_in_players(
+        public_info=public_info,
+        suit=card.suit,
+        players=opponents,
+    )
+
+    if int(card.rank) >= int(Rank.EIGHT):
+        if lower_unseen_count <= 3:
+            score += 0.45
+            tags.append("v3_discard_depleted_suit_card")
+            if lower_unseen_count <= 1:
+                score += 0.25
+                tags.append("v3_discard_suit_near_top")
+        if voids_in_opponents >= 2:
+            score += 0.35 + (0.15 * float(voids_in_opponents - 2))
+            tags.append("v3_discard_suit_with_known_voids")
+    return score, tags
+
+
+def _build_public_info_v3(state: GameState) -> PublicInfoV3:
+    seen_cards = {
+        current
+        for trick in _all_public_tricks(state=state)
+        for _, current in trick
+    }
+    played_count_by_suit = {
+        suit: sum(1 for current in seen_cards if current.suit == suit) for suit in Suit
+    }
+    unseen_ranks_by_suit: dict[Suit, tuple[int, ...]] = {}
+    lowest_unseen_rank_by_suit: dict[Suit, int | None] = {}
+    for suit in Suit:
+        unseen = tuple(
+            int(rank)
+            for rank in Rank
+            if Card(suit=suit, rank=rank) not in seen_cards
+        )
+        unseen_ranks_by_suit[suit] = unseen
+        lowest_unseen_rank_by_suit[suit] = unseen[0] if unseen else None
+
+    void_suits_by_player = _infer_void_suits_by_player(state=state)
+    return PublicInfoV3(
+        qs_live=_QUEEN_SPADES not in seen_cards,
+        played_count_by_suit=played_count_by_suit,
+        lowest_unseen_rank_by_suit=lowest_unseen_rank_by_suit,
+        unseen_ranks_by_suit=unseen_ranks_by_suit,
+        void_suits_by_player=void_suits_by_player,
+    )
+
+
+def _all_public_tricks(state: GameState) -> list[Trick]:
+    tricks = [
+        trick
+        for taken in state.taken_tricks.values()
+        for trick in taken
+    ]
+    if state.trick_in_progress:
+        tricks.append(state.trick_in_progress)
+    return tricks
+
+
+def _infer_void_suits_by_player(state: GameState) -> dict[PlayerId, frozenset[Suit]]:
+    inferred: dict[PlayerId, set[Suit]] = {
+        PlayerId(index): set() for index in range(PLAYER_COUNT)
+    }
+    for trick in _all_public_tricks(state=state):
+        if len(trick) < 2:
+            continue
+        led_suit = trick[0][1].suit
+        for player_id, card in trick[1:]:
+            if card.suit != led_suit:
+                inferred[player_id].add(led_suit)
+    return {player_id: frozenset(suits) for player_id, suits in inferred.items()}
+
+
+def _count_lower_unseen_ranks(public_info: PublicInfoV3, suit: Suit, rank_value: int) -> int:
+    return sum(1 for unseen in public_info.unseen_ranks_by_suit[suit] if unseen < rank_value)
+
+
+def _void_count_in_players(
+    public_info: PublicInfoV3,
+    suit: Suit,
+    players: list[PlayerId],
+) -> int:
+    return sum(
+        1
+        for player_id in players
+        if suit in public_info.void_suits_by_player.get(player_id, frozenset())
+    )
 
 
 def _score_follow_v2(
