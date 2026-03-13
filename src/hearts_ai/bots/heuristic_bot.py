@@ -709,6 +709,38 @@ def _score_discard_v3(
         elif is_floor:
             score -= 0.2
             tags.append("v3_floor_card_void_keep")
+
+    if moon_target is not None and not is_point_card(card):
+        moon_target_voids = public_info.void_suits_by_player.get(moon_target, frozenset())
+        suit_still_live = outside_count >= 4
+        stopper_candidate = is_boss or (
+            outside_count > 0 and outside_higher_count <= 1 and int(card.rank) >= int(Rank.JACK)
+        )
+        if card.suit not in moon_target_voids and suit_still_live and stopper_candidate:
+            has_secondary_cover = any(
+                other != card
+                and not is_point_card(other)
+                and int(other.rank) >= int(Rank.TEN)
+                and _outside_rank_counts_for_card(
+                    state=state,
+                    public_info=public_info,
+                    player_id=player_id,
+                    card=other,
+                )[1]
+                <= 1
+                for other in state.hands[player_id]
+                if other.suit == card.suit
+            )
+            stopper_penalty = 3.0
+            if outside_count >= 8:
+                stopper_penalty += 1.0
+            if is_boss:
+                stopper_penalty += 0.6
+            if not has_secondary_cover:
+                stopper_penalty += 1.6
+                tags.append("v3_moon_defense_no_backup_stopper")
+            score -= stopper_penalty
+            tags.append("v3_moon_defense_keep_suit_stopper")
     return score, tags
 
 

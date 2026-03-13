@@ -860,6 +860,107 @@ def test_heuristic_v3_blocks_sole_moon_candidate_when_threshold_met() -> None:
     assert "block_moon_target" in only_entry.tags
 
 
+def test_heuristic_v3_moon_defense_preserves_lone_suit_stopper_on_discard() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [
+            Card(Suit.CLUBS, Rank.ACE),
+            Card(Suit.SPADES, Rank.SEVEN),
+            Card(Suit.SPADES, Rank.THREE),
+        ],
+        PlayerId(1): [Card(Suit.CLUBS, Rank.THREE)],
+        PlayerId(2): [Card(Suit.CLUBS, Rank.FOUR)],
+        PlayerId(3): [Card(Suit.CLUBS, Rank.FIVE)],
+    }
+    state.taken_tricks = {
+        PlayerId(0): [],
+        PlayerId(1): [[
+            (PlayerId(1), Card(Suit.HEARTS, Rank.TWO)),
+            (PlayerId(2), Card(Suit.HEARTS, Rank.THREE)),
+            (PlayerId(3), Card(Suit.HEARTS, Rank.FOUR)),
+            (PlayerId(0), Card(Suit.HEARTS, Rank.FIVE)),
+        ], [
+            (PlayerId(1), Card(Suit.HEARTS, Rank.EIGHT)),
+            (PlayerId(2), Card(Suit.HEARTS, Rank.NINE)),
+            (PlayerId(3), Card(Suit.HEARTS, Rank.TEN)),
+            (PlayerId(0), Card(Suit.HEARTS, Rank.JACK)),
+        ], [
+            (PlayerId(1), Card(Suit.HEARTS, Rank.QUEEN)),
+            (PlayerId(2), Card(Suit.HEARTS, Rank.KING)),
+            (PlayerId(3), Card(Suit.HEARTS, Rank.ACE)),
+            (PlayerId(0), Card(Suit.HEARTS, Rank.SEVEN)),
+        ]],
+        PlayerId(2): [],
+        PlayerId(3): [],
+    }
+    state.trick_in_progress = [(PlayerId(2), Card(Suit.HEARTS, Rank.SIX))]
+    state.hearts_broken = True
+    state.trick_number = 9
+
+    bot = HeuristicBotV3(player_id=PlayerId(0), rollout_samples=0)
+    card = bot.choose_play(state=state, rng=random.Random(120))
+    reason = bot._peek_last_play_reason()
+
+    assert reason is not None
+    assert reason.moon_defense_target == PlayerId(1)
+    assert card != Card(Suit.CLUBS, Rank.ACE)
+    ace_entry = next(entry for entry in reason.candidates if entry.card == Card(Suit.CLUBS, Rank.ACE))
+    assert "v3_moon_defense_keep_suit_stopper" in ace_entry.tags
+    assert "v3_moon_defense_no_backup_stopper" in ace_entry.tags
+
+
+def test_heuristic_v3_moon_defense_allows_spending_one_stopper_when_backup_exists() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [
+            Card(Suit.CLUBS, Rank.ACE),
+            Card(Suit.CLUBS, Rank.KING),
+            Card(Suit.SPADES, Rank.SEVEN),
+        ],
+        PlayerId(1): [Card(Suit.CLUBS, Rank.THREE)],
+        PlayerId(2): [Card(Suit.CLUBS, Rank.FOUR)],
+        PlayerId(3): [Card(Suit.CLUBS, Rank.FIVE)],
+    }
+    state.taken_tricks = {
+        PlayerId(0): [],
+        PlayerId(1): [[
+            (PlayerId(1), Card(Suit.HEARTS, Rank.TWO)),
+            (PlayerId(2), Card(Suit.HEARTS, Rank.THREE)),
+            (PlayerId(3), Card(Suit.HEARTS, Rank.FOUR)),
+            (PlayerId(0), Card(Suit.HEARTS, Rank.FIVE)),
+        ], [
+            (PlayerId(1), Card(Suit.HEARTS, Rank.EIGHT)),
+            (PlayerId(2), Card(Suit.HEARTS, Rank.NINE)),
+            (PlayerId(3), Card(Suit.HEARTS, Rank.TEN)),
+            (PlayerId(0), Card(Suit.HEARTS, Rank.JACK)),
+        ], [
+            (PlayerId(1), Card(Suit.HEARTS, Rank.QUEEN)),
+            (PlayerId(2), Card(Suit.HEARTS, Rank.KING)),
+            (PlayerId(3), Card(Suit.HEARTS, Rank.ACE)),
+            (PlayerId(0), Card(Suit.HEARTS, Rank.SEVEN)),
+        ]],
+        PlayerId(2): [],
+        PlayerId(3): [],
+    }
+    state.trick_in_progress = [(PlayerId(2), Card(Suit.HEARTS, Rank.SIX))]
+    state.hearts_broken = True
+    state.trick_number = 9
+
+    bot = HeuristicBotV3(player_id=PlayerId(0), rollout_samples=0)
+    card = bot.choose_play(state=state, rng=random.Random(121))
+    reason = bot._peek_last_play_reason()
+
+    assert reason is not None
+    assert reason.moon_defense_target == PlayerId(1)
+    assert card in {Card(Suit.CLUBS, Rank.ACE), Card(Suit.CLUBS, Rank.KING)}
+    ace_entry = next(entry for entry in reason.candidates if entry.card == Card(Suit.CLUBS, Rank.ACE))
+    king_entry = next(entry for entry in reason.candidates if entry.card == Card(Suit.CLUBS, Rank.KING))
+    assert "v3_moon_defense_keep_suit_stopper" in ace_entry.tags
+    assert "v3_moon_defense_no_backup_stopper" not in ace_entry.tags
+    assert "v3_moon_defense_keep_suit_stopper" in king_entry.tags
+    assert "v3_moon_defense_no_backup_stopper" not in king_entry.tags
+
+
 def test_heuristic_v3_prefers_jack_spades_over_ten_clubs_when_qs_unseen() -> None:
     state = GameState()
     state.hands = {

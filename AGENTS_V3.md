@@ -291,6 +291,11 @@ Implementation targets:
   - when computing these signals, distinguish public outside cards from cards still held in our own hand so we do not misclassify a card as "safe" merely because we also hold adjacent cover in the same suit
   - keep debug tags semantically accurate and tied to the actual signal being measured, for example `floor_card_keep_safe`, `boss_card_dump_risk`, or `trap_card_dump_risk`
   - keep this phase to hard public-info inference only; do not add speculative opponent-reading or pass-memory logic yet
+- Moon-defense refinements:
+  - while a sole moon target is live, preserve future stoppers rather than evaluating only the current trick in isolation
+  - strongly discourage discarding the last `boss` or near-`boss` control card in a still-live suit when that card may be needed to break a run
+  - treat this as a bias, not an absolute rule, so the bot can still spend a stopper if doing so immediately blocks the moon attempt
+  - make the preservation strongest when the bot has no comparable secondary cover left in that suit
 - Optional small hand-shape adjustments:
   - short-suit honors become riskier pass candidates
   - lower cover beneath a card makes it safer to keep
@@ -311,6 +316,7 @@ Acceptance criteria:
 - `heuristic_v3` essentially never passes or pre-`Q♠` dumps sub-queen spades (`2♠-J♠`) in ordinary hands.
 - `heuristic_v3` treats sub-queen spades like ordinary black-suit cards again once `Q♠` is already dead.
 - `heuristic_v3` no longer gives `A♠` / `K♠` an outsized discard premium after `Q♠` is already dead.
+- `heuristic_v3` does not casually discard a suit stopper such as `A♣` into a live moon run when that card may be needed to break the target's control later.
 - v3 remains deterministic and legal.
 - v3 can be benchmarked cleanly against `heuristic_v2`, `heuristic`, and `random`.
 
@@ -364,6 +370,7 @@ Update/add tests:
   - `heuristic_v3` lead regression scenarios covering `floor card` vs `trap card` vs `boss card` ordering within the same suit
   - `heuristic_v3` public-info scenarios for suit depletion and inferred player voids affecting lead/discard choices
   - `heuristic_v3` discard regression scenarios covering `floor card` vs `trap card` vs `boss card` choices within the same suit
+  - `heuristic_v3` moon-defense discard scenarios where preserving a last stopper in a live suit should outrank a locally attractive dump
 - integration/smoke:
   - deterministic full-game runs with heuristic bots
   - legal-move invariants remain enforced
