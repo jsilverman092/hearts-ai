@@ -413,13 +413,14 @@ def _moon_defense_target(state: GameState, player_id: PlayerId, threshold: int) 
         pid: sum(trick_points(trick) for trick in state.taken_tricks[pid])
         for pid in state.taken_tricks
     }
-    opponents = [pid for pid in hand_points if pid != player_id]
-    if not opponents:
+    sole_point_holder = [pid for pid, points in hand_points.items() if points > 0]
+    if len(sole_point_holder) != 1:
         return None
-    target = max(opponents, key=lambda pid: hand_points[pid])
+    target = sole_point_holder[0]
+    if target == player_id:
+        return None
     target_points = hand_points[target]
-    runner_up = max((hand_points[pid] for pid in opponents if pid != target), default=0)
-    if target_points >= threshold and target_points >= runner_up + 6:
+    if target_points >= threshold:
         return target
     return None
 
@@ -512,7 +513,6 @@ def _score_lead_v2(
                 score -= 0.9
                 tags.append("avoid_high_heart_lead")
     score -= float(int(card.rank)) * 0.12
-    tags.append("prefer_lower_lead")
     if card == _QUEEN_SPADES:
         score -= 4.0 if lower_spade_available else 2.2
         tags.append("avoid_qs_lead")

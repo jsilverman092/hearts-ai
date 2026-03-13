@@ -509,6 +509,30 @@ def test_heuristic_v2_rollout_scores_lead_candidates() -> None:
     assert abs(queen_entry.rollout_score) > 0.01
 
 
+def test_heuristic_v2_lead_reason_omits_universal_prefer_lower_tag() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [
+            Card(Suit.SPADES, Rank.FIVE),
+            Card(Suit.HEARTS, Rank.KING),
+            Card(Suit.DIAMONDS, Rank.JACK),
+        ],
+        PlayerId(1): [Card(Suit.CLUBS, Rank.TWO)],
+        PlayerId(2): [Card(Suit.CLUBS, Rank.THREE)],
+        PlayerId(3): [Card(Suit.CLUBS, Rank.FOUR)],
+    }
+    state.hearts_broken = True
+    state.trick_number = 6
+
+    bot = HeuristicBotV2(player_id=PlayerId(0), rollout_samples=0)
+    bot.choose_play(state=state, rng=random.Random(72))
+    reason = bot._peek_last_play_reason()
+
+    assert reason is not None
+    assert reason.mode == "lead"
+    assert all("prefer_lower_lead" not in candidate.tags for candidate in reason.candidates)
+
+
 def test_heuristic_v2_rollout_uses_shared_samples_for_equivalent_follow_candidates() -> None:
     state = GameState()
     state.hands = {
@@ -777,6 +801,63 @@ def test_heuristic_v3_short_qs_shape_penalty_is_not_absolute_on_forced_spade_lea
     card = bot.choose_play(state=state, rng=random.Random(92))
 
     assert card == Card(Suit.SPADES, Rank.FOUR)
+
+
+def test_heuristic_v3_moon_defense_requires_sole_point_holder() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [Card(Suit.CLUBS, Rank.TWO)],
+        PlayerId(1): [Card(Suit.CLUBS, Rank.THREE)],
+        PlayerId(2): [Card(Suit.CLUBS, Rank.FOUR)],
+        PlayerId(3): [Card(Suit.HEARTS, Rank.FIVE)],
+    }
+    state.taken_tricks = {
+        PlayerId(0): [],
+        PlayerId(1): [[(PlayerId(1), Card(Suit.SPADES, Rank.QUEEN))]],
+        PlayerId(2): [[(PlayerId(2), Card(Suit.HEARTS, Rank.FOUR))]],
+        PlayerId(3): [],
+    }
+    state.trick_in_progress = [(PlayerId(2), Card(Suit.HEARTS, Rank.FOUR))]
+    state.hearts_broken = True
+    state.trick_number = 5
+
+    bot = HeuristicBotV3(player_id=PlayerId(3), rollout_samples=0)
+    bot.choose_play(state=state, rng=random.Random(76))
+    reason = bot._peek_last_play_reason()
+
+    assert reason is not None
+    assert reason.moon_defense_target is None
+    only_entry = reason.candidates[0]
+    assert "block_moon_target" not in only_entry.tags
+    assert "moon_target_still_wins" not in only_entry.tags
+
+
+def test_heuristic_v3_blocks_sole_moon_candidate_when_threshold_met() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [Card(Suit.CLUBS, Rank.TWO)],
+        PlayerId(1): [Card(Suit.CLUBS, Rank.THREE)],
+        PlayerId(2): [Card(Suit.CLUBS, Rank.FOUR)],
+        PlayerId(3): [Card(Suit.HEARTS, Rank.FIVE)],
+    }
+    state.taken_tricks = {
+        PlayerId(0): [],
+        PlayerId(1): [[(PlayerId(1), Card(Suit.SPADES, Rank.QUEEN))]],
+        PlayerId(2): [],
+        PlayerId(3): [],
+    }
+    state.trick_in_progress = [(PlayerId(2), Card(Suit.HEARTS, Rank.FOUR))]
+    state.hearts_broken = True
+    state.trick_number = 5
+
+    bot = HeuristicBotV3(player_id=PlayerId(3), rollout_samples=0)
+    bot.choose_play(state=state, rng=random.Random(77))
+    reason = bot._peek_last_play_reason()
+
+    assert reason is not None
+    assert reason.moon_defense_target == PlayerId(1)
+    only_entry = reason.candidates[0]
+    assert "block_moon_target" in only_entry.tags
 
 
 def test_heuristic_v3_prefers_jack_spades_over_ten_clubs_when_qs_unseen() -> None:
