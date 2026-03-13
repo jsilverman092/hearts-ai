@@ -132,7 +132,7 @@ class HeuristicBotV2:
         )
         candidate_reasons: list[PlayCandidateReason] = []
         for card in legal:
-            base_score, tags = self._score_base(
+            base_score, tags = self._score_play_candidate(
                 state=state,
                 player_id=self.player_id,
                 legal=legal,
@@ -188,7 +188,7 @@ class HeuristicBotV2:
     def _peek_last_play_reason(self) -> PlayDecisionReason | None:
         return self._last_play_reason
 
-    def _score_base(
+    def _score_play_candidate(
         self,
         state: GameState,
         player_id: PlayerId,
@@ -197,12 +197,66 @@ class HeuristicBotV2:
         mode: Literal["lead", "follow", "discard"],
         moon_target: PlayerId | None,
     ) -> tuple[float, list[str]]:
-        return _score_base_v2(
+        if mode == "lead":
+            return self._score_lead_candidate(
+                state=state,
+                player_id=player_id,
+                legal=legal,
+                card=card,
+            )
+        if mode == "follow":
+            return self._score_follow_candidate(
+                state=state,
+                player_id=player_id,
+                card=card,
+                moon_target=moon_target,
+            )
+        return self._score_discard_candidate(
             state=state,
             player_id=player_id,
+            card=card,
+            moon_target=moon_target,
+        )
+
+    def _score_lead_candidate(
+        self,
+        state: GameState,
+        player_id: PlayerId,
+        legal: list[Card],
+        card: Card,
+    ) -> tuple[float, list[str]]:
+        del player_id
+        return _score_lead_v2(
+            state=state,
             legal=legal,
             card=card,
-            mode=mode,
+        )
+
+    def _score_follow_candidate(
+        self,
+        state: GameState,
+        player_id: PlayerId,
+        card: Card,
+        moon_target: PlayerId | None,
+    ) -> tuple[float, list[str]]:
+        return _score_follow_v2(
+            state=state,
+            player_id=player_id,
+            card=card,
+            moon_target=moon_target,
+        )
+
+    def _score_discard_candidate(
+        self,
+        state: GameState,
+        player_id: PlayerId,
+        card: Card,
+        moon_target: PlayerId | None,
+    ) -> tuple[float, list[str]]:
+        del player_id
+        return _score_discard_v2(
+            state=state,
+            card=card,
             moon_target=moon_target,
         )
 
@@ -230,21 +284,32 @@ class HeuristicBotV3(HeuristicBotV2):
         )
         return list(selected)
 
-    def _score_base(
+    def _score_lead_candidate(
         self,
         state: GameState,
         player_id: PlayerId,
         legal: list[Card],
         card: Card,
-        mode: Literal["lead", "follow", "discard"],
-        moon_target: PlayerId | None,
     ) -> tuple[float, list[str]]:
-        return _score_base_v3(
+        return _score_lead_v3(
             state=state,
             player_id=player_id,
             legal=legal,
+            hand=state.hands[player_id],
             card=card,
-            mode=mode,
+        )
+
+    def _score_discard_candidate(
+        self,
+        state: GameState,
+        player_id: PlayerId,
+        card: Card,
+        moon_target: PlayerId | None,
+    ) -> tuple[float, list[str]]:
+        return _score_discard_v3(
+            state=state,
+            player_id=player_id,
+            card=card,
             moon_target=moon_target,
         )
 
@@ -437,61 +502,6 @@ def _moon_defense_target(state: GameState, player_id: PlayerId, threshold: int) 
     if target_points >= high_total_trigger:
         return target
     return None
-
-
-def _score_base_v2(
-    state: GameState,
-    player_id: PlayerId,
-    legal: list[Card],
-    card: Card,
-    mode: Literal["lead", "follow", "discard"],
-    moon_target: PlayerId | None,
-) -> tuple[float, list[str]]:
-    if mode == "lead":
-        return _score_lead_v2(state=state, legal=legal, card=card)
-    if mode == "follow":
-        return _score_follow_v2(
-            state=state,
-            player_id=player_id,
-            card=card,
-            moon_target=moon_target,
-        )
-    return _score_discard_v2(
-        state=state,
-        card=card,
-        moon_target=moon_target,
-    )
-
-
-def _score_base_v3(
-    state: GameState,
-    player_id: PlayerId,
-    legal: list[Card],
-    card: Card,
-    mode: Literal["lead", "follow", "discard"],
-    moon_target: PlayerId | None,
-) -> tuple[float, list[str]]:
-    if mode == "lead":
-        return _score_lead_v3(
-            state=state,
-            player_id=player_id,
-            legal=legal,
-            hand=state.hands[player_id],
-            card=card,
-        )
-    if mode == "follow":
-        return _score_follow_v2(
-            state=state,
-            player_id=player_id,
-            card=card,
-            moon_target=moon_target,
-        )
-    return _score_discard_v3(
-        state=state,
-        player_id=player_id,
-        card=card,
-        moon_target=moon_target,
-    )
 
 
 def _score_lead_v2(
