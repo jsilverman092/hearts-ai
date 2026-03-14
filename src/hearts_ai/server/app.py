@@ -173,6 +173,27 @@ def create_app(*, table_manager: TableManager | None = None) -> Any:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return {"ok": True}
 
+    @app.post("/tables/{table_code}/viewer-advisory-bot")
+    async def set_viewer_advisory_bot(table_code: str, payload: dict[str, Any]) -> dict[str, bool]:
+        bot_name = payload.get("bot_name")
+        if not isinstance(bot_name, str):
+            raise HTTPException(status_code=400, detail="Field 'bot_name' must be a string.")
+        try:
+            manager.set_viewer_advisory_bot(
+                table_code,
+                player_secret=str(payload.get("player_secret", "")),
+                bot_name=bot_name,
+            )
+            table = manager.get_table(table_code)
+            await hub.broadcast_snapshot(table_code=table.table_code, manager=manager)
+        except TableNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except UnauthorizedError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except TableError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"ok": True}
+
     @app.post("/tables/{table_code}/pass")
     async def submit_pass(table_code: str, payload: dict[str, Any]) -> dict[str, bool]:
         cards_raw = payload.get("cards")

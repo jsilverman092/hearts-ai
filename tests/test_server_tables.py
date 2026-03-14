@@ -99,6 +99,27 @@ def test_add_bot_persists_bot_type_in_table_and_snapshot() -> None:
     assert seats[3]["bot_name"] == "heuristic"
 
 
+def test_viewer_advisory_bot_preference_persists_in_snapshot() -> None:
+    manager = TableManager()
+    table, player_secret = manager.create_table(display_name="Host", target_score=50, seed=7)
+
+    initial_snapshot = table_snapshot(table, viewer_secret=player_secret)
+    assert initial_snapshot["viewer_advisory_bot_name"] == "heuristic_v3"
+
+    manager.set_viewer_advisory_bot(table.table_code, player_secret=player_secret, bot_name="heuristic_v2")
+    updated = manager.get_table(table.table_code)
+    updated_snapshot = table_snapshot(updated, viewer_secret=player_secret)
+    assert updated_snapshot["viewer_advisory_bot_name"] == "heuristic_v2"
+
+
+def test_viewer_advisory_bot_preference_rejects_unknown_bot_type() -> None:
+    manager = TableManager()
+    table, player_secret = manager.create_table(display_name="Host", target_score=50, seed=7)
+
+    with pytest.raises(InvalidTableActionError):
+        manager.set_viewer_advisory_bot(table.table_code, player_secret=player_secret, bot_name="unknown-bot")
+
+
 def test_add_bot_rejects_unknown_bot_type() -> None:
     manager = TableManager()
     table, _ = manager.create_table(display_name="Host", target_score=50, seed=7)

@@ -217,8 +217,10 @@ function renderViewerRecommendation(snapshot = appState.snapshot) {
     dom.debugViewerContent.textContent = "No table snapshot yet.";
     return;
   }
+  const advisoryBot = snapshot.viewer_advisory_bot_name || globalBotType();
   dom.debugViewerContent.textContent =
-    "Viewer recommendation mode is enabled. Advisory payload is added in Phase 4.7 step 3.";
+    `Viewer recommendation mode is enabled. Advisory bot: ${advisoryBot}. ` +
+    "Recommendation payload is added in Phase 4.7 step 3.";
 }
 
 function renderOpponentReason(snapshot = appState.snapshot) {
@@ -618,6 +620,7 @@ async function createTable() {
     const created = await apiRequest("/tables", "POST", options.payload);
     applyCreatedTableSession(created, options.displayName);
     await fetchSnapshot();
+    await setViewerAdvisoryBotPreference(globalBotType());
     connectWebSocket();
   } catch (error) {
     setInfo(error.message);
@@ -645,6 +648,7 @@ async function quickStartSolo() {
     }
 
     await fetchSnapshot();
+    await setViewerAdvisoryBotPreference(globalBotType());
     connectWebSocket();
   } catch (error) {
     setInfo(error.message);
@@ -676,6 +680,7 @@ async function joinTable() {
     appState.beginHandPendingByHand = {};
     saveSession();
     await fetchSnapshot();
+    await setViewerAdvisoryBotPreference(globalBotType());
     connectWebSocket();
   } catch (error) {
     setInfo(error.message);
@@ -690,6 +695,7 @@ async function reconnectSession() {
 
   try {
     await fetchSnapshot();
+    await setViewerAdvisoryBotPreference(globalBotType());
     connectWebSocket();
   } catch (error) {
     setInfo(error.message);
@@ -817,6 +823,17 @@ async function addBot(seat, botName = null) {
   } catch (error) {
     setInfo(error.message);
   }
+}
+
+async function setViewerAdvisoryBotPreference(botName = null) {
+  if (!appState.tableCode || !appState.playerSecret) {
+    return;
+  }
+  const nextBot = botName || globalBotType();
+  await apiRequest(`/tables/${appState.tableCode}/viewer-advisory-bot`, "POST", {
+    player_secret: appState.playerSecret,
+    bot_name: nextBot,
+  });
 }
 
 async function submitPass() {
@@ -1269,6 +1286,16 @@ function wireEvents() {
     updatePaceControls();
     scheduleAutoAdvance();
   });
+  if (dom.botType) {
+    dom.botType.addEventListener("change", () => {
+      if (!appState.tableCode || !appState.playerSecret) {
+        return;
+      }
+      void setViewerAdvisoryBotPreference(globalBotType()).catch((error) => {
+        setInfo(error.message);
+      });
+    });
+  }
   if (dom.debugViewerToggle) {
     dom.debugViewerToggle.addEventListener("change", () => {
       appState.debugViewerRecommendationEnabled = dom.debugViewerToggle.checked;

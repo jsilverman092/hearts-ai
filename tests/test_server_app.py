@@ -93,6 +93,36 @@ def test_rest_claim_seat_broadcasts_snapshot() -> None:
             assert broadcast["payload"]["viewer_seat"] == 0
 
 
+def test_rest_set_viewer_advisory_bot_broadcasts_snapshot() -> None:
+    manager = TableManager()
+    table, player_secret = manager.create_table(display_name="Host", target_score=50, seed=5)
+    app = create_app(table_manager=manager)
+
+    with TestClient(app) as client:
+        with client.websocket_connect("/ws") as ws:
+            ws.send_json(
+                {
+                    "schema_version": 1,
+                    "type": "join_table",
+                    "table_code": table.table_code,
+                    "display_name": "Host",
+                    "player_secret": player_secret,
+                }
+            )
+            ws.receive_json()
+            ws.receive_json()
+
+            response = client.post(
+                f"/tables/{table.table_code}/viewer-advisory-bot",
+                json={"player_secret": player_secret, "bot_name": "heuristic_v2"},
+            )
+            assert response.status_code == 200
+
+            broadcast = ws.receive_json()
+            assert broadcast["type"] == "state_snapshot"
+            assert broadcast["payload"]["viewer_advisory_bot_name"] == "heuristic_v2"
+
+
 def _drive_game_to_completion(client: TestClient, *, table_code: str, player_secret: str) -> dict[str, int]:
     max_steps = 3000
     for _ in range(max_steps):

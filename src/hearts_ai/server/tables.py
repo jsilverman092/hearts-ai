@@ -95,6 +95,10 @@ def _empty_bot_seat_types() -> dict[PlayerId, str]:
     return {}
 
 
+def _empty_viewer_advisory_bot_types() -> dict[str, str]:
+    return {}
+
+
 @dataclass(slots=True)
 class Table:
     table_code: str
@@ -107,6 +111,7 @@ class Table:
     seat_secrets: dict[PlayerId, str | None] = field(default_factory=_empty_seat_secrets)
     bot_seats: set[PlayerId] = field(default_factory=set)
     bot_seat_types: dict[PlayerId, str] = field(default_factory=_empty_bot_seat_types)
+    viewer_advisory_bot_types: dict[str, str] = field(default_factory=_empty_viewer_advisory_bot_types)
     pending_passes: dict[PlayerId, list[Card]] = field(default_factory=dict)
     version: int = 0
     recorder: GameRecorder | None = None
@@ -127,6 +132,7 @@ class Table:
             raise InvalidTableActionError("Display name must not be empty.")
         player_secret = secrets.token_urlsafe(16)
         self.participants[player_secret] = Participant(display_name=display_name.strip())
+        self.viewer_advisory_bot_types[player_secret] = "heuristic_v3"
         self.version += 1
         return player_secret
 
@@ -164,6 +170,15 @@ class Table:
         self.bot_seat_types[player_id] = normalized_bot_name
         self.version += 1
         self._maybe_start_game()
+
+    def set_viewer_advisory_bot(self, player_secret: str, *, bot_name: str) -> None:
+        self._require_participant(player_secret)
+        try:
+            normalized_bot_name = normalize_bot_name(bot_name)
+        except ValueError as exc:
+            raise InvalidTableActionError(str(exc)) from exc
+        self.viewer_advisory_bot_types[player_secret] = normalized_bot_name
+        self.version += 1
 
     def submit_pass(self, player_secret: str, cards: list[str]) -> None:
         if self.phase != "passing":
@@ -221,6 +236,11 @@ class Table:
             return None
         participant = self.participants.get(seat_secret)
         return participant.display_name if participant is not None else None
+
+    def viewer_advisory_bot_name(self, player_secret: str | None) -> str | None:
+        if player_secret is None:
+            return None
+        return self.viewer_advisory_bot_types.get(player_secret)
 
     def is_started(self) -> bool:
         return self.phase != "lobby"
@@ -476,6 +496,17 @@ class TableManager:
     def add_bot(self, table_code: str, *, seat: int, bot_name: str = "random") -> None:
         table = self.get_table(table_code)
         table.add_bot(seat=seat, bot_name=bot_name)
+        self._post_action(table)
+
+    def set_viewer_advisory_bot(
+        self,
+        table_code: str,
+        *,
+        player_secret: str,
+        bot_name: str,
+    ) -> None:
+        table = self.get_table(table_code)
+        table.set_viewer_advisory_bot(player_secret=player_secret, bot_name=bot_name)
         self._post_action(table)
 
     def submit_pass(self, table_code: str, *, player_secret: str, cards: list[str]) -> None:

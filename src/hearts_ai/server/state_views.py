@@ -12,6 +12,7 @@ from hearts_ai.server.tables import Table
 def table_snapshot(table: Table, *, viewer_secret: str | None = None) -> dict[str, Any]:
     viewer_seat = None
     viewer_can_control_pace = False
+    viewer_advisory_bot_name = table.viewer_advisory_bot_name(viewer_secret)
     if viewer_secret is not None:
         participant = table.participants.get(viewer_secret)
         viewer_seat = participant.seat if participant is not None else None
@@ -107,6 +108,7 @@ def table_snapshot(table: Table, *, viewer_secret: str | None = None) -> dict[st
         "seats": seats,
         "viewer_seat": int(viewer_seat) if viewer_seat is not None else None,
         "viewer_can_control_pace": viewer_can_control_pace,
+        "viewer_advisory_bot_name": viewer_advisory_bot_name,
         "viewer_hand": hand_cards,
         "viewer_legal_moves": legal_for_viewer,
         "pass_submissions": pass_status,
