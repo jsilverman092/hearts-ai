@@ -29,7 +29,8 @@ const appState = {
   prePassHandByHand: {},
   receivedPassCardsByHand: {},
   beginHandPendingByHand: {},
-  debugReasonEnabled: false,
+  debugViewerRecommendationEnabled: false,
+  debugOpponentReasonEnabled: false,
 };
 
 const SEAT_POSITIONS = ["south", "west", "north", "east"];
@@ -87,8 +88,10 @@ const dom = {
   passHint: document.getElementById("passHint"),
   submitPassBtn: document.getElementById("submitPassBtn"),
   beginHandBtn: document.getElementById("beginHandBtn"),
-  debugReasonToggle: document.getElementById("debugReasonToggle"),
-  debugReasonContent: document.getElementById("debugReasonContent"),
+  debugViewerToggle: document.getElementById("debugViewerToggle"),
+  debugViewerContent: document.getElementById("debugViewerContent"),
+  debugOpponentToggle: document.getElementById("debugOpponentToggle"),
+  debugOpponentContent: document.getElementById("debugOpponentContent"),
 };
 
 function seatPositionForViewer(seat, viewerSeat) {
@@ -202,16 +205,32 @@ function formatDebugScore(value) {
   return numeric.toFixed(3);
 }
 
-function renderDebugReason(snapshot = appState.snapshot) {
-  if (!dom.debugReasonContent) {
+function renderViewerRecommendation(snapshot = appState.snapshot) {
+  if (!dom.debugViewerContent) {
     return;
   }
-  if (!appState.debugReasonEnabled) {
-    dom.debugReasonContent.textContent = "Enable the toggle to inspect latest heuristic_v2/v3 decision.";
+  if (!appState.debugViewerRecommendationEnabled) {
+    dom.debugViewerContent.textContent = "Enable to inspect recommendation for your own move.";
+    return;
+  }
+  if (!snapshot) {
+    dom.debugViewerContent.textContent = "No table snapshot yet.";
+    return;
+  }
+  dom.debugViewerContent.textContent =
+    "Viewer recommendation mode is enabled. Advisory payload is added in Phase 4.7 step 3.";
+}
+
+function renderOpponentReason(snapshot = appState.snapshot) {
+  if (!dom.debugOpponentContent) {
+    return;
+  }
+  if (!appState.debugOpponentReasonEnabled) {
+    dom.debugOpponentContent.textContent = "Enable to inspect latest heuristic_v2/v3 opponent decision.";
     return;
   }
   if (!snapshot || !snapshot.debug_last_bot_decision) {
-    dom.debugReasonContent.textContent = "No heuristic_v2/v3 decision captured yet.";
+    dom.debugOpponentContent.textContent = "No heuristic_v2/v3 decision captured yet.";
     return;
   }
 
@@ -252,7 +271,12 @@ function renderDebugReason(snapshot = appState.snapshot) {
   } else {
     lines.push("Unsupported decision payload.");
   }
-  dom.debugReasonContent.textContent = lines.join("\n");
+  dom.debugOpponentContent.textContent = lines.join("\n");
+}
+
+function renderDebugPanels(snapshot = appState.snapshot) {
+  renderViewerRecommendation(snapshot);
+  renderOpponentReason(snapshot);
 }
 
 function applySnapshot(snapshot) {
@@ -1151,7 +1175,7 @@ function render(snapshot = appState.snapshot) {
     dom.beginHandBtn.classList.add("hidden");
     appState.hasRenderedSnapshot = false;
     updatePaceControls(null);
-    renderDebugReason(null);
+    renderDebugPanels(null);
     return;
   }
 
@@ -1209,7 +1233,7 @@ function render(snapshot = appState.snapshot) {
   renderPassPanel(snapshot);
   renderHand(snapshot);
   renderBeginHandButton(snapshot);
-  renderDebugReason(snapshot);
+  renderDebugPanels(snapshot);
   updatePaceControls(snapshot);
   appState.hasRenderedSnapshot = true;
   scheduleAutoAdvance(snapshot);
@@ -1245,10 +1269,16 @@ function wireEvents() {
     updatePaceControls();
     scheduleAutoAdvance();
   });
-  if (dom.debugReasonToggle) {
-    dom.debugReasonToggle.addEventListener("change", () => {
-      appState.debugReasonEnabled = dom.debugReasonToggle.checked;
-      renderDebugReason();
+  if (dom.debugViewerToggle) {
+    dom.debugViewerToggle.addEventListener("change", () => {
+      appState.debugViewerRecommendationEnabled = dom.debugViewerToggle.checked;
+      renderDebugPanels();
+    });
+  }
+  if (dom.debugOpponentToggle) {
+    dom.debugOpponentToggle.addEventListener("change", () => {
+      appState.debugOpponentReasonEnabled = dom.debugOpponentToggle.checked;
+      renderDebugPanels();
     });
   }
 }
@@ -1262,8 +1292,11 @@ function boot() {
     dom.joinCode.value = appState.tableCode;
     dom.tableCodeValue.textContent = appState.tableCode;
   }
-  if (dom.debugReasonToggle) {
-    dom.debugReasonToggle.checked = appState.debugReasonEnabled;
+  if (dom.debugViewerToggle) {
+    dom.debugViewerToggle.checked = appState.debugViewerRecommendationEnabled;
+  }
+  if (dom.debugOpponentToggle) {
+    dom.debugOpponentToggle.checked = appState.debugOpponentReasonEnabled;
   }
   setConnectionStatus("offline", false);
   wireEvents();

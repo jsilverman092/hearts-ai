@@ -86,11 +86,16 @@
 
         <article class="card debug-card">
           <h3>Bot Debug</h3>
-          <label class="toggle-row" for="debugReasonToggle">
-            <input id="debugReasonToggle" type="checkbox" />
-            <span>Show heuristic_v2/v3 reasoning</span>
+          <label class="toggle-row" for="debugOpponentToggle">
+            <input id="debugOpponentToggle" type="checkbox" />
+            <span>Show opponent heuristic_v2/v3 explanations</span>
           </label>
-          <pre id="debugReasonContent" class="mono debug-reason">Enable the toggle to inspect latest heuristic_v2/v3 decision.</pre>
+          <pre id="debugOpponentContent" class="mono debug-reason">Enable to inspect latest heuristic_v2/v3 opponent decision.</pre>
+          <label class="toggle-row" for="debugViewerToggle">
+            <input id="debugViewerToggle" type="checkbox" />
+            <span>Show my recommendation (top Bot Type)</span>
+          </label>
+          <pre id="debugViewerContent" class="mono debug-reason">Enable to inspect recommendation for your own move.</pre>
         </article>
 
         <article class="card table-card">
@@ -122,6 +127,6 @@
       </section>
     </main>
 
-    <script src="/static/app.js?v=22" defer></script>
+    <script src="/static/app.js?v=23" defer></script>
   </body>
 </html>
