@@ -389,7 +389,10 @@ def _score_discard_v3(
         score += 0.55 + (0.2 * float(2 - outside_higher_count))
         tags.append("v3_trap_card_dump_risk")
 
-    if voids_in_opponents >= 2:
+    if outside_count == 0:
+        score -= 1.0
+        tags.append("v3_all_void_suit_safe_slough_keep")
+    elif voids_in_opponents >= 2:
         if is_boss or is_trap:
             score += 0.3 + (0.12 * float(voids_in_opponents - 2))
             tags.append("v3_discard_void_pressure")

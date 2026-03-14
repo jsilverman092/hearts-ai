@@ -1389,3 +1389,54 @@ def test_heuristic_v3_discard_prefers_trap_over_floor_card_within_suit() -> None
     nine_entry = next(entry for entry in reason.candidates if entry.card == Card(Suit.CLUBS, Rank.NINE))
     assert "v3_trap_card_dump_risk" in queen_entry.tags
     assert "v3_floor_card_keep_safe" in nine_entry.tags
+
+
+def test_heuristic_v3_keeps_exhausted_suit_boss_as_safe_future_slough() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [
+            Card(Suit.CLUBS, Rank.ACE),
+            Card(Suit.DIAMONDS, Rank.KING),
+            Card(Suit.SPADES, Rank.FOUR),
+        ],
+        PlayerId(1): [Card(Suit.HEARTS, Rank.FIVE)],
+        PlayerId(2): [Card(Suit.HEARTS, Rank.SIX)],
+        PlayerId(3): [Card(Suit.HEARTS, Rank.SEVEN)],
+    }
+    state.taken_tricks = {
+        PlayerId(0): [[
+            (PlayerId(0), Card(Suit.CLUBS, Rank.TWO)),
+            (PlayerId(1), Card(Suit.CLUBS, Rank.THREE)),
+            (PlayerId(2), Card(Suit.CLUBS, Rank.FOUR)),
+            (PlayerId(3), Card(Suit.CLUBS, Rank.FIVE)),
+        ]],
+        PlayerId(1): [[
+            (PlayerId(1), Card(Suit.CLUBS, Rank.SIX)),
+            (PlayerId(2), Card(Suit.CLUBS, Rank.SEVEN)),
+            (PlayerId(3), Card(Suit.CLUBS, Rank.EIGHT)),
+            (PlayerId(0), Card(Suit.CLUBS, Rank.NINE)),
+        ]],
+        PlayerId(2): [[
+            (PlayerId(2), Card(Suit.CLUBS, Rank.TEN)),
+            (PlayerId(3), Card(Suit.CLUBS, Rank.JACK)),
+            (PlayerId(0), Card(Suit.CLUBS, Rank.QUEEN)),
+            (PlayerId(1), Card(Suit.CLUBS, Rank.KING)),
+        ]],
+        PlayerId(3): [],
+    }
+    state.trick_in_progress = [(PlayerId(1), Card(Suit.HEARTS, Rank.FIVE))]
+    state.hearts_broken = True
+    state.trick_number = 6
+
+    bot = HeuristicBotV3(player_id=PlayerId(0), rollout_samples=0)
+    card = bot.choose_play(state=state, rng=random.Random(100))
+
+    assert card == Card(Suit.DIAMONDS, Rank.KING)
+    reason = bot._peek_last_play_reason()
+    assert reason is not None
+    ace_entry = next(entry for entry in reason.candidates if entry.card == Card(Suit.CLUBS, Rank.ACE))
+    king_entry = next(entry for entry in reason.candidates if entry.card == Card(Suit.DIAMONDS, Rank.KING))
+    assert "v3_all_void_suit_safe_slough_keep" in ace_entry.tags
+    assert "v3_discard_void_pressure" not in ace_entry.tags
+    assert "v3_boss_card_dump_risk" not in ace_entry.tags
+    assert king_entry.total_score > ace_entry.total_score

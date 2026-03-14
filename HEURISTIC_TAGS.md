@@ -113,6 +113,7 @@ This helper relies on `public_info.py` for `qs_live`, floor / trap / boss classi
 | `v3_trap_card_dump_risk` | A trap card is dangerous because only a few higher cards remain. | `+(0.55 + 0.2 * (2 - outside_higher_count))` | `QC` may still win ugly tricks but is not a true floor card. | `dump_trap_card` |
 | `v3_discard_void_pressure` | Opponent voids make dumping this dangerous control card even more attractive. | `+0.3 + 0.12 * (voids_in_opponents - 2)` | Many players are void in clubs, so dumping a boss/trap club gets extra value. | `voids_raise_dump_value` |
 | `v3_floor_card_void_keep` | Opponent voids make a floor card even more worth keeping. | `-0.2` | Players are void in diamonds, which increases the value of retaining your safest low diamond. | `voids_strengthen_floor` |
+| `v3_all_void_suit_safe_slough_keep` | If no outside cards remain in a suit, keep those cards as safe future off-suit sloughs instead of over-prioritizing them as dumps. This can be known either from explicit void evidence or because played cards plus your hand already exhaust the suit. | `-1.0` | All remaining clubs are already either played or in your hand, so `AC` is safer to keep than a dangerous live-suit honor. | `all_void_suit_keep` |
 
 ## `scoring.py`: `_score_discard_v3` moon-defense overlays
 
