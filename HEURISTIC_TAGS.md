@@ -80,6 +80,20 @@ Second-seat and later-seat branches are explicit in code, but currently use the 
 | `moon_target_still_wins` | This play still leaves the current moon target winning the trick. | `-5.0` | A moon threat is live and your follow card does not overtake them. | `moon_target_still_ahead` |
 | `block_moon_target` | This play takes the current trick lead away from the moon target. | `+2.4` | A moon threat is live and your follow card now becomes the projected winner. | `currently_block_moon` |
 
+## `scoring.py`: `_score_follow_v3`
+
+Applies to: `heuristic_v3`
+
+This helper is a narrow fourth-seat overlay on top of `_score_follow_base`. It only applies when you are last to act, the projected trick remains worth `0` points after your card is played, and the candidate is a legal follow in the led suit.
+
+| Current Tag | Meaning | Impact | Example | Cleaner Name |
+| --- | --- | --- | --- | --- |
+| `v3_last_seat_zero_point_duck_discount` | On fourth seat in a zero-point trick, pure ducking gets a discount so safe shedding wins can compete. | `-1.8` | Spades are led `9S`, `JS`, `3S`, and keeping `5S` under them is no longer automatically best if `KS` can cash safely. | `last_seat_duck_discount` |
+| `v3_last_seat_zero_point_safe_win` | On fourth seat in a zero-point trick, safely winning can be good if it unloads future control. | `+2.0` | Diamonds are led `5D`, `7D`, `9D`, and winning with a dangerous honor gets extra credit. | `last_seat_safe_win` |
+| `v3_last_seat_safe_ak_spade_shed` | Safely cashing `AS` or `KS` before `QS` is played is especially valuable. | `+2.4` | `QS` is still out, and winning a zero-point spade trick with `KS` removes future queen-capture risk. | `cash_ak_spade_safely` |
+| `v3_last_seat_safe_boss_win_shed` | Safely winning with a boss club/diamond on fourth seat can unload dangerous future control. | `+1.8` | No higher outside diamond remains, so taking a zero-point trick with `AD` is rewarded. | `safe_boss_win_shed` |
+| `v3_last_seat_safe_trap_win_shed` | Safely winning with a trap club/diamond on fourth seat can unload a dangerous near-top card. | `+1.5` | `QD` wins a zero-point trick while `KD`/`AD` are still outside, so the bot prefers shedding it over ducking with `2D`. | `safe_trap_win_shed` |
+
 ## `scoring.py`: `_score_discard_base`
 
 Applies to: `heuristic_v2`, `heuristic_v3`

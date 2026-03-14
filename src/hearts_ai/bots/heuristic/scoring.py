@@ -502,6 +502,65 @@ def _score_follow_base(
     return score, tags
 
 
+def _score_follow_v3(
+    state: GameState,
+    player_id: PlayerId,
+    card: Card,
+    moon_target: PlayerId | None,
+) -> tuple[float, list[str]]:
+    score, tags = _score_follow_base(
+        state=state,
+        player_id=player_id,
+        card=card,
+        moon_target=moon_target,
+    )
+    trick = state.trick_in_progress
+    if len(trick) != 3:
+        return score, tags
+
+    led_suit = trick[0][1].suit
+    current_highest = max(current.rank for _, current in trick if current.suit == led_suit)
+    losing = card.rank < current_highest
+    projected_trick = [*trick, (player_id, card)]
+    if trick_points(projected_trick) != 0:
+        return score, tags
+
+    if losing:
+        score -= 1.8
+        tags.append("v3_last_seat_zero_point_duck_discount")
+        return score, tags
+
+    score += 2.0
+    tags.append("v3_last_seat_zero_point_safe_win")
+    public_info = _build_public_info(state=state)
+
+    if card in (_ACE_SPADES, _KING_SPADES) and public_info.qs_live:
+        score += 2.4
+        tags.append("v3_last_seat_safe_ak_spade_shed")
+        return score, tags
+
+    if card.suit not in (Suit.CLUBS, Suit.DIAMONDS):
+        return score, tags
+
+    outside_lower_count, outside_higher_count = _outside_rank_counts_for_card(
+        state=state,
+        public_info=public_info,
+        player_id=player_id,
+        card=card,
+    )
+    outside_count = outside_lower_count + outside_higher_count
+    is_boss = outside_count > 0 and outside_higher_count == 0
+    is_trap = outside_lower_count > 0 and 0 < outside_higher_count <= 2
+
+    if is_boss:
+        score += 1.8
+        tags.append("v3_last_seat_safe_boss_win_shed")
+    elif is_trap:
+        score += 1.5
+        tags.append("v3_last_seat_safe_trap_win_shed")
+    return score, tags
+
+
 def _score_discard_base(
     state: GameState,
     card: Card,

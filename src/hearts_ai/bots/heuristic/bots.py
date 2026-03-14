@@ -15,6 +15,7 @@ from hearts_ai.bots.heuristic.scoring import (
     _score_discard_base,
     _score_discard_v3,
     _score_follow_base,
+    _score_follow_v3,
     _score_lead_base,
     _score_lead_v3,
     _score_pass_base,
@@ -241,6 +242,20 @@ class HeuristicBotV3(_HeuristicScoringBotBase):
             legal=legal,
             hand=state.hands[player_id],
             card=card,
+        )
+
+    def _score_follow_candidate(
+        self,
+        state: GameState,
+        player_id: PlayerId,
+        card: Card,
+        moon_target: PlayerId | None,
+    ) -> tuple[float, list[str]]:
+        return _score_follow_v3(
+            state=state,
+            player_id=player_id,
+            card=card,
+            moon_target=moon_target,
         )
 
     def _score_discard_candidate(

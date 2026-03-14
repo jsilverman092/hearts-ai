@@ -73,7 +73,8 @@ Notes:
 | --- | --- | --- | --- | --- |
 | `_score_lead_base` | `heuristic/scoring.py` | `v2`, base of `v3` | Shared lead scoring foundation. |  |
 | `_score_lead_v3` | `heuristic/scoring.py` | `v3` | v3 lead refinements over shared lead base. |  |
-| `_score_follow_base` | `heuristic/scoring.py` | `v2`, `v3` | Shared follow scoring system (with explicit second-seat/later-seat branch). |  |
+| `_score_follow_base` | `heuristic/scoring.py` | `v2`, base of `v3` | Shared follow scoring foundation (with explicit second-seat/later-seat branch). |  |
+| `_score_follow_v3` | `heuristic/scoring.py` | `v3` | v3 fourth-seat safe-win overlay over shared follow base. |  |
 | `_score_discard_priority_base` | `heuristic/scoring.py` | `v1`, `v2`, tie-break in `v2`/`v3` | Discard priority buckets for scripted shedding, discard base scoring, and non-lead tie-breaks. |  |
 | `_score_discard_base` | `heuristic/scoring.py` | `v2`, base of `v3` | Shared discard scoring foundation. |  |
 | `_score_discard_v3` | `heuristic/scoring.py` | `v3` | v3 discard refinements over shared discard base. |  |

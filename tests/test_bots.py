@@ -649,6 +649,90 @@ def test_heuristic_v3_follow_position_later_seat_prefers_high_losing_follow() ->
     assert "prefer_high_losing_follow" in reason.candidates[0].tags
 
 
+def test_heuristic_v3_last_seat_zero_point_prefers_safe_king_spades_cash() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [
+            Card(Suit.SPADES, Rank.FIVE),
+            Card(Suit.SPADES, Rank.KING),
+        ],
+        PlayerId(1): [Card(Suit.SPADES, Rank.NINE)],
+        PlayerId(2): [Card(Suit.SPADES, Rank.JACK)],
+        PlayerId(3): [Card(Suit.SPADES, Rank.THREE)],
+    }
+    state.trick_in_progress = [
+        (PlayerId(1), Card(Suit.SPADES, Rank.NINE)),
+        (PlayerId(2), Card(Suit.SPADES, Rank.JACK)),
+        (PlayerId(3), Card(Suit.SPADES, Rank.THREE)),
+    ]
+    state.hearts_broken = True
+    state.trick_number = 6
+
+    bot = HeuristicBotV3(player_id=PlayerId(0), rollout_samples=0)
+    card = bot.choose_play(state=state, rng=random.Random(143))
+    reason = bot._peek_last_play_reason()
+
+    assert reason is not None
+    assert reason.mode == "follow"
+    assert card == Card(Suit.SPADES, Rank.KING)
+    king_entry = next(
+        candidate
+        for candidate in reason.candidates
+        if candidate.card == Card(Suit.SPADES, Rank.KING)
+    )
+    five_entry = next(
+        candidate
+        for candidate in reason.candidates
+        if candidate.card == Card(Suit.SPADES, Rank.FIVE)
+    )
+    assert "v3_last_seat_zero_point_safe_win" in king_entry.tags
+    assert "v3_last_seat_safe_ak_spade_shed" in king_entry.tags
+    assert "v3_last_seat_zero_point_duck_discount" in five_entry.tags
+    assert king_entry.total_score > five_entry.total_score
+
+
+def test_heuristic_v3_last_seat_zero_point_prefers_safe_trap_win_shed() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [
+            Card(Suit.DIAMONDS, Rank.TWO),
+            Card(Suit.DIAMONDS, Rank.QUEEN),
+        ],
+        PlayerId(1): [Card(Suit.DIAMONDS, Rank.FIVE)],
+        PlayerId(2): [Card(Suit.DIAMONDS, Rank.SEVEN)],
+        PlayerId(3): [Card(Suit.DIAMONDS, Rank.NINE)],
+    }
+    state.trick_in_progress = [
+        (PlayerId(1), Card(Suit.DIAMONDS, Rank.FIVE)),
+        (PlayerId(2), Card(Suit.DIAMONDS, Rank.SEVEN)),
+        (PlayerId(3), Card(Suit.DIAMONDS, Rank.NINE)),
+    ]
+    state.hearts_broken = True
+    state.trick_number = 7
+
+    bot = HeuristicBotV3(player_id=PlayerId(0), rollout_samples=0)
+    card = bot.choose_play(state=state, rng=random.Random(144))
+    reason = bot._peek_last_play_reason()
+
+    assert reason is not None
+    assert reason.mode == "follow"
+    assert card == Card(Suit.DIAMONDS, Rank.QUEEN)
+    queen_entry = next(
+        candidate
+        for candidate in reason.candidates
+        if candidate.card == Card(Suit.DIAMONDS, Rank.QUEEN)
+    )
+    two_entry = next(
+        candidate
+        for candidate in reason.candidates
+        if candidate.card == Card(Suit.DIAMONDS, Rank.TWO)
+    )
+    assert "v3_last_seat_zero_point_safe_win" in queen_entry.tags
+    assert "v3_last_seat_safe_trap_win_shed" in queen_entry.tags
+    assert "v3_last_seat_zero_point_duck_discount" in two_entry.tags
+    assert queen_entry.total_score > two_entry.total_score
+
+
 def test_heuristic_v2_broken_hearts_prefers_low_heart_escape_over_king_spades() -> None:
     state = GameState()
     state.hands = {
