@@ -121,6 +121,9 @@ def test_rest_set_viewer_advisory_bot_broadcasts_snapshot() -> None:
             broadcast = ws.receive_json()
             assert broadcast["type"] == "state_snapshot"
             assert broadcast["payload"]["viewer_advisory_bot_name"] == "heuristic_v2"
+            recommendation = broadcast["payload"]["debug_viewer_recommendation"]
+            assert recommendation is not None
+            assert recommendation["status"] == "idle"
 
 
 def _drive_game_to_completion(client: TestClient, *, table_code: str, player_secret: str) -> dict[str, int]:

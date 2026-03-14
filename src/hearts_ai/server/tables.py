@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import random
 import secrets
 import string
@@ -241,6 +242,109 @@ class Table:
         if player_secret is None:
             return None
         return self.viewer_advisory_bot_types.get(player_secret)
+
+    def viewer_debug_recommendation(self, viewer_secret: str | None) -> dict[str, Any] | None:
+        if viewer_secret is None:
+            return None
+        participant = self.participants.get(viewer_secret)
+        if participant is None or participant.seat is None:
+            return {
+                "status": "idle",
+                "message": "Viewer must claim a human seat for recommendations.",
+            }
+        viewer_seat = participant.seat
+        if viewer_seat in self.bot_seats:
+            return {
+                "status": "idle",
+                "message": "Viewer recommendations are available only for human-controlled seats.",
+            }
+
+        decision_kind: Literal["pass", "play"] | None = None
+        if self.phase == "passing":
+            if viewer_seat in self.pending_passes:
+                return {
+                    "status": "idle",
+                    "message": "Pass already submitted for this hand.",
+                }
+            decision_kind = "pass"
+        elif self.phase == "playing":
+            if self.state.turn != viewer_seat:
+                return {
+                    "status": "idle",
+                    "message": f"Waiting on P{int(self.state.turn)}.",
+                }
+            decision_kind = "play"
+        else:
+            return {
+                "status": "idle",
+                "message": f"No viewer recommendation in phase '{self.phase}'.",
+            }
+
+        advisory_bot_name = self.viewer_advisory_bot_name(viewer_secret) or "heuristic_v3"
+        if advisory_bot_name not in {"heuristic_v2", "heuristic_v3"}:
+            return {
+                "status": "unsupported_bot",
+                "seat": int(viewer_seat),
+                "bot_name": advisory_bot_name,
+                "decision_kind": decision_kind,
+                "hand_number": self.state.hand_number,
+                "trick_number": self.state.trick_number,
+                "message": f"No explanation payload support for advisory bot '{advisory_bot_name}'.",
+            }
+
+        advisory_rng_seed = (
+            (self.seed << 16)
+            ^ (self.state.hand_number << 8)
+            ^ (self.state.trick_number << 2)
+            ^ int(viewer_seat)
+            ^ sum(ord(ch) for ch in advisory_bot_name)
+        )
+        advisory_rng = random.Random(advisory_rng_seed)
+        advisory_state = copy.deepcopy(self.state)
+        advisory_bot = create_bot(advisory_bot_name, player_id=viewer_seat)
+
+        try:
+            if decision_kind == "pass":
+                advisory_bot.choose_pass(
+                    hand=advisory_state.hands[viewer_seat],
+                    state=advisory_state,
+                    rng=advisory_rng,
+                )
+                payload = _serialize_heuristic_v2_pass_reason(advisory_bot)
+            else:
+                advisory_bot.choose_play(state=advisory_state, rng=advisory_rng)
+                payload = _serialize_heuristic_v2_play_reason(advisory_bot)
+        except Exception as exc:
+            return {
+                "status": "error",
+                "seat": int(viewer_seat),
+                "bot_name": advisory_bot_name,
+                "decision_kind": decision_kind,
+                "hand_number": self.state.hand_number,
+                "trick_number": self.state.trick_number,
+                "message": f"Failed to generate recommendation: {exc}",
+            }
+
+        if payload is None:
+            return {
+                "status": "error",
+                "seat": int(viewer_seat),
+                "bot_name": advisory_bot_name,
+                "decision_kind": decision_kind,
+                "hand_number": self.state.hand_number,
+                "trick_number": self.state.trick_number,
+                "message": "Recommendation bot did not expose a reason payload.",
+            }
+
+        return {
+            "status": "ok",
+            "seat": int(viewer_seat),
+            "bot_name": advisory_bot_name,
+            "decision_kind": decision_kind,
+            "hand_number": self.state.hand_number,
+            "trick_number": self.state.trick_number,
+            "payload": payload,
+        }
 
     def is_started(self) -> bool:
         return self.phase != "lobby"

@@ -29,7 +29,7 @@ const appState = {
   prePassHandByHand: {},
   receivedPassCardsByHand: {},
   beginHandPendingByHand: {},
-  debugViewerRecommendationEnabled: false,
+  debugViewerRecommendationEnabled: true,
   debugOpponentReasonEnabled: false,
 };
 

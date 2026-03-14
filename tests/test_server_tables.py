@@ -120,6 +120,42 @@ def test_viewer_advisory_bot_preference_rejects_unknown_bot_type() -> None:
         manager.set_viewer_advisory_bot(table.table_code, player_secret=player_secret, bot_name="unknown-bot")
 
 
+def test_snapshot_includes_viewer_pass_recommendation_for_supported_bot() -> None:
+    manager = TableManager()
+    table, player_secret = manager.create_table(display_name="Host", target_score=50, seed=7)
+    manager.claim_seat(table.table_code, player_secret=player_secret, seat=0)
+    manager.add_bot(table.table_code, seat=1, bot_name="random")
+    manager.add_bot(table.table_code, seat=2, bot_name="random")
+    manager.add_bot(table.table_code, seat=3, bot_name="random")
+    manager.set_viewer_advisory_bot(table.table_code, player_secret=player_secret, bot_name="heuristic_v3")
+
+    snapshot = table_snapshot(manager.get_table(table.table_code), viewer_secret=player_secret)
+    recommendation = snapshot["debug_viewer_recommendation"]
+    assert recommendation is not None
+    assert recommendation["status"] == "ok"
+    assert recommendation["decision_kind"] == "pass"
+    assert recommendation["bot_name"] == "heuristic_v3"
+    payload = recommendation["payload"]
+    assert isinstance(payload.get("selected_cards"), list)
+    assert len(payload.get("selected_cards")) == snapshot["pass_count"]
+
+
+def test_snapshot_marks_unsupported_viewer_recommendation_bot() -> None:
+    manager = TableManager()
+    table, player_secret = manager.create_table(display_name="Host", target_score=50, seed=7)
+    manager.claim_seat(table.table_code, player_secret=player_secret, seat=0)
+    manager.add_bot(table.table_code, seat=1, bot_name="random")
+    manager.add_bot(table.table_code, seat=2, bot_name="random")
+    manager.add_bot(table.table_code, seat=3, bot_name="random")
+    manager.set_viewer_advisory_bot(table.table_code, player_secret=player_secret, bot_name="random")
+
+    snapshot = table_snapshot(manager.get_table(table.table_code), viewer_secret=player_secret)
+    recommendation = snapshot["debug_viewer_recommendation"]
+    assert recommendation is not None
+    assert recommendation["status"] == "unsupported_bot"
+    assert recommendation["bot_name"] == "random"
+
+
 def test_add_bot_rejects_unknown_bot_type() -> None:
     manager = TableManager()
     table, _ = manager.create_table(display_name="Host", target_score=50, seed=7)
