@@ -216,17 +216,10 @@ def _score_lead_base(
     elif card in (_KING_SPADES, _ACE_SPADES):
         score -= 2.6 if lower_spade_available else 1.4
         tags.append("avoid_high_spade_lead")
-    if card.suit == Suit.SPADES and int(card.rank) >= int(Rank.JACK):
-        # High spade leads are broadly risky without strong trick context.
-        score -= 0.8
-        tags.append("cautious_high_spade_lead")
     if state.hearts_broken and low_heart_legal and card in (_QUEEN_SPADES, _KING_SPADES, _ACE_SPADES):
         # Do not burn high spades when a cheap heart escape lead exists.
         score -= 1.6
         tags.append("prefer_low_heart_over_high_spade")
-    if state.trick_number == 0:
-        score -= float(int(card.rank)) * 0.06
-        tags.append("first_trick_conservative_lead")
     if card == _QUEEN_SPADES and state.hearts_broken:
         # If hearts are already live, opening with queen is even less attractive.
         score -= 0.5
@@ -307,11 +300,6 @@ def _score_lead_v3(
 
     if card.suit != Suit.SPADES:
         return score, tags
-
-    if card == Card(Suit.SPADES, Rank.JACK):
-        # Jack of spades is not in the same control-risk class as Q/K/A spades.
-        score += 0.8
-        tags.append("v3_jack_spade_not_high_control")
 
     non_spade_legal = [candidate for candidate in legal if candidate.suit != Suit.SPADES]
     if not non_spade_legal:

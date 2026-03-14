@@ -39,9 +39,7 @@ Untagged terms in this helper:
 | `avoid_high_heart_lead` | A high heart lead is risky. | `-0.9` | Hearts are broken, but leading `QH` is more dangerous than leading `4H`. | `high_heart_lead_risk` |
 | `avoid_qs_lead` | Do not casually lead `QS`. | `-4.0` with a lower legal spade available, else `-2.2` | You hold `QS` and another spade, so opening `QS` is strongly discouraged. | `dont_lead_qs` |
 | `avoid_high_spade_lead` | Do not casually lead `AS` or `KS`. | `-2.6` with a lower legal spade available, else `-1.4` | You can lead `5S` or `KS`; the high spade gets penalized. | `dont_lead_high_spade` |
-| `cautious_high_spade_lead` | Broad caution against leading higher spades. | `-0.8` | A `JS` or higher spade lead gets a general risk penalty. | `high_spade_lead_risk` |
 | `prefer_low_heart_over_high_spade` | If a low heart is available, prefer it over spending a dangerous high spade. | `-1.6` | Hearts are broken and you have both `3H` and `KS`; the bot prefers `3H`. | `low_heart_over_high_spade` |
-| `first_trick_conservative_lead` | First-trick leads should be especially low/conservative. | `-rank * 0.06` | On the opening lead, lower cards get a small extra preference. | `first_trick_play_low` |
 | `avoid_qs_after_hearts_broken` | Leading `QS` is even worse once hearts are live. | `-0.5` | Hearts are already broken, making a `QS` lead especially unattractive. | `dont_lead_qs_after_break` |
 | `forced_spade_lead_prefer_low` | If the bot is effectively forced to lead spades, it prefers the lower spade. | `-rank * 0.04` | The entire legal lead set is spades, so `4S` is preferred over `9S`. | `forced_spade_lead_low` |
 
@@ -61,7 +59,6 @@ This helper adds only tagged overlay terms. It relies on `public_info.py` for `q
 | `v3_lead_void_amplifies_control_risk` | Existing lead-control risk is amplified because players ahead may be void. | `-0.14 * voids_ahead` | A boss or trap lead becomes even less attractive when one or more opponents can slough. | `voids_raise_lead_risk` |
 | `v3_avoid_mid_offsuit_when_qs_live` | Mid/high off-suit leads can win awkward queen-dump tricks while `QS` is still out. | `-0.35` | You could lead `10C` or `JS`; the club lead is penalized because it may win a `QS` trick. | `offsuit_win_risk_qs_live` |
 | `v3_extra_offsuit_win_risk` | Extra penalty because the off-suit lead is especially high. | `-0.15` | `KC` gets an added penalty beyond the generic mid/high off-suit risk. | `high_offsuit_win_risk` |
-| `v3_jack_spade_not_high_control` | `JS` is not treated like `QS`, `KS`, or `AS`. | `+0.8` | `JS` gets some relief relative to `10C` or `KS` as an opening lead. | `js_not_high_spade` |
 | `v3_avoid_short_qs_shape_spade_lead` | With short spade length and `QS`, do not flush spades early unless needed. | `-2.1` | You hold `QS`, `7S`, `4S`, plus side suits; a non-spade lead is preferred. | `short_qs_shape_no_spade_lead` |
 | `v3_avoid_qs_flush_lead` | Stronger penalty on actually leading `QS` in that short-queen shape. | extra `-1.4` | Same hand as above, but specifically on the `QS` candidate. | `dont_flush_qs` |
 | `v3_preserve_spade_protection_shape` | Preserve a fragile `AS`/`KS` protection shape when spades are short. | `-1.5` | You hold `AS`, `KS`, `5S`, and no queen; side-suit leads are preferred. | `keep_spade_protection_shape` |
@@ -225,8 +222,6 @@ Definitions:
 
 These are still documented because they exist in code now, but they are the most likely cleanup candidates:
 
-- `cautious_high_spade_lead`
-- `first_trick_conservative_lead`
 - `discard_priority`
 - `lead_non_heart`
 
