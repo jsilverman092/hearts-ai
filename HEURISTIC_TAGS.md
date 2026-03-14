@@ -52,6 +52,7 @@ This helper adds only tagged overlay terms. It relies on `public_info.py` for `q
 | Current Tag | Meaning | Impact | Example | Cleaner Name |
 | --- | --- | --- | --- | --- |
 | `v3_floor_card_lead_safe` | This lead is a floor card: no lower outside cards remain, so it is relatively safe. | `+0.45` | In diamonds, your `7D` is the lowest unseen diamond still outside your hand. | `lead_floor_safe` |
+| `v3_preserve_floor_lead_inventory` | A live floor card is also future escape inventory, so the bot resists spending it too early. This does not apply once no outside cards remain in the suit. | `-0.60` on tricks `0-3`; `-0.32` on tricks `4-7`; `-0.12` on tricks `8+` | Early in the hand, leading `3D` is locally safe but may be worse than saving it for later ducking/escape. | `preserve_floor_inventory` |
 | `v3_boss_card_lead_risk` | This lead is a boss card: no higher outside cards remain, so it risks taking control. | `-0.78` | You lead `AD` when no unseen diamond above it exists. | `lead_boss_risk` |
 | `v3_trap_card_lead_risk` | This lead is a trap card: only a few higher outside cards remain, but some lower cards do too. | `-(0.5 + 0.2 * (2 - outside_higher_count))` | Leading `10D` when only `QD` and `KD` are above it but many lower diamonds remain. | `lead_trap_risk` |
 | `v3_lead_owned_suit_control_risk` | You hold all remaining cards in the suit, so leading it guarantees control stays with you. | `-0.9` | All unseen clubs are in your hand; any club lead keeps you in charge of the suit. | `lead_owned_suit_risk` |

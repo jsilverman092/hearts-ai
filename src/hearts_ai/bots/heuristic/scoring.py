@@ -260,6 +260,15 @@ def _score_lead_v3(
     if is_floor:
         score += 0.45
         tags.append("v3_floor_card_lead_safe")
+        if state.trick_number <= 3:
+            score -= 0.6
+            tags.append("v3_preserve_floor_lead_inventory")
+        elif state.trick_number <= 7:
+            score -= 0.32
+            tags.append("v3_preserve_floor_lead_inventory")
+        else:
+            score -= 0.12
+            tags.append("v3_preserve_floor_lead_inventory")
     elif is_boss:
         score -= 0.78
         tags.append("v3_boss_card_lead_risk")

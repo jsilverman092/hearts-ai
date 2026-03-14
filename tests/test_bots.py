@@ -1316,6 +1316,114 @@ def test_heuristic_v3_lead_prefers_floor_over_trap_and_boss_in_same_suit() -> No
     assert ten_entry.total_score > ace_entry.total_score
 
 
+def test_heuristic_v3_preserves_floor_lead_inventory_more_early_than_late() -> None:
+    def build_state(*, trick_number: int) -> GameState:
+        state = GameState()
+        state.hands = {
+            PlayerId(0): [
+                Card(Suit.DIAMONDS, Rank.THREE),
+                Card(Suit.SPADES, Rank.FOUR),
+            ],
+            PlayerId(1): [Card(Suit.CLUBS, Rank.FIVE)],
+            PlayerId(2): [Card(Suit.CLUBS, Rank.SIX)],
+            PlayerId(3): [Card(Suit.CLUBS, Rank.SEVEN)],
+        }
+        state.hearts_broken = True
+        state.trick_number = trick_number
+        state.taken_tricks = {
+            PlayerId(0): [],
+            PlayerId(1): [[
+                (PlayerId(1), Card(Suit.DIAMONDS, Rank.TWO)),
+                (PlayerId(2), Card(Suit.CLUBS, Rank.TWO)),
+                (PlayerId(3), Card(Suit.CLUBS, Rank.THREE)),
+                (PlayerId(0), Card(Suit.CLUBS, Rank.FOUR)),
+            ]],
+            PlayerId(2): [],
+            PlayerId(3): [],
+        }
+        return state
+
+    early_bot = HeuristicBotV3(player_id=PlayerId(0), rollout_samples=0)
+    early_card = early_bot.choose_play(state=build_state(trick_number=2), rng=random.Random(211))
+    early_reason = early_bot._peek_last_play_reason()
+
+    late_bot = HeuristicBotV3(player_id=PlayerId(0), rollout_samples=0)
+    late_card = late_bot.choose_play(state=build_state(trick_number=9), rng=random.Random(212))
+    late_reason = late_bot._peek_last_play_reason()
+
+    assert early_reason is not None
+    assert late_reason is not None
+    assert early_reason.mode == "lead"
+    assert late_reason.mode == "lead"
+    assert early_card == Card(Suit.SPADES, Rank.FOUR)
+    assert late_card == Card(Suit.DIAMONDS, Rank.THREE)
+
+    early_diamond = next(
+        candidate
+        for candidate in early_reason.candidates
+        if candidate.card == Card(Suit.DIAMONDS, Rank.THREE)
+    )
+    late_diamond = next(
+        candidate
+        for candidate in late_reason.candidates
+        if candidate.card == Card(Suit.DIAMONDS, Rank.THREE)
+    )
+    assert "v3_floor_card_lead_safe" in early_diamond.tags
+    assert "v3_preserve_floor_lead_inventory" in early_diamond.tags
+    assert "v3_preserve_floor_lead_inventory" in late_diamond.tags
+    assert late_diamond.total_score > early_diamond.total_score
+
+
+def test_heuristic_v3_does_not_treat_exhausted_suit_as_floor_inventory() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [
+            Card(Suit.CLUBS, Rank.ACE),
+            Card(Suit.DIAMONDS, Rank.THREE),
+        ],
+        PlayerId(1): [Card(Suit.HEARTS, Rank.FIVE)],
+        PlayerId(2): [Card(Suit.HEARTS, Rank.SIX)],
+        PlayerId(3): [Card(Suit.HEARTS, Rank.SEVEN)],
+    }
+    state.hearts_broken = True
+    state.trick_number = 5
+    state.taken_tricks = {
+        PlayerId(0): [],
+        PlayerId(1): [[
+            (PlayerId(1), Card(Suit.CLUBS, Rank.TWO)),
+            (PlayerId(2), Card(Suit.CLUBS, Rank.THREE)),
+            (PlayerId(3), Card(Suit.CLUBS, Rank.FOUR)),
+            (PlayerId(0), Card(Suit.CLUBS, Rank.FIVE)),
+        ]],
+        PlayerId(2): [[
+            (PlayerId(2), Card(Suit.CLUBS, Rank.SIX)),
+            (PlayerId(3), Card(Suit.CLUBS, Rank.SEVEN)),
+            (PlayerId(0), Card(Suit.CLUBS, Rank.EIGHT)),
+            (PlayerId(1), Card(Suit.CLUBS, Rank.NINE)),
+        ]],
+        PlayerId(3): [[
+            (PlayerId(3), Card(Suit.CLUBS, Rank.TEN)),
+            (PlayerId(0), Card(Suit.CLUBS, Rank.JACK)),
+            (PlayerId(1), Card(Suit.CLUBS, Rank.QUEEN)),
+            (PlayerId(2), Card(Suit.CLUBS, Rank.KING)),
+        ]],
+    }
+
+    bot = HeuristicBotV3(player_id=PlayerId(0), rollout_samples=0)
+    bot.choose_play(state=state, rng=random.Random(213))
+    reason = bot._peek_last_play_reason()
+
+    assert reason is not None
+    club_entry = next(
+        candidate
+        for candidate in reason.candidates
+        if candidate.card == Card(Suit.CLUBS, Rank.ACE)
+    )
+    assert "v3_lead_owned_suit_control_risk" in club_entry.tags
+    assert "v3_floor_card_lead_safe" not in club_entry.tags
+    assert "v3_preserve_floor_lead_inventory" not in club_entry.tags
+
+
 def test_heuristic_v3_subqueen_spade_discard_is_qs_conditional() -> None:
     def build_state(*, qs_seen: bool) -> GameState:
         state = GameState()
