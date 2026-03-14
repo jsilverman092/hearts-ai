@@ -18,6 +18,7 @@ This file documents the debug tags currently emitted by the heuristic bots.
 - The `Impact` column shows the direct additive base-score effect attached to the tag in current code.
 - Final play choice also includes `rollout_score` and deterministic tie-breaks, so `Impact` is not the entire decision.
 - Some scoring helpers also have untagged terms; those are listed under the relevant section when useful.
+- In impact formulas, `rank` means `int(card.rank)`, using `2-14` for `2` through `A` (`J=11`, `Q=12`, `K=13`, `A=14`).
 - Pass decisions currently expose score tuples, not tags.
 - Examples are illustrative, not exhaustive. They describe the kind of spot where a tag may appear.
 - "Cleaner name" is a suggested future rename for UI/debug readability. It is not implemented yet.
@@ -126,6 +127,99 @@ These penalties can stack with the base `v3` discard overlays above.
 | --- | --- | --- | --- | --- |
 | `v3_moon_defense_keep_suit_stopper` | Keep this card because it may stop a moon run later. | base `-3.0`, plus `-1.0` if `outside_count >= 8`, plus `-0.6` if the card is a boss stopper | A sole moon threat is live and dumping `AC` would give up your likely future club stopper. | `keep_moon_stopper` |
 | `v3_moon_defense_no_backup_stopper` | Keep it even more strongly because it is your only stopper in that suit. | extra `-1.6` | You hold `AC` but no other club stopper, so the preservation penalty is stronger. | `only_moon_stopper` |
+
+## `shared.py`: play-selection tie-breaks
+
+Applies to: `heuristic_v2`, `heuristic_v3`
+
+These are only used when two candidates have the same `total_score` after base scoring plus weighted rollout.
+
+- Lead mode:
+  - prefer lower rank first
+  - if still tied, prefer lower suit enum (`CLUBS=0`, `DIAMONDS=1`, `HEARTS=2`, `SPADES=3`)
+- Follow / discard mode:
+  - prefer higher `_score_discard_priority_base` bucket first
+  - if still tied, prefer higher rank
+  - if still tied, prefer higher suit enum
+
+Notes:
+- These tie-breaks come from `_move_tiebreak()` in `src/hearts_ai/bots/heuristic/shared.py`.
+- Pass decisions do not use this tie-break helper; they are ordered directly by their pass-score tuples.
+
+## Pass debug tuples
+
+Pass decisions do not emit string tags. Instead, the debug UI shows each candidate card with its pass-score tuple.
+
+General rule:
+- pass tuples are sorted descending
+- first number is the dominant priority
+- second number breaks ties by rank
+- third number breaks ties by suit enum (`CLUBS=0`, `DIAMONDS=1`, `HEARTS=2`, `SPADES=3`)
+
+### `scoring.py`: `_score_pass_base`
+
+Applies to: `heuristic`, `heuristic_v2`
+
+Tuple shape:
+- `(priority_bucket, rank, suit)`
+
+Priority buckets:
+- `QS = 6`
+- `AS = 5`
+- `KS = 4`
+- any heart = `3`
+- clubs / diamonds = `2`
+- sub-queen spades = `1`
+
+Example:
+- `QS` -> `(6, 12, 3)`
+- `KH` -> `(3, 13, 2)`
+- `TD` -> `(2, 10, 1)`
+
+### `scoring.py`: `_score_pass_v3`
+
+Applies to: `heuristic_v3`
+
+Tuple shape:
+- `(primary, rank, suit)`
+
+Notes:
+- `primary` is a hand-aware score, not a fixed bucket.
+- it depends on context such as total spade length, whether `QS` is present, low-spade cover, suit length, and card category.
+- the same card can therefore receive different first-number values in different hands.
+
+Example interpretation:
+- if two cards have tuples `(720, 14, 3)` and `(690, 13, 3)`, the first is passed first because `720 > 690`
+- if two cards tie on the first number, the higher rank wins
+- if both first and second numbers tie, the higher suit enum wins
+
+Hand-aware scoring factors:
+
+| Card Category | Base `primary` | Conditional Adjustments | Notes |
+| --- | --- | --- | --- |
+| `QS` | `980` if `spade_count <= 3`; `920` if `spade_count == 4`; `350` if `spade_count == 5`; `260` otherwise | `-40` if `low_spade_cover >= 3` | Short-spade `QS` shapes are treated as urgent passes; long-spade `QS` shapes are less urgent. |
+| `AS` | `720` | `-220` if `spade_count >= 5`; `-140` if `not has_qs and spade_count >= 3`; `-70` if `low_spade_cover >= 3`; if both `AS` and `KS` are present: `+30` if `low_spade_cover < 3`, else `-30`; `+70` if `lower_cover_for_card == 0`, else `-60` if `lower_cover_for_card >= 2` | Starts as a high-priority pass, then gets discounted when the hand has enough spade shape/protection to justify keeping it. |
+| `KS` | `690` | `-220` if `spade_count >= 5`; `-140` if `not has_qs and spade_count >= 3`; `-70` if `low_spade_cover >= 3`; if both `AS` and `KS` are present: `+80` if `low_spade_cover < 3`, else `-30`; `+70` if `lower_cover_for_card == 0`, else `-60` if `lower_cover_for_card >= 2` | Similar to `AS`, but with a slightly lower base and a larger paired `AS+KS` penalty/boost swing. |
+| sub-queen spade (`2S-JS`) | `-220 + rank` | `+80` if `spade_count >= 7`; `+50` if `spade_count >= 6` | These are intentionally preserved in most hands; even long-spade adjustments usually leave them far below normal pass candidates. |
+| heart `2H-4H` | `70 + 2 * rank` | `-30` if `suit_count >= 5 and rank <= 6`; `+30` if `suit_count <= 2 and rank >= 10` | Very low hearts are usually kept. |
+| `5H` | `220` | `-30` if `suit_count >= 5`; `+30` if `suit_count <= 2` does not apply here because rank is below `10` | Transitional heart risk. |
+| `6H` | `320` | `-30` if `suit_count >= 5`; `+30` if `suit_count <= 2` does not apply here because rank is below `10` | Slightly more passable than `5H`. |
+| heart `7H-AH` | `460 + 40 * (rank - 7)` | `+30` if `suit_count <= 2 and rank >= 10` | High hearts climb quickly in pass priority, especially in short suits. |
+| club `2C-4C` | `60` | `-30` if `suit_count >= 5 and rank <= 5`; `+45` if `rank >= 11 and suit_count <= 2` does not apply here | Very low clubs are usually kept. |
+| `5C` | `180` | `-30` if `suit_count >= 5`; no short-suit honor bonus | Transitional club risk. |
+| club `6C-9C` | `250 + 25 * (rank - 6)` | no long-suit low-card discount; no short-suit honor bonus | Mid clubs ramp gradually. |
+| club `JC-AC` | `520 + 45 * (rank - 11)` | `+45` if `suit_count <= 2` | High clubs in short suits become strong pass candidates. |
+| diamond `2D-3D` | `55` | `-30` if `suit_count >= 5 and rank <= 5`; `+45` if `rank >= 11 and suit_count <= 2` does not apply here | Very low diamonds are usually kept. |
+| `4D` | `175` | `-30` if `suit_count >= 5 and rank <= 5` | Transitional diamond risk. |
+| diamond `5D-9D` | `245 + 24 * (rank - 5)` | `-30` if `suit_count >= 5 and rank <= 5` only applies at `5D`; no short-suit honor bonus | Mid diamonds ramp gradually. |
+| diamond `JD-AD` | `515 + 45 * (rank - 11)` | `+45` if `suit_count <= 2` | High diamonds in short suits become strong pass candidates. |
+
+Definitions:
+- `spade_count`: total spades in hand.
+- `has_qs`, `has_ks`, `has_as`: whether the hand contains those specific spades.
+- `low_spade_cover`: number of spades in hand with rank `<= 9`.
+- `suit_count`: number of cards in the candidate card's suit.
+- `lower_cover_for_card`: number of same-suit spades in hand below the candidate spade.
 
 ## Likely Cleanup Candidates
 
