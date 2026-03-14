@@ -205,6 +205,43 @@ function formatDebugScore(value) {
   return numeric.toFixed(3);
 }
 
+function renderPassDecisionLines(decision) {
+  const lines = [];
+  const payload = decision.payload || {};
+  const selected = Array.isArray(payload.selected_cards) ? payload.selected_cards : [];
+  lines.push(`Selected: ${selected.join(" ") || "-"}`);
+  const candidates = Array.isArray(payload.candidates) ? payload.candidates : [];
+  const top = candidates.slice(0, 5);
+  lines.push("Top pass candidates:");
+  for (const candidate of top) {
+    const score = Array.isArray(candidate.score) ? candidate.score.join(",") : "";
+    lines.push(`- ${candidate.card} [${score}]`);
+  }
+  return lines;
+}
+
+function renderPlayDecisionLines(decision) {
+  const lines = [];
+  const payload = decision.payload || {};
+  lines.push(`Mode: ${payload.mode || "-"}`);
+  lines.push(`Chosen: ${payload.chosen_card || "-"}`);
+  lines.push(`Moon target: ${payload.moon_defense_target ?? "-"}`);
+  const candidates = Array.isArray(payload.candidates) ? payload.candidates : [];
+  const top = candidates.slice(0, 3);
+  lines.push("Top play candidates:");
+  for (const candidate of top) {
+    const tags = Array.isArray(candidate.tags) ? candidate.tags.join(", ") : "";
+    lines.push(
+      `- ${candidate.card} total=${formatDebugScore(candidate.total_score)} ` +
+      `base=${formatDebugScore(candidate.base_score)} rollout=${formatDebugScore(candidate.rollout_score)}`
+    );
+    if (tags) {
+      lines.push(`  tags: ${tags}`);
+    }
+  }
+  return lines;
+}
+
 function renderViewerRecommendation(snapshot = appState.snapshot) {
   if (!dom.debugViewerContent) {
     return;
@@ -217,10 +254,32 @@ function renderViewerRecommendation(snapshot = appState.snapshot) {
     dom.debugViewerContent.textContent = "No table snapshot yet.";
     return;
   }
+  const recommendation = snapshot.debug_viewer_recommendation;
   const advisoryBot = snapshot.viewer_advisory_bot_name || globalBotType();
-  dom.debugViewerContent.textContent =
-    `Viewer recommendation mode is enabled. Advisory bot: ${advisoryBot}. ` +
-    "Recommendation payload is added in Phase 4.7 step 3.";
+  if (!recommendation || typeof recommendation !== "object") {
+    dom.debugViewerContent.textContent = `No recommendation payload available. Advisory bot: ${advisoryBot}.`;
+    return;
+  }
+
+  const status = String(recommendation.status || "idle");
+  if (status !== "ok") {
+    const message = recommendation.message ? String(recommendation.message) : "No recommendation available.";
+    dom.debugViewerContent.textContent = `Advisory bot: ${advisoryBot}\nStatus: ${status}\n${message}`;
+    return;
+  }
+
+  const lines = [
+    `Seat P${recommendation.seat} (${recommendation.bot_name})`,
+    `Kind ${recommendation.decision_kind}  Hand ${recommendation.hand_number}  Trick ${recommendation.trick_number}`,
+  ];
+  if (recommendation.decision_kind === "pass") {
+    lines.push(...renderPassDecisionLines(recommendation));
+  } else if (recommendation.decision_kind === "play") {
+    lines.push(...renderPlayDecisionLines(recommendation));
+  } else {
+    lines.push("Unsupported recommendation payload.");
+  }
+  dom.debugViewerContent.textContent = lines.join("\n");
 }
 
 function renderOpponentReason(snapshot = appState.snapshot) {
@@ -241,35 +300,10 @@ function renderOpponentReason(snapshot = appState.snapshot) {
     `Seat P${decision.seat} (${decision.bot_name})`,
     `Kind ${decision.decision_kind}  Hand ${decision.hand_number}  Trick ${decision.trick_number}`,
   ];
-  const payload = decision.payload || {};
-
   if (decision.decision_kind === "pass") {
-    const selected = Array.isArray(payload.selected_cards) ? payload.selected_cards : [];
-    lines.push(`Selected: ${selected.join(" ") || "-"}`);
-    const candidates = Array.isArray(payload.candidates) ? payload.candidates : [];
-    const top = candidates.slice(0, 5);
-    lines.push("Top pass candidates:");
-    for (const candidate of top) {
-      const score = Array.isArray(candidate.score) ? candidate.score.join(",") : "";
-      lines.push(`- ${candidate.card} [${score}]`);
-    }
+    lines.push(...renderPassDecisionLines(decision));
   } else if (decision.decision_kind === "play") {
-    lines.push(`Mode: ${payload.mode || "-"}`);
-    lines.push(`Chosen: ${payload.chosen_card || "-"}`);
-    lines.push(`Moon target: ${payload.moon_defense_target ?? "-"}`);
-    const candidates = Array.isArray(payload.candidates) ? payload.candidates : [];
-    const top = candidates.slice(0, 3);
-    lines.push("Top play candidates:");
-    for (const candidate of top) {
-      const tags = Array.isArray(candidate.tags) ? candidate.tags.join(", ") : "";
-      lines.push(
-        `- ${candidate.card} total=${formatDebugScore(candidate.total_score)} ` +
-        `base=${formatDebugScore(candidate.base_score)} rollout=${formatDebugScore(candidate.rollout_score)}`
-      );
-      if (tags) {
-        lines.push(`  tags: ${tags}`);
-      }
-    }
+    lines.push(...renderPlayDecisionLines(decision));
   } else {
     lines.push("Unsupported decision payload.");
   }
