@@ -838,6 +838,11 @@ async function playCard(cardCode) {
 function renderSeat(snapshot, seat, seatPosition) {
   const seatBox = document.createElement("div");
   seatBox.className = `table-seat pos-${seatPosition}`;
+  const seatKey = String(seat.seat);
+  const cumulativeScore = Number(snapshot.scores[seatKey] || 0);
+  const currentHandPoints = Number(snapshot.seat_hand_points[seatKey] || 0);
+  const liveTotalScore =
+    snapshot.phase === "playing" ? cumulativeScore + currentHandPoints : cumulativeScore;
   if (snapshot.viewer_seat === seat.seat) {
     seatBox.classList.add("you");
   }
@@ -880,7 +885,7 @@ function renderSeat(snapshot, seat, seatPosition) {
 
   const handValue = document.createElement("span");
   handValue.className = "seat-hand-big";
-  handValue.textContent = String(snapshot.seat_hand_points[String(seat.seat)] || 0);
+  handValue.textContent = String(snapshot.seat_hand_points[seatKey] || 0);
 
   nameRow.append(name, handValue);
 
@@ -889,7 +894,7 @@ function renderSeat(snapshot, seat, seatPosition) {
 
   const totalMetric = document.createElement("span");
   totalMetric.className = "seat-metric seat-metric-total";
-  totalMetric.textContent = `Total ${snapshot.scores[String(seat.seat)] || 0}`;
+  totalMetric.textContent = `Total ${liveTotalScore}`;
   metrics.append(totalMetric);
 
   seatBox.append(head, nameRow, metrics);
