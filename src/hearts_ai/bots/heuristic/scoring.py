@@ -340,8 +340,13 @@ def _score_lead_v3(
     has_as = _ACE_SPADES in spades
     high_spade_count = int(has_as) + int(has_ks)
     low_spade_cover = sum(1 for current in spades if current.rank <= Rank.NINE)
+    safe_qs_cash_lead = card == _QUEEN_SPADES and is_floor and outside_count > 0
 
-    if has_qs and spade_count <= 4:
+    if safe_qs_cash_lead:
+        score += 8.5
+        tags.append("v3_safe_qs_cash_lead")
+
+    if has_qs and spade_count <= 4 and not safe_qs_cash_lead:
         score -= 2.1
         tags.append("v3_avoid_short_qs_shape_spade_lead")
         if card == _QUEEN_SPADES:

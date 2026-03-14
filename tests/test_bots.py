@@ -978,6 +978,64 @@ def test_heuristic_v3_short_qs_shape_penalty_is_not_absolute_on_forced_spade_lea
     assert card == Card(Suit.SPADES, Rank.FOUR)
 
 
+def test_heuristic_v3_leads_qs_when_it_is_safe_floor_spade_cashout() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [
+            Card(Suit.SPADES, Rank.QUEEN),
+            Card(Suit.HEARTS, Rank.THREE),
+        ],
+        PlayerId(1): [Card(Suit.SPADES, Rank.KING)],
+        PlayerId(2): [Card(Suit.CLUBS, Rank.TWO)],
+        PlayerId(3): [Card(Suit.DIAMONDS, Rank.THREE)],
+    }
+    state.taken_tricks = {
+        PlayerId(0): [],
+        PlayerId(1): [[
+            (PlayerId(1), Card(Suit.SPADES, Rank.TWO)),
+            (PlayerId(2), Card(Suit.SPADES, Rank.THREE)),
+            (PlayerId(3), Card(Suit.SPADES, Rank.FOUR)),
+            (PlayerId(0), Card(Suit.SPADES, Rank.FIVE)),
+        ], [
+            (PlayerId(1), Card(Suit.SPADES, Rank.SIX)),
+            (PlayerId(2), Card(Suit.SPADES, Rank.SEVEN)),
+            (PlayerId(3), Card(Suit.SPADES, Rank.EIGHT)),
+            (PlayerId(0), Card(Suit.SPADES, Rank.NINE)),
+        ], [
+            (PlayerId(1), Card(Suit.SPADES, Rank.TEN)),
+            (PlayerId(2), Card(Suit.SPADES, Rank.JACK)),
+            (PlayerId(3), Card(Suit.HEARTS, Rank.TWO)),
+            (PlayerId(0), Card(Suit.HEARTS, Rank.FOUR)),
+        ]],
+        PlayerId(2): [],
+        PlayerId(3): [],
+    }
+    state.hearts_broken = True
+    state.trick_number = 6
+
+    bot = HeuristicBotV3(player_id=PlayerId(0), rollout_samples=0)
+    card = bot.choose_play(state=state, rng=random.Random(215))
+    reason = bot._peek_last_play_reason()
+
+    assert reason is not None
+    assert reason.mode == "lead"
+    assert card == Card(Suit.SPADES, Rank.QUEEN)
+    queen_entry = next(
+        candidate
+        for candidate in reason.candidates
+        if candidate.card == Card(Suit.SPADES, Rank.QUEEN)
+    )
+    heart_entry = next(
+        candidate
+        for candidate in reason.candidates
+        if candidate.card == Card(Suit.HEARTS, Rank.THREE)
+    )
+    assert "v3_floor_card_lead_safe" in queen_entry.tags
+    assert "v3_safe_qs_cash_lead" in queen_entry.tags
+    assert "v3_avoid_qs_flush_lead" not in queen_entry.tags
+    assert queen_entry.total_score > heart_entry.total_score
+
+
 def test_heuristic_v3_moon_defense_requires_sole_point_holder() -> None:
     state = GameState()
     state.hands = {

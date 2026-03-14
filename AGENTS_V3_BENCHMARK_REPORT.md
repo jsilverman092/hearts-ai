@@ -153,7 +153,7 @@ Conclusion:
 ## Addendum: 2026-03-14 Final Mixed-Field Recheck
 
 Scope:
-- final seat-rotated mixed-field validation after the last `heuristic_v3` follow and lead refinements
+- final seat-rotated mixed-field validation after the last `heuristic_v3` follow and lead refinements, including the owned-suit lead veto
 - one seat each of `heuristic_v3`, `heuristic_v2`, `heuristic`, and `random`
 
 Method:
@@ -166,12 +166,13 @@ Method:
 - seeds: `9000`, `9200`, `9400`, `9600`
 
 Aggregate results:
-- `heuristic_v3`: win rate `0.508`, avg points `16.098`, avg rank `1.699`
-- `heuristic_v2`: win rate `0.236`, avg points `21.956`, avg rank `2.222`
-- `heuristic`: win rate `0.196`, avg points `24.908`, avg rank `2.422`
-- `random`: win rate `0.061`, avg points `53.974`, avg rank `3.657`
+- `heuristic_v3`: win rate `0.525`, avg points `15.672`, avg rank `1.671`
+- `heuristic_v2`: win rate `0.224`, avg points `21.910`, avg rank `2.237`
+- `heuristic`: win rate `0.191`, avg points `24.728`, avg rank `2.423`
+- `random`: win rate `0.061`, avg points `54.072`, avg rank `3.669`
 
 Conclusion:
 - `heuristic_v3` remained clearly first in the mixed field after the final heuristic cleanup pass.
 - ordering stayed stable: `heuristic_v3` first, `heuristic_v2` second, `heuristic` third, `random` last.
 - compared with the earlier 2026-03-13 mixed-field check, `heuristic_v3` improved further on all three summary metrics.
+- compared with the prior 2026-03-14 mixed-field recheck, the owned-suit lead fix improved `heuristic_v3` again on win rate, average points, and average rank.
