@@ -451,6 +451,66 @@ Suggested substeps:
    - preserve behavior unchanged; this is a naming / ownership cleanup, not a heuristic retune
    - verify with full tests plus a quick mixed-field benchmark spot check
 
+## Phase 4.7: Viewer Recommendation Debug Mode
+
+Scope:
+- Extend the existing heuristic debug tooling so it can recommend the viewer's own pass/play choices, not just explain the most recent opponent bot action.
+- Keep "my recommendation" and "opponent explanations" as separate UI/debug concerns that can be enabled independently.
+- Use the top-level Bot Type selector as the advisory bot choice for the viewer recommendation path.
+
+Implementation targets:
+- UI/debug controls:
+  - split the current single debug toggle into two independent controls:
+    - viewer recommendation
+    - opponent explanations
+  - keep the debug panel usable when only one of the two is enabled
+- Server/state exposure:
+  - add a separate viewer-facing debug payload to snapshot state rather than overloading `debug_last_bot_decision`
+  - preserve the existing opponent-decision payload shape for bot-vs-bot inspection
+- Recommendation generation:
+  - compute viewer recommendations server-side on a cloned state so live game state is never mutated
+  - instantiate the selected advisory bot for the viewer seat and serialize the same style of pass/play reason payload already used for heuristic debug
+  - support `heuristic_v2` and `heuristic_v3` first; if another bot type is selected, return a clear "no explanation available" style payload instead of inventing fake reasons
+- Advisory bot selection:
+  - send the top-level Bot Type choice to the server as viewer-specific advisory preference
+  - keep this separate from seat-assigned bot configuration so human recommendation mode does not reconfigure live table seats
+- UI rendering:
+  - show viewer recommendation and opponent explanation as distinct sections in the debug panel
+  - label recommendation output clearly as advisory, not as a committed action
+
+Constraints:
+- Do not mutate real table state when generating viewer recommendations.
+- Do not replace or weaken the existing opponent-debug path.
+- Keep deterministic behavior under fixed seeds; recommendation generation should not introduce unstable live-state side effects.
+- Avoid forcing opponent explanations on when the user only wants self-advice.
+
+Acceptance criteria:
+- A human player can enable viewer recommendation mode and see heuristic advice for their own legal pass/play choices.
+- A human player can enable opponent explanations without also enabling viewer recommendation, and vice versa.
+- The top-level Bot Type selector controls which heuristic bot produces the viewer recommendation.
+- Unsupported advisory bots fail clearly in the UI instead of producing misleading output.
+- Live gameplay behavior is unchanged when both debug controls are off.
+
+Suggested substeps:
+1. UI/debug control split
+   - replace the single debug toggle with two independent controls:
+     - viewer recommendation
+     - opponent explanations
+   - update the debug panel layout so each section can render independently
+   - keep behavior unchanged for server payloads during this step
+2. Viewer advisory-bot preference plumbing
+   - define how the client communicates the top-level Bot Type choice as viewer advisory preference
+   - keep this preference separate from seat-assigned bot configuration
+   - ensure unsupported advisory bot types can still be represented cleanly in the UI
+3. Server-side viewer recommendation payload
+   - add a viewer-specific debug payload to snapshot state
+   - generate it from a cloned state using the selected advisory bot
+   - support `heuristic_v2` and `heuristic_v3` first using the existing reason-serialization shape where possible
+4. UI rendering and validation
+   - render viewer recommendation and opponent explanation as separate debug sections
+   - show clear unsupported-bot messaging when needed
+   - add/update tests for snapshot payload exposure and basic UI/client behavior where practical
+
 ## Test Plan
 
 Update/add tests:
@@ -506,4 +566,5 @@ Start complex methods (determinized search) only after:
 9. Phase 4 HeuristicBot v3
 10. Phase 4.5 UI review rewind
 11. Phase 4.6 HeuristicBot v3 structural cleanup
-12. Compare v2/v3 and decide on search transition
+12. Phase 4.7 viewer recommendation debug mode
+13. Compare v2/v3 and decide on search transition
