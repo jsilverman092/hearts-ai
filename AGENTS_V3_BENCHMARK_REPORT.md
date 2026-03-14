@@ -149,3 +149,29 @@ Conclusion:
 - `heuristic_v3` finished clearly ahead in this quick mixed-field check.
 - ordering was stable and sensible: `heuristic_v3` first, `heuristic_v2` second, `heuristic` third, `random` last.
 - this mixed-field result is consistent with the current head-to-head checks showing `heuristic_v3` materially ahead of both earlier heuristic bots.
+
+## Addendum: 2026-03-14 Final Mixed-Field Recheck
+
+Scope:
+- final seat-rotated mixed-field validation after the last `heuristic_v3` follow and lead refinements
+- one seat each of `heuristic_v3`, `heuristic_v2`, `heuristic`, and `random`
+
+Method:
+- four seat rotations, `200` games each, `800` total games per bot
+- benchmark specs:
+  - `heuristic_v3,heuristic_v2,heuristic,random`
+  - `heuristic_v2,heuristic,random,heuristic_v3`
+  - `heuristic,random,heuristic_v3,heuristic_v2`
+  - `random,heuristic_v3,heuristic_v2,heuristic`
+- seeds: `9000`, `9200`, `9400`, `9600`
+
+Aggregate results:
+- `heuristic_v3`: win rate `0.508`, avg points `16.098`, avg rank `1.699`
+- `heuristic_v2`: win rate `0.236`, avg points `21.956`, avg rank `2.222`
+- `heuristic`: win rate `0.196`, avg points `24.908`, avg rank `2.422`
+- `random`: win rate `0.061`, avg points `53.974`, avg rank `3.657`
+
+Conclusion:
+- `heuristic_v3` remained clearly first in the mixed field after the final heuristic cleanup pass.
+- ordering stayed stable: `heuristic_v3` first, `heuristic_v2` second, `heuristic` third, `random` last.
+- compared with the earlier 2026-03-13 mixed-field check, `heuristic_v3` improved further on all three summary metrics.

@@ -5,15 +5,17 @@
 This file tracks the longer-term bot and product direction for the project.
 
 Use `AGENTS_v3.md` for the current implementation checklist.
-Use this roadmap for sequencing what comes after the current heuristic-first phase.
+Use this roadmap for sequencing what comes after the current heuristic-baseline phase.
 
 ## Current State
 
 - Core Hearts engine is in place and playable.
 - CLI benchmarking and UI bot-selection plumbing exist.
-- `HeuristicBot` v1 is implemented as a deterministic rule-based baseline.
-- `HeuristicBotV2` exists as an early risk-aware upgrade with internal reason-payload hooks.
-- UI can select different bot policies, including `heuristic_v2`.
+- `HeuristicBot` v1 remains as the simple deterministic baseline.
+- `HeuristicBotV2` remains available as an intermediate comparison bot.
+- `HeuristicBotV3` is the current main handcrafted baseline.
+- Heuristic debug reasons/tags are exposed in the UI and documented.
+- Benchmarking is repeatable enough to compare heuristic iterations credibly.
 
 ## Guiding Principles
 
@@ -21,68 +23,93 @@ Use this roadmap for sequencing what comes after the current heuristic-first pha
 - Keep bots deterministic when given the same game state and RNG seed.
 - Do not jump to RL before evaluation infrastructure is trustworthy.
 - Use stronger baselines to make later search or learning work interpretable.
+- Add statefulness and inference only when they clearly improve play or debugging value.
 
 ## Near-Term Priorities
 
-### 1. Stabilize HeuristicBot v2
+### 1. Freeze HeuristicBot v3 As The Main Handcrafted Baseline
 
 Goal:
-- Make `heuristic_v2` strategically coherent before adding a more complex bot class.
+- Treat `heuristic_v3` as the reference handcrafted bot unless a clearly justified tactical fix appears.
 
 Focus areas:
-- Remove obviously bad context-free rules.
-- Make risk-shedding logic situational rather than universal.
-- Improve lead logic so dangerous cards are not dumped into bad spots.
-- Tighten moon-defense behavior so it helps more often than it hurts.
+- Keep only targeted heuristic fixes for obviously bad behavior.
+- Avoid broad weight retuning without a clear evaluation target.
+- Preserve `heuristic`, `heuristic_v2`, and `heuristic_v3` for benchmarking and UI comparison.
+- Keep reason payloads and tag docs aligned with actual code behavior.
 
 Exit criteria:
-- No glaring tactical self-owns in normal play.
+- `heuristic_v3` remains tactically sane in normal play.
 - Determinism and legality tests remain green.
-- Benchmark results show v2 at least consistently ahead of random and preferably ahead of v1.
+- Mixed-field benchmark remains stably ahead of `heuristic_v2`, `heuristic`, and `random`.
 
 ### 2. Strengthen Evaluation
 
 Goal:
-- Make bot comparisons credible and easy to rerun.
+- Make bot comparisons credible, repeatable, and useful for both aggregate and tactical review.
 
 Focus areas:
 - Standard benchmark command sets and seed ranges.
 - Summary metrics: win rate, average score, finishing rank.
-- Head-to-head comparisons: `random` vs `heuristic`, `heuristic` vs `heuristic_v2`.
-- Save benchmark notes or outputs in a lightweight, repeatable format.
+- Mixed-field comparisons, not just single seat-order runs.
+- Lightweight benchmark notes or saved reports.
+- Curated scenario/regression positions for recurring Hearts concepts.
+
+Scenario suite candidates:
+- `QS` handling and spade-control spots.
+- Moon defense / stopper preservation.
+- Fourth-seat safe-win decisions.
+- Lead-inventory preservation.
+- Late-hand endgame card-counting spots.
 
 Exit criteria:
-- We can answer "is this bot better?" with data instead of anecdotes.
+- We can answer "is this bot better?" with both aggregate data and scenario evidence.
 - Benchmark runs are easy enough to use during normal iteration.
 
-### 3. Add Explanation Hooks To UI
+### 3. Improve Comparison / Explanation Tooling
 
 Goal:
-- Surface bot reasoning for debugging and design validation.
+- Make bot reasoning easy to inspect, compare, and challenge.
 
 Focus areas:
-- Expose existing internal reason payloads from `HeuristicBotV2`.
-- Add an optional debug/explain mode in the UI.
-- Show chosen move, main rationale tags, and top alternatives.
+- Keep heuristic reason payloads stable and readable.
+- Improve UI debug mode presentation when needed.
+- Show chosen move, main rationale tags, top alternatives, and rollout contribution.
+- Prepare for search-bot comparison views, not just single-bot explanations.
+
+Future extension:
+- "Why this move over that move?" comparison output.
+- "Why the bot disagreed with the human move" output.
 
 Exit criteria:
 - A developer can inspect why a bot chose a move without reading logs or stepping through code.
+- The same tooling can later support search-bot explanation overlays.
 
 ## Mid-Term Bot Progression
 
-### 4. HeuristicBot v2.5 or v3
+### 4. Search Support Layers
 
 Goal:
-- Add a small number of context-aware improvements without turning the bot into an unmaintainable rule pile.
+- Build the state and evaluation support needed for a useful search bot before writing deeper search logic.
 
-Candidates:
-- Better opening-lead selection.
-- Safer queen-of-spades handling.
-- More precise end-of-trick logic when points are impossible.
-- Better handling of voids, short suits, and controlled dumps.
+Focus areas:
+- Public-card inference beyond simple proven voids.
+- Suit exhaustion by counting.
+- Likely suit-length / suit-pressure inference where justified.
+- Private-memory features that matter strategically, such as remembering own pass.
+- Scenario-friendly hooks for inspecting inferred hidden-information state.
+
+Important examples:
+- Knowing no outside cards remain in a suit from counts, not just void evidence.
+- Remembering when `QS` was passed right or across.
+- Recognizing when a known passed danger is likely to be behind or ahead in seat order.
 
 Constraint:
-- If improvements start requiring many special cases, stop and move effort toward search instead.
+- Do not turn this into speculative opponent modeling without evidence that it improves decisions.
+
+Exit criteria:
+- Search code can query a clean inference/memory layer instead of rebuilding logic ad hoc.
+- The inference layer is testable in isolation.
 
 ### 5. Search-Based Bot Prototype
 
@@ -92,15 +119,36 @@ Goal:
 Likely direction:
 - Shallow hidden-information search.
 - Determinized sampling from unseen cards.
-- 1-ply or limited-depth move evaluation using heuristic scoring.
+- 1-ply or limited-depth move evaluation using heuristic scoring as a prior.
+- Better move comparison over multiple plausible hidden-card worlds.
 
 Why this comes before RL:
 - Easier to validate.
 - Easier to debug.
-- Builds on the current engine and evaluation tooling.
+- Easier to compare against the current heuristic baseline.
+- Builds directly on the current engine and evaluation tooling.
 
 Exit criteria:
-- Search bot is legal, deterministic under fixed sampling seed, and measurably competitive with the best heuristic bot.
+- Search bot is legal, deterministic under fixed sampling seed, and measurably competitive with or stronger than `heuristic_v3`.
+- Search decisions are inspectable enough to debug surprising plays.
+
+### 6. Search Comparison And Human-Learning Mode
+
+Goal:
+- Make the stronger bot useful for actual player learning, not just benchmark wins.
+
+Focus areas:
+- Compare heuristic move vs search move on the same position.
+- Expose the main inferred risks behind the search preference.
+- Support a UI mode that helps a human understand why a move is stronger.
+
+Examples:
+- "Search preferred keeping this floor card because your future lead inventory is thin."
+- "Search spent `KS` safely because `QS` risk was still live and this was a zero-point cashout."
+
+Exit criteria:
+- The project can teach, not just play.
+- Users can inspect disagreements between their move and the bot's move in a compact way.
 
 ## RL Readiness Criteria
 
@@ -113,6 +161,7 @@ Do not start reinforcement learning until most of the following are true:
 - Self-play simulation throughput is known and acceptable.
 - Reward design is explicit and not obviously flawed.
 - We have a clear success target beyond "see what happens."
+- Search or heuristic explanation tooling is strong enough to diagnose regressions.
 
 ## RL Phase
 
@@ -120,12 +169,13 @@ Once the project is ready, the first RL phase should be narrow:
 
 - Keep the environment headless and simulation-first.
 - Start with self-play experiments, not UI features.
-- Compare learned agents against `random`, `heuristic`, and the best search/heuristic bot.
+- Compare learned agents against `random`, `heuristic`, `heuristic_v2`, `heuristic_v3`, and the best search bot.
 - Treat explanation/debug tooling as mandatory, not optional.
 
 Good first goals:
 - Beat random reliably.
 - Match or beat heuristic baselines over a meaningful benchmark set.
+- Become competitive with the first search bot.
 
 Bad first goals:
 - End-to-end production deployment.
@@ -138,15 +188,16 @@ These are useful, but secondary to bot quality:
 
 - Better animation and card-motion polish.
 - Friend-sharing via real deployment rather than local tunneling.
-- Bot explanation mode in the live table UI.
+- Richer bot explanation mode in the live table UI.
 - Saved match records and replay tools.
 - Stronger spectating and debugging features.
+- Human-vs-bot post-hand review tools.
 
 ## Decision Rules
 
 Use these rules to choose the next major step:
 
-- If bot behavior is still making obvious tactical mistakes, keep improving heuristics.
-- If heuristics are getting harder to extend cleanly, start a search prototype.
+- If bot behavior is still making obvious tactical mistakes, keep improving heuristics, but only with targeted fixes.
+- If heuristic improvements start requiring more memory, inference, or future-trick planning, move effort toward search support and search prototypes.
 - If search and evaluation are both stable, then RL becomes a serious option.
-- If a feature does not improve play quality, measurability, or debugging, deprioritize it.
+- If a feature does not improve play quality, measurability, debugging, or human learning value, deprioritize it.
