@@ -61,8 +61,8 @@ This helper adds only tagged overlay terms. It relies on `public_info.py` for `q
 | `v3_extra_offsuit_win_risk` | Extra penalty because the off-suit lead is especially high. | `-0.15` | `KC` gets an added penalty beyond the generic mid/high off-suit risk. | `high_offsuit_win_risk` |
 | `v3_avoid_short_qs_shape_spade_lead` | With short spade length and `QS`, do not flush spades early unless needed. | `-2.1` | You hold `QS`, `7S`, `4S`, plus side suits; a non-spade lead is preferred. | `short_qs_shape_no_spade_lead` |
 | `v3_avoid_qs_flush_lead` | Stronger penalty on actually leading `QS` in that short-queen shape. | extra `-1.4` | Same hand as above, but specifically on the `QS` candidate. | `dont_flush_qs` |
-| `v3_preserve_spade_protection_shape` | Preserve a fragile `AS`/`KS` protection shape when spades are short. | `-1.5` | You hold `AS`, `KS`, `5S`, and no queen; side-suit leads are preferred. | `keep_spade_protection_shape` |
-| `v3_avoid_exposing_high_spade_protection` | Avoid spending the actual `AS` or `KS` from that fragile protection shape. | extra `-1.3` | `KS` gets an extra penalty beyond the generic short-shape penalty. | `dont_expose_spade_protection` |
+| `v3_preserve_spade_protection_shape` | Preserve a fragile `AS`/`KS` protection shape when `QS` is still live and spades are short. | `-1.5` | `QS` is still out, and you hold `AS`, `KS`, `5S`, plus side suits, so a non-spade lead is preferred. | `keep_spade_protection_shape` |
+| `v3_avoid_exposing_high_spade_protection` | Avoid spending the actual `AS` or `KS` from that fragile protection shape while `QS` is still live. | extra `-1.3` | `QS` is still out, so `KS` gets an extra penalty beyond the generic short-shape penalty. | `dont_expose_spade_protection` |
 
 ## `scoring.py`: `_score_follow_base`
 

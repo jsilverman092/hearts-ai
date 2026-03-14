@@ -321,7 +321,8 @@ def _score_lead_v3(
             tags.append("v3_avoid_qs_flush_lead")
 
     fragile_protection_shape = (
-        not has_qs
+        public_info.qs_live
+        and not has_qs
         and high_spade_count > 0
         and (spade_count - high_spade_count) <= 2
         and low_spade_cover <= 2

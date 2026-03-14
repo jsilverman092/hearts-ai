@@ -837,6 +837,42 @@ def test_heuristic_v3_avoids_spade_lead_with_fragile_ak_protection_shape() -> No
     assert card == Card(Suit.DIAMONDS, Rank.JACK)
 
 
+def test_heuristic_v3_ak_protection_tags_require_qs_to_be_live() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [
+            Card(Suit.SPADES, Rank.ACE),
+            Card(Suit.SPADES, Rank.KING),
+            Card(Suit.SPADES, Rank.FIVE),
+            Card(Suit.DIAMONDS, Rank.JACK),
+            Card(Suit.CLUBS, Rank.KING),
+        ],
+        PlayerId(1): [Card(Suit.CLUBS, Rank.TWO)],
+        PlayerId(2): [Card(Suit.CLUBS, Rank.THREE)],
+        PlayerId(3): [Card(Suit.CLUBS, Rank.FOUR)],
+    }
+    state.taken_tricks = {
+        PlayerId(0): [],
+        PlayerId(1): [[(PlayerId(1), Card(Suit.SPADES, Rank.QUEEN))]],
+        PlayerId(2): [],
+        PlayerId(3): [],
+    }
+    state.hearts_broken = False
+    state.trick_number = 6
+
+    bot = HeuristicBotV3(player_id=PlayerId(0), rollout_samples=0)
+    bot.choose_play(state=state, rng=random.Random(191))
+    reason = bot._peek_last_play_reason()
+
+    assert reason is not None
+    ace_entry = next(entry for entry in reason.candidates if entry.card == Card(Suit.SPADES, Rank.ACE))
+    king_entry = next(entry for entry in reason.candidates if entry.card == Card(Suit.SPADES, Rank.KING))
+    assert "v3_preserve_spade_protection_shape" not in ace_entry.tags
+    assert "v3_avoid_exposing_high_spade_protection" not in ace_entry.tags
+    assert "v3_preserve_spade_protection_shape" not in king_entry.tags
+    assert "v3_avoid_exposing_high_spade_protection" not in king_entry.tags
+
+
 def test_heuristic_v3_short_qs_shape_penalty_is_not_absolute_on_forced_spade_lead() -> None:
     state = GameState()
     state.hands = {
