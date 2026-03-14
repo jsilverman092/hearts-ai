@@ -96,8 +96,9 @@ class _HeuristicScoringBotBase:
         player_id: PlayerId,
         legal: list[Card],
         card: Card,
+        moon_target: PlayerId | None,
     ) -> tuple[float, list[str]]:
-        del state, player_id, legal, card
+        del state, player_id, legal, card, moon_target
         raise NotImplementedError
 
     def _score_play_candidate(
@@ -115,6 +116,7 @@ class _HeuristicScoringBotBase:
                 player_id=player_id,
                 legal=legal,
                 card=card,
+                moon_target=moon_target,
             )
         if mode == "follow":
             return self._score_follow_candidate(
@@ -182,8 +184,9 @@ class HeuristicBotV2(_HeuristicScoringBotBase):
         player_id: PlayerId,
         legal: list[Card],
         card: Card,
+        moon_target: PlayerId | None,
     ) -> tuple[float, list[str]]:
-        del player_id
+        del player_id, moon_target
         return _score_lead_base(
             state=state,
             legal=legal,
@@ -235,6 +238,7 @@ class HeuristicBotV3(_HeuristicScoringBotBase):
         player_id: PlayerId,
         legal: list[Card],
         card: Card,
+        moon_target: PlayerId | None,
     ) -> tuple[float, list[str]]:
         return _score_lead_v3(
             state=state,
@@ -242,6 +246,7 @@ class HeuristicBotV3(_HeuristicScoringBotBase):
             legal=legal,
             hand=state.hands[player_id],
             card=card,
+            moon_target=moon_target,
         )
 
     def _score_follow_candidate(

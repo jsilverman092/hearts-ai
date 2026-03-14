@@ -1410,18 +1410,75 @@ def test_heuristic_v3_does_not_treat_exhausted_suit_as_floor_inventory() -> None
     }
 
     bot = HeuristicBotV3(player_id=PlayerId(0), rollout_samples=0)
-    bot.choose_play(state=state, rng=random.Random(213))
+    card = bot.choose_play(state=state, rng=random.Random(213))
     reason = bot._peek_last_play_reason()
 
     assert reason is not None
+    assert card == Card(Suit.DIAMONDS, Rank.THREE)
     club_entry = next(
         candidate
         for candidate in reason.candidates
         if candidate.card == Card(Suit.CLUBS, Rank.ACE)
     )
     assert "v3_lead_owned_suit_control_risk" in club_entry.tags
+    assert "v3_avoid_owned_suit_lead_when_live_alternative" in club_entry.tags
     assert "v3_floor_card_lead_safe" not in club_entry.tags
     assert "v3_preserve_floor_lead_inventory" not in club_entry.tags
+
+
+def test_heuristic_v3_owned_suit_lead_veto_is_disabled_during_moon_defense() -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [
+            Card(Suit.CLUBS, Rank.ACE),
+            Card(Suit.DIAMONDS, Rank.THREE),
+        ],
+        PlayerId(1): [Card(Suit.HEARTS, Rank.FIVE)],
+        PlayerId(2): [Card(Suit.HEARTS, Rank.SIX)],
+        PlayerId(3): [Card(Suit.HEARTS, Rank.SEVEN)],
+    }
+    state.hearts_broken = True
+    state.trick_number = 5
+    state.taken_tricks = {
+        PlayerId(0): [],
+        PlayerId(1): [[
+            (PlayerId(1), Card(Suit.SPADES, Rank.QUEEN)),
+            (PlayerId(2), Card(Suit.HEARTS, Rank.TWO)),
+            (PlayerId(3), Card(Suit.HEARTS, Rank.THREE)),
+            (PlayerId(0), Card(Suit.DIAMONDS, Rank.FOUR)),
+        ]],
+        PlayerId(2): [[
+            (PlayerId(2), Card(Suit.CLUBS, Rank.TWO)),
+            (PlayerId(3), Card(Suit.CLUBS, Rank.THREE)),
+            (PlayerId(0), Card(Suit.CLUBS, Rank.FOUR)),
+            (PlayerId(1), Card(Suit.CLUBS, Rank.FIVE)),
+        ]],
+        PlayerId(3): [[
+            (PlayerId(3), Card(Suit.CLUBS, Rank.SIX)),
+            (PlayerId(0), Card(Suit.CLUBS, Rank.SEVEN)),
+            (PlayerId(1), Card(Suit.CLUBS, Rank.EIGHT)),
+            (PlayerId(2), Card(Suit.CLUBS, Rank.NINE)),
+        ], [
+            (PlayerId(3), Card(Suit.CLUBS, Rank.TEN)),
+            (PlayerId(0), Card(Suit.CLUBS, Rank.JACK)),
+            (PlayerId(1), Card(Suit.CLUBS, Rank.QUEEN)),
+            (PlayerId(2), Card(Suit.CLUBS, Rank.KING)),
+        ]],
+    }
+
+    bot = HeuristicBotV3(player_id=PlayerId(0), rollout_samples=0)
+    bot.choose_play(state=state, rng=random.Random(214))
+    reason = bot._peek_last_play_reason()
+
+    assert reason is not None
+    assert reason.moon_defense_target == PlayerId(1)
+    club_entry = next(
+        candidate
+        for candidate in reason.candidates
+        if candidate.card == Card(Suit.CLUBS, Rank.ACE)
+    )
+    assert "v3_lead_owned_suit_control_risk" in club_entry.tags
+    assert "v3_avoid_owned_suit_lead_when_live_alternative" not in club_entry.tags
 
 
 def test_heuristic_v3_subqueen_spade_discard_is_qs_conditional() -> None:

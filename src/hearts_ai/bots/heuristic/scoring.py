@@ -237,6 +237,7 @@ def _score_lead_v3(
     legal: list[Card],
     hand: Hand,
     card: Card,
+    moon_target: PlayerId | None,
 ) -> tuple[float, list[str]]:
     score, tags = _score_lead_base(state=state, legal=legal, card=card)
     public_info = _build_public_info(state=state)
@@ -280,6 +281,24 @@ def _score_lead_v3(
         # If we hold all remaining cards in suit, leading it always yields control.
         score -= 0.9
         tags.append("v3_lead_owned_suit_control_risk")
+        has_live_alternative = any(
+            candidate != card
+            and (
+                sum(
+                    _outside_rank_counts_for_card(
+                        state=state,
+                        public_info=public_info,
+                        player_id=player_id,
+                        card=candidate,
+                    )
+                )
+                > 0
+            )
+            for candidate in legal
+        )
+        if moon_target is None and has_live_alternative:
+            score -= 6.0
+            tags.append("v3_avoid_owned_suit_lead_when_live_alternative")
 
     if int(card.rank) >= int(Rank.NINE) and voids_ahead > 0 and not is_floor:
         score -= 0.22 * float(voids_ahead)
