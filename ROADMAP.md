@@ -76,10 +76,20 @@ Focus areas:
 - Improve UI debug mode presentation when needed.
 - Show chosen move, main rationale tags, top alternatives, and rollout contribution.
 - Prepare for search-bot comparison views, not just single-bot explanations.
+- Distinguish recommendation from explanation:
+  - recommended move
+  - why it was preferred
+  - why the human move lost
+  - how confident the bot is in the recommendation
+- Keep room for both:
+  - heuristic scores/reasons
+  - stronger search-bot recommendation overlays on top of those heuristic baselines
 
 Future extension:
 - "Why this move over that move?" comparison output.
 - "Why the bot disagreed with the human move" output.
+- Candidate-ranking views with confidence or value estimates instead of only one recommended move.
+- Hybrid feedback panels where a stronger bot recommends the move but a simpler bot still exposes legible heuristic scores.
 
 Exit criteria:
 - A developer can inspect why a bot chose a move without reading logs or stepping through code.
@@ -141,10 +151,15 @@ Focus areas:
 - Compare heuristic move vs search move on the same position.
 - Expose the main inferred risks behind the search preference.
 - Support a UI mode that helps a human understand why a move is stronger.
+- Show recommendation quality in a way that is honest about uncertainty:
+  - relative move values
+  - high/medium/low confidence
+  - later, calibrated percentages only if they prove trustworthy
 
 Examples:
 - "Search preferred keeping this floor card because your future lead inventory is thin."
 - "Search spent `KS` safely because `QS` risk was still live and this was a zero-point cashout."
+- "Heuristic preferred `4C`, but search preferred `QC` because it safely shed future control across most sampled worlds."
 
 Exit criteria:
 - The project can teach, not just play.
@@ -189,6 +204,8 @@ These are useful, but secondary to bot quality:
 - Better animation and card-motion polish.
 - Friend-sharing via real deployment rather than local tunneling.
 - Richer bot explanation mode in the live table UI.
+- Recommendation panels with confidence/value display and top-3 candidate moves.
+- Hybrid feedback mode where search recommendations can still expose heuristic score context.
 - Saved match records and replay tools.
 - Stronger spectating and debugging features.
 - Human-vs-bot post-hand review tools.

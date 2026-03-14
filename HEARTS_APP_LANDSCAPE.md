@@ -25,7 +25,7 @@ The current Hearts app market appears to split into three broad buckets:
 
 - it explicitly brands itself around `Expert AI`
 - it mixes strength claims with learning tools such as hints, play-checking, card counting, trick review, and replay
-- NeuralPlay publicly says its card AIs are based on Monte Carlo simulation methods
+- NeuralPlay publicly says its card AIs are based on Monte Carlo simulation methods, and the Hearts product itself is marketed as using `advanced Monte Carlo simulation AI`
 - it appears to have one of the strongest in-app strategy-feedback toolsets in the category
 
 The broader landscape is more mixed. Several competitors claim `smart`, `adaptive`, `challenging`, or `advanced` AI, but fewer pair that with detailed teaching/review tools. Fewer still appear to offer anything close to `play this card and here is what the AI would do instead` style strategic feedback.
@@ -65,6 +65,13 @@ This is notable because many Hearts apps offer hints or difficulty settings, but
 - post-hand review
 - broad rules customization
 
+Important distinction:
+
+- NeuralPlay appears to offer strong recommendation/checker tooling
+- it does not, based on the official copy and current in-app behavior, appear to offer a real `why this move` explanation layer
+
+So it looks more like `the AI recommends this card` than `the AI recommends this card because of these specific risks and tradeoffs`.
+
 Sources:
 
 - [Hearts - Expert AI on the App Store](https://apps.apple.com/us/app/hearts-expert-ai/id1536040860)
@@ -79,6 +86,11 @@ There are three useful signals here:
 3. NeuralPlay's company positioning is explicitly `challenge you and teach you the games`, which matches a teaching/analysis product rather than a pure casual game app.
 
 None of that proves the Hearts AI is elite. It does suggest NeuralPlay is trying to make the AI legible to the player, not just hard to beat.
+
+Additional note:
+
+- The in-app strategic guidance still appears to be recommendation-first rather than explanation-first.
+- That matters because this repo can potentially differentiate not only by move quality, but by exposing why the recommendation was made.
 
 Sources:
 
@@ -122,6 +134,7 @@ In-app strategic feedback:
 - hints
 - move-comparison guidance when your play differs from the AI
 - trick review and replay add post-move learning support
+- based on current evidence, stronger on `recommended move` than on `explain the recommendation`
 
 Why it matters:
 
@@ -347,6 +360,7 @@ Sources:
   - hints
   - trick review and replay
   - clearly the best match to the kind of per-play recommendation loop we just added
+  - still appears to stop short of true explanation tooling
 
 - `MobilityWare`
   - hints plus tutorial/advice
@@ -403,6 +417,11 @@ That matters because this repo can differentiate not just on strength, but on tr
 - where your move diverged
 - later, how a stronger search bot disagrees with the heuristic bot
 
+This is an important distinction from NeuralPlay:
+
+- NeuralPlay appears to have recommendation/checker tooling
+- this repo can aim for recommendation plus actual explanation, confidence, and bot-vs-bot comparison
+
 ### 4. The market splits between learning and live service
 
 There is a real product distinction between:
@@ -435,6 +454,7 @@ The commercial Hearts app space is active, but the most relevant products do not
 - explicit AI quality positioning
 - learning support
 - clear move-guidance features
+- Monte Carlo / simulation-oriented AI positioning
 - post-hand analysis
 - customization depth
 
