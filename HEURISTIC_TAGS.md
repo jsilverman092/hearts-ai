@@ -87,10 +87,14 @@ Second-seat and later-seat branches are explicit in code, but currently use the 
 
 Applies to: `heuristic_v3`
 
-This helper is a narrow fourth-seat overlay on top of `_score_follow_base`. It only applies when you are last to act, the projected trick remains worth `0` points after your card is played, and the candidate is a legal follow in the led suit.
+This helper adds two narrow overlays on top of `_score_follow_base`:
+- first-trick third-seat club follows, where a temporary zero-point overtake can be a good shedding play
+- fourth-seat zero-point follows, where a safe win can unload future control
 
 | Current Tag | Meaning | Impact | Example | Cleaner Name |
 | --- | --- | --- | --- | --- |
+| `v3_first_trick_third_seat_duck_discount` | On third seat of the first trick, pure ducking gets a discount so high-club shedding can compete. | `-1.8` | Trick starts `2C, 6C`, and `4C` no longer automatically beats shedding `QC`. | `first_trick_third_duck_discount` |
+| `v3_first_trick_third_seat_safe_win` | On third seat of the first trick, a provisional zero-point overtake with a higher club can be good if it sheds danger before fourth seat acts. | `+2.0` | Trick starts `2C, 6C`, and overtaking with `QC` is rewarded because the trick is still guaranteed to stay at `0` points. | `first_trick_third_safe_win` |
 | `v3_last_seat_zero_point_duck_discount` | On fourth seat in a zero-point trick, pure ducking gets a discount so safe shedding wins can compete. | `-1.8` | Spades are led `9S`, `JS`, `3S`, and keeping `5S` under them is no longer automatically best if `KS` can cash safely. | `last_seat_duck_discount` |
 | `v3_last_seat_zero_point_safe_win` | On fourth seat in a zero-point trick, safely winning can be good if it unloads future control. | `+2.0` | Diamonds are led `5D`, `7D`, `9D`, and winning with a dangerous honor gets extra credit. | `last_seat_safe_win` |
 | `v3_last_seat_safe_ak_spade_shed` | Safely cashing `AS` or `KS` before `QS` is played is especially valuable. | `+2.4` | `QS` is still out, and winning a zero-point spade trick with `KS` removes future queen-capture risk. | `cash_ak_spade_safely` |

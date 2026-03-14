@@ -176,3 +176,29 @@ Conclusion:
 - ordering stayed stable: `heuristic_v3` first, `heuristic_v2` second, `heuristic` third, `random` last.
 - compared with the earlier 2026-03-13 mixed-field check, `heuristic_v3` improved further on all three summary metrics.
 - compared with the prior 2026-03-14 mixed-field recheck, the owned-suit lead fix improved `heuristic_v3` again on win rate, average points, and average rank.
+
+## Addendum: 2026-03-14 First-Trick Third-Seat Follow Recheck
+
+Scope:
+- seat-rotated mixed-field validation after adding the `heuristic_v3` first-trick third-seat zero-point follow overlay
+- one seat each of `heuristic_v3`, `heuristic_v2`, `heuristic`, and `random`
+
+Method:
+- four seat rotations, `200` games each, `800` total games per bot
+- benchmark specs:
+  - `heuristic_v3,heuristic_v2,heuristic,random`
+  - `heuristic_v2,heuristic,random,heuristic_v3`
+  - `heuristic,random,heuristic_v3,heuristic_v2`
+  - `random,heuristic_v3,heuristic_v2,heuristic`
+- seeds: `9000`, `9200`, `9400`, `9600`
+
+Aggregate results:
+- `heuristic_v3`: win rate `0.529`, avg points `15.214`, avg rank `1.660`
+- `heuristic_v2`: win rate `0.230`, avg points `21.223`, avg rank `2.213`
+- `heuristic`: win rate `0.184`, avg points `24.766`, avg rank `2.440`
+- `random`: win rate `0.057`, avg points `54.108`, avg rank `3.687`
+
+Conclusion:
+- `heuristic_v3` remained clearly first in the mixed field after the first-trick third-seat follow adjustment.
+- compared with the prior 2026-03-14 final mixed-field recheck, `heuristic_v3` improved on all three summary metrics.
+- this supports the judgment that the previous first-trick follow logic was too duck-heavy on third seat against weak mixed-field opposition.

@@ -548,13 +548,21 @@ def _score_follow_v3(
         moon_target=moon_target,
     )
     trick = state.trick_in_progress
-    if len(trick) != 3:
-        return score, tags
-
     led_suit = trick[0][1].suit
     current_highest = max(current.rank for _, current in trick if current.suit == led_suit)
     losing = card.rank < current_highest
     projected_trick = [*trick, (player_id, card)]
+    if state.trick_number == 0 and len(trick) == 2 and led_suit == Suit.CLUBS and trick_points(projected_trick) == 0:
+        if losing:
+            score -= 1.8
+            tags.append("v3_first_trick_third_seat_duck_discount")
+        else:
+            score += 2.0
+            tags.append("v3_first_trick_third_seat_safe_win")
+        return score, tags
+
+    if len(trick) != 3:
+        return score, tags
     if trick_points(projected_trick) != 0:
         return score, tags
 
