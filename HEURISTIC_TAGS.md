@@ -13,82 +13,119 @@ This file documents the debug tags currently emitted by the heuristic bots.
 ## Notes
 
 - Tags are grouped by scoring-helper ownership, which matches the current heuristic package structure.
+- `Applies to` indicates which bot versions can emit the tags in that section.
 - `v3_` tags are overlays specific to `heuristic_v3`.
+- The `Impact` column shows the direct additive base-score effect attached to the tag in current code.
+- Final play choice also includes `rollout_score` and deterministic tie-breaks, so `Impact` is not the entire decision.
+- Some scoring helpers also have untagged terms; those are listed under the relevant section when useful.
+- Pass decisions currently expose score tuples, not tags.
 - Examples are illustrative, not exhaustive. They describe the kind of spot where a tag may appear.
 - "Cleaner name" is a suggested future rename for UI/debug readability. It is not implemented yet.
-- Pure rules-only constraints are intentionally omitted if they do not emit a tag.
 
 ## `scoring.py`: `_score_lead_base`
 
-| Current Tag | Meaning | Example | Cleaner Name |
-| --- | --- | --- | --- |
-| `lead_non_heart` | Leading a non-heart is preferred over leading hearts. | Hearts are not especially attractive, so a club or diamond lead gets a bonus. | `non_heart_lead` |
-| `low_heart_escape_lead` | A low heart can be a good escape lead once hearts are broken. | Hearts are broken and leading `3H` is safer than burning `KS`. | `low_heart_escape` |
-| `avoid_high_heart_lead` | A high heart lead is risky. | Hearts are broken, but leading `QH` is more dangerous than leading `4H`. | `high_heart_lead_risk` |
-| `avoid_qs_lead` | Do not casually lead `QS`. | You hold `QS` and another spade, so opening `QS` is strongly discouraged. | `dont_lead_qs` |
-| `avoid_high_spade_lead` | Do not casually lead `AS` or `KS`. | You can lead `5S` or `KS`; the high spade gets penalized. | `dont_lead_high_spade` |
-| `cautious_high_spade_lead` | Broad caution against leading higher spades. | A `JS` or higher spade lead gets a general risk penalty. | `high_spade_lead_risk` |
-| `prefer_low_heart_over_high_spade` | If a low heart is available, prefer it over spending a dangerous high spade. | Hearts are broken and you have both `3H` and `KS`; the bot prefers `3H`. | `low_heart_over_high_spade` |
-| `first_trick_conservative_lead` | First-trick leads should be especially low/conservative. | On the opening lead, lower cards get a small extra preference. | `first_trick_play_low` |
-| `avoid_qs_after_hearts_broken` | Leading `QS` is even worse once hearts are live. | Hearts are already broken, making a `QS` lead especially unattractive. | `dont_lead_qs_after_break` |
-| `forced_spade_lead_prefer_low` | If the bot is effectively forced to lead spades, it prefers the lower spade. | The entire legal lead set is spades, so `4S` is preferred over `9S`. | `forced_spade_lead_low` |
+Applies to: `heuristic_v2`, `heuristic_v3`
+
+Untagged terms in this helper:
+- legal heart lead before hearts are broken: `-2.5`
+- legal heart lead after hearts are broken baseline: `-0.5`
+- all lead candidates: `-rank * 0.12`
+
+| Current Tag | Meaning | Impact | Example | Cleaner Name |
+| --- | --- | --- | --- | --- |
+| `lead_non_heart` | Leading a non-heart is preferred over leading hearts. | `+2.0` | Hearts are not especially attractive, so a club or diamond lead gets a bonus. | `non_heart_lead` |
+| `low_heart_escape_lead` | A low heart can be a good escape lead once hearts are broken. | `+1.9` | Hearts are broken and leading `3H` is safer than burning `KS`. | `low_heart_escape` |
+| `avoid_high_heart_lead` | A high heart lead is risky. | `-0.9` | Hearts are broken, but leading `QH` is more dangerous than leading `4H`. | `high_heart_lead_risk` |
+| `avoid_qs_lead` | Do not casually lead `QS`. | `-4.0` with a lower legal spade available, else `-2.2` | You hold `QS` and another spade, so opening `QS` is strongly discouraged. | `dont_lead_qs` |
+| `avoid_high_spade_lead` | Do not casually lead `AS` or `KS`. | `-2.6` with a lower legal spade available, else `-1.4` | You can lead `5S` or `KS`; the high spade gets penalized. | `dont_lead_high_spade` |
+| `cautious_high_spade_lead` | Broad caution against leading higher spades. | `-0.8` | A `JS` or higher spade lead gets a general risk penalty. | `high_spade_lead_risk` |
+| `prefer_low_heart_over_high_spade` | If a low heart is available, prefer it over spending a dangerous high spade. | `-1.6` | Hearts are broken and you have both `3H` and `KS`; the bot prefers `3H`. | `low_heart_over_high_spade` |
+| `first_trick_conservative_lead` | First-trick leads should be especially low/conservative. | `-rank * 0.06` | On the opening lead, lower cards get a small extra preference. | `first_trick_play_low` |
+| `avoid_qs_after_hearts_broken` | Leading `QS` is even worse once hearts are live. | `-0.5` | Hearts are already broken, making a `QS` lead especially unattractive. | `dont_lead_qs_after_break` |
+| `forced_spade_lead_prefer_low` | If the bot is effectively forced to lead spades, it prefers the lower spade. | `-rank * 0.04` | The entire legal lead set is spades, so `4S` is preferred over `9S`. | `forced_spade_lead_low` |
 
 ## `scoring.py`: `_score_lead_v3` with `public_info.py`
 
-| Current Tag | Meaning | Example | Cleaner Name |
-| --- | --- | --- | --- |
-| `v3_floor_card_lead_safe` | This lead is a floor card: no lower outside cards remain, so it is relatively safe. | In diamonds, your `7D` is the lowest unseen diamond still outside your hand. | `lead_floor_safe` |
-| `v3_boss_card_lead_risk` | This lead is a boss card: no higher outside cards remain, so it risks taking control. | You lead `AD` when no unseen diamond above it exists. | `lead_boss_risk` |
-| `v3_trap_card_lead_risk` | This lead is a trap card: only a few higher outside cards remain, but some lower cards do too. | Leading `10D` when only `QD` and `KD` are above it but many lower diamonds remain. | `lead_trap_risk` |
-| `v3_lead_owned_suit_control_risk` | You hold all remaining cards in the suit, so leading it guarantees control stays with you. | All unseen clubs are in your hand; any club lead keeps you in charge of the suit. | `lead_owned_suit_risk` |
-| `v3_avoid_high_lead_with_voids_ahead` | High leads get worse if players still to act may be void and can discard freely. | A player ahead has shown void in diamonds, so leading a high diamond is more dangerous. | `high_lead_void_risk` |
-| `v3_lead_void_amplifies_control_risk` | Existing lead-control risk is amplified because players ahead may be void. | A boss or trap lead becomes even less attractive when one or more opponents can slough. | `voids_raise_lead_risk` |
-| `v3_avoid_mid_offsuit_when_qs_live` | Mid/high off-suit leads can win awkward queen-dump tricks while `QS` is still out. | You could lead `10C` or `JS`; the club lead is penalized because it may win a `QS` trick. | `offsuit_win_risk_qs_live` |
-| `v3_extra_offsuit_win_risk` | Extra penalty because the off-suit lead is especially high. | `KC` gets an added penalty beyond the generic mid/high off-suit risk. | `high_offsuit_win_risk` |
-| `v3_jack_spade_not_high_control` | `JS` is not treated like `QS`, `KS`, or `AS`. | `JS` gets some relief relative to `10C` or `KS` as an opening lead. | `js_not_high_spade` |
-| `v3_avoid_short_qs_shape_spade_lead` | With short spade length and `QS`, do not flush spades early unless needed. | You hold `QS`, `7S`, `4S`, plus side suits; a non-spade lead is preferred. | `short_qs_shape_no_spade_lead` |
-| `v3_avoid_qs_flush_lead` | Stronger penalty on actually leading `QS` in that short-queen shape. | Same hand as above, but specifically on the `QS` candidate. | `dont_flush_qs` |
-| `v3_preserve_spade_protection_shape` | Preserve a fragile `AS`/`KS` protection shape when spades are short. | You hold `AS`, `KS`, `5S`, and no queen; side-suit leads are preferred. | `keep_spade_protection_shape` |
-| `v3_avoid_exposing_high_spade_protection` | Avoid spending the actual `AS` or `KS` from that fragile protection shape. | `KS` gets an extra penalty beyond the generic short-shape penalty. | `dont_expose_spade_protection` |
+Applies to: `heuristic_v3`
+
+This helper adds only tagged overlay terms. It relies on `public_info.py` for `qs_live`, void counts, and floor / trap / boss card classification.
+
+| Current Tag | Meaning | Impact | Example | Cleaner Name |
+| --- | --- | --- | --- | --- |
+| `v3_floor_card_lead_safe` | This lead is a floor card: no lower outside cards remain, so it is relatively safe. | `+0.45` | In diamonds, your `7D` is the lowest unseen diamond still outside your hand. | `lead_floor_safe` |
+| `v3_boss_card_lead_risk` | This lead is a boss card: no higher outside cards remain, so it risks taking control. | `-0.78` | You lead `AD` when no unseen diamond above it exists. | `lead_boss_risk` |
+| `v3_trap_card_lead_risk` | This lead is a trap card: only a few higher outside cards remain, but some lower cards do too. | `-(0.5 + 0.2 * (2 - outside_higher_count))` | Leading `10D` when only `QD` and `KD` are above it but many lower diamonds remain. | `lead_trap_risk` |
+| `v3_lead_owned_suit_control_risk` | You hold all remaining cards in the suit, so leading it guarantees control stays with you. | `-0.9` | All unseen clubs are in your hand; any club lead keeps you in charge of the suit. | `lead_owned_suit_risk` |
+| `v3_avoid_high_lead_with_voids_ahead` | High leads get worse if players still to act may be void and can discard freely. | `-0.22 * voids_ahead` | A player ahead has shown void in diamonds, so leading a high diamond is more dangerous. | `high_lead_void_risk` |
+| `v3_lead_void_amplifies_control_risk` | Existing lead-control risk is amplified because players ahead may be void. | `-0.14 * voids_ahead` | A boss or trap lead becomes even less attractive when one or more opponents can slough. | `voids_raise_lead_risk` |
+| `v3_avoid_mid_offsuit_when_qs_live` | Mid/high off-suit leads can win awkward queen-dump tricks while `QS` is still out. | `-0.35` | You could lead `10C` or `JS`; the club lead is penalized because it may win a `QS` trick. | `offsuit_win_risk_qs_live` |
+| `v3_extra_offsuit_win_risk` | Extra penalty because the off-suit lead is especially high. | `-0.15` | `KC` gets an added penalty beyond the generic mid/high off-suit risk. | `high_offsuit_win_risk` |
+| `v3_jack_spade_not_high_control` | `JS` is not treated like `QS`, `KS`, or `AS`. | `+0.8` | `JS` gets some relief relative to `10C` or `KS` as an opening lead. | `js_not_high_spade` |
+| `v3_avoid_short_qs_shape_spade_lead` | With short spade length and `QS`, do not flush spades early unless needed. | `-2.1` | You hold `QS`, `7S`, `4S`, plus side suits; a non-spade lead is preferred. | `short_qs_shape_no_spade_lead` |
+| `v3_avoid_qs_flush_lead` | Stronger penalty on actually leading `QS` in that short-queen shape. | extra `-1.4` | Same hand as above, but specifically on the `QS` candidate. | `dont_flush_qs` |
+| `v3_preserve_spade_protection_shape` | Preserve a fragile `AS`/`KS` protection shape when spades are short. | `-1.5` | You hold `AS`, `KS`, `5S`, and no queen; side-suit leads are preferred. | `keep_spade_protection_shape` |
+| `v3_avoid_exposing_high_spade_protection` | Avoid spending the actual `AS` or `KS` from that fragile protection shape. | extra `-1.3` | `KS` gets an extra penalty beyond the generic short-shape penalty. | `dont_expose_spade_protection` |
 
 ## `scoring.py`: `_score_follow_base`
 
-| Current Tag | Meaning | Example | Cleaner Name |
-| --- | --- | --- | --- |
-| `prefer_high_losing_follow` | If you can lose safely while following suit, dump the highest such card. | Clubs were led and `9C` loses while `4C` also loses; `9C` is preferred. | `highest_safe_follow` |
-| `forced_win_follow` | This play is currently winning the trick if played now. | You must follow suit and every legal card beats the current leader. | `currently_winning_follow` |
-| `avoid_point_capture` | Losing a point trick is good. | Hearts are already on the trick and your card loses, so that gets rewarded. | `duck_point_trick` |
-| `point_trick_win_penalty` | Winning a point trick is bad. | Hearts or `QS` are already on the trick and your card would take it. | `taking_points_bad` |
-| `first_trick_forced_win_shed_high` | On the first trick, if you must win, shed the highest club you can. | First trick starts `2C`, a higher club is already out, and you cannot duck. | `first_trick_win_high` |
-| `moon_target_still_wins` | This play still leaves the current moon target winning the trick. | A moon threat is live and your follow card does not overtake them. | `moon_target_still_ahead` |
-| `block_moon_target` | This play takes the current trick lead away from the moon target. | A moon threat is live and your follow card now becomes the projected winner. | `currently_block_moon` |
+Applies to: `heuristic_v2`, `heuristic_v3`
+
+Second-seat and later-seat branches are explicit in code, but currently use the same weights.
+
+| Current Tag | Meaning | Impact | Example | Cleaner Name |
+| --- | --- | --- | --- | --- |
+| `prefer_high_losing_follow` | If you can lose safely while following suit, dump the highest such card. | `+3.0 + rank * 0.08` | Clubs were led and `9C` loses while `4C` also loses; `9C` is preferred. | `highest_safe_follow` |
+| `forced_win_follow` | This play is currently winning the trick if played now. | `-2.0` | You must follow suit and every legal card beats the current leader. | `currently_winning_follow` |
+| `avoid_point_capture` | Losing a point trick is good. | `+1.2` | Hearts are already on the trick and your card loses, so that gets rewarded. | `duck_point_trick` |
+| `point_trick_win_penalty` | Winning a point trick is bad. | `-7.5` | Hearts or `QS` are already on the trick and your card would take it. | `taking_points_bad` |
+| `first_trick_forced_win_shed_high` | On the first trick, if you must win, shed the highest club you can. | `+rank * 0.22` | First trick starts `2C`, a higher club is already out, and you cannot duck. | `first_trick_win_high` |
+| `moon_target_still_wins` | This play still leaves the current moon target winning the trick. | `-5.0` | A moon threat is live and your follow card does not overtake them. | `moon_target_still_ahead` |
+| `block_moon_target` | This play takes the current trick lead away from the moon target. | `+2.4` | A moon threat is live and your follow card now becomes the projected winner. | `currently_block_moon` |
 
 ## `scoring.py`: `_score_discard_base`
 
-| Current Tag | Meaning | Example | Cleaner Name |
-| --- | --- | --- | --- |
-| `discard_priority` | Generic base discard score from the older heuristic ordering. | `QS` or a high heart ranks above a small safe card even before v3 refinements. | `base_discard_risk` |
-| `avoid_feeding_moon_target` | Do not dump point cards onto a trick currently being won by the moon target. | A moon target is winning a heart trick and you are deciding whether to slough `QH`. | `dont_feed_moon_target` |
+Applies to: `heuristic_v2`, `heuristic_v3`
+
+Priority buckets from `_score_discard_priority_base`:
+- `QS = 6`
+- `AS = 5`
+- `KS = 4`
+- any heart = `3`
+- clubs / diamonds = `2`
+- sub-queen spades = `1`
+
+| Current Tag | Meaning | Impact | Example | Cleaner Name |
+| --- | --- | --- | --- | --- |
+| `discard_priority` | Generic base discard score from the older heuristic ordering. | `+1.8 * priority_bucket + 0.04 * rank` | `QS` or a high heart ranks above a small safe card even before v3 refinements. | `base_discard_risk` |
+| `avoid_feeding_moon_target` | Do not dump point cards onto a trick currently being won by the moon target. | `-4.5` | A moon target is winning a heart trick and you are deciding whether to slough `QH`. | `dont_feed_moon_target` |
 
 ## `scoring.py`: `_score_discard_v3` with `public_info.py`
 
-| Current Tag | Meaning | Example | Cleaner Name |
-| --- | --- | --- | --- |
-| `v3_preserve_subqueen_spade_while_qs_live` | Keep `2S` through `JS` while `QS` is still unplayed. | You are void in the led suit and can dump `JS` or `QC`; `JS` gets preserved. | `keep_low_spades_qs_live` |
-| `v3_qs_dead_subqueen_spade_as_black_suit` | Once `QS` is gone, low spades are treated like ordinary black-suit cards again. | `QS` has already been played, so dumping `7S` is no longer specially discouraged. | `low_spades_normal_after_qs` |
-| `v3_qs_dead_reduce_ak_spade_dump_premium` | Once `QS` is gone, `AS` and `KS` lose most of their special dump urgency. | The queen is dead, so `KS` is no longer treated as an emergency unload. | `less_ak_spade_risk_after_qs` |
-| `v3_floor_card_keep_safe` | A floor card is usually a useful safe escape card, so keep it. | `3C` is the lowest outside club left and is better kept than dumped. | `keep_floor_card` |
-| `v3_boss_card_dump_risk` | A boss card is dangerous control, so it is a strong dump candidate. | `AC` is now the top remaining club and is expensive to keep. | `dump_boss_card` |
-| `v3_trap_card_dump_risk` | A trap card is dangerous because only a few higher cards remain. | `QC` may still win ugly tricks but is not a true floor card. | `dump_trap_card` |
-| `v3_discard_void_pressure` | Opponent voids make dumping this dangerous control card even more attractive. | Many players are void in clubs, so dumping a boss/trap club gets extra value. | `voids_raise_dump_value` |
-| `v3_floor_card_void_keep` | Opponent voids make a floor card even more worth keeping. | Players are void in diamonds, which increases the value of retaining your safest low diamond. | `voids_strengthen_floor` |
+Applies to: `heuristic_v3`
+
+This helper relies on `public_info.py` for `qs_live`, floor / trap / boss classification, and opponent void counts.
+
+| Current Tag | Meaning | Impact | Example | Cleaner Name |
+| --- | --- | --- | --- | --- |
+| `v3_preserve_subqueen_spade_while_qs_live` | Keep `2S` through `JS` while `QS` is still unplayed. | `-1.8` | You are void in the led suit and can dump `JS` or `QC`; `JS` gets preserved. | `keep_low_spades_qs_live` |
+| `v3_qs_dead_subqueen_spade_as_black_suit` | Once `QS` is gone, low spades are treated like ordinary black-suit cards again. | `+1.8` | `QS` has already been played, so dumping `7S` is no longer specially discouraged. | `low_spades_normal_after_qs` |
+| `v3_qs_dead_reduce_ak_spade_dump_premium` | Once `QS` is gone, `AS` and `KS` lose most of their special dump urgency. | `-1.8 * max(priority_bucket - 2, 0)` | The queen is dead, so `KS` is no longer treated as an emergency unload. | `less_ak_spade_risk_after_qs` |
+| `v3_floor_card_keep_safe` | A floor card is usually a useful safe escape card, so keep it. | `-0.75` | `3C` is the lowest outside club left and is better kept than dumped. | `keep_floor_card` |
+| `v3_boss_card_dump_risk` | A boss card is dangerous control, so it is a strong dump candidate. | `+0.85` | `AC` is now the top remaining club and is expensive to keep. | `dump_boss_card` |
+| `v3_trap_card_dump_risk` | A trap card is dangerous because only a few higher cards remain. | `+(0.55 + 0.2 * (2 - outside_higher_count))` | `QC` may still win ugly tricks but is not a true floor card. | `dump_trap_card` |
+| `v3_discard_void_pressure` | Opponent voids make dumping this dangerous control card even more attractive. | `+0.3 + 0.12 * (voids_in_opponents - 2)` | Many players are void in clubs, so dumping a boss/trap club gets extra value. | `voids_raise_dump_value` |
+| `v3_floor_card_void_keep` | Opponent voids make a floor card even more worth keeping. | `-0.2` | Players are void in diamonds, which increases the value of retaining your safest low diamond. | `voids_strengthen_floor` |
 
 ## `scoring.py`: `_score_discard_v3` moon-defense overlays
 
-| Current Tag | Meaning | Example | Cleaner Name |
-| --- | --- | --- | --- |
-| `v3_moon_defense_keep_suit_stopper` | Keep this card because it may stop a moon run later. | A sole moon threat is live and dumping `AC` would give up your likely future club stopper. | `keep_moon_stopper` |
-| `v3_moon_defense_no_backup_stopper` | Keep it even more strongly because it is your only stopper in that suit. | You hold `AC` but no other club stopper, so the preservation penalty is stronger. | `only_moon_stopper` |
+Applies to: `heuristic_v3`
+
+These penalties can stack with the base `v3` discard overlays above.
+
+| Current Tag | Meaning | Impact | Example | Cleaner Name |
+| --- | --- | --- | --- | --- |
+| `v3_moon_defense_keep_suit_stopper` | Keep this card because it may stop a moon run later. | base `-3.0`, plus `-1.0` if `outside_count >= 8`, plus `-0.6` if the card is a boss stopper | A sole moon threat is live and dumping `AC` would give up your likely future club stopper. | `keep_moon_stopper` |
+| `v3_moon_defense_no_backup_stopper` | Keep it even more strongly because it is your only stopper in that suit. | extra `-1.6` | You hold `AC` but no other club stopper, so the preservation penalty is stronger. | `only_moon_stopper` |
 
 ## Likely Cleanup Candidates
 
