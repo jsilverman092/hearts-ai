@@ -592,6 +592,22 @@ Do not bake runtime thresholds into CI immediately.
 ### Phase 0: Runtime and Interface Foundations
 
 1. Add hidden-information-safe search view.
+   - Sub-step 1: define the search-side types and boundary
+     - `SearchPlayerView`
+     - `PublicKnowledge` placeholder shape
+     - view-construction API from `GameState`
+   - Sub-step 2: implement the minimal hidden-information-safe view
+     - own hand
+     - public trick / taken-trick state
+     - legal moves
+     - no opponent hidden hands
+   - Sub-step 3: add hard boundary tests
+     - view does not expose opponent hands
+     - same public state plus same own hand yields the same derived view
+     - anti-cheating fixtures / tests
+   - Sub-step 4: add one thin consumer
+     - not the full search bot
+     - just enough to prove the interface is usable
 2. Add persistent bot runtime/session support for server and CLI.
 3. Add generic reason serialization hooks so search payloads have a place to go.
 
