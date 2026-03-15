@@ -188,6 +188,7 @@ def test_search_v1_play_reason_uses_generic_boundary() -> None:
     assert payload["chosen"]["card"] == str(chosen_card)
     assert payload["chosen"]["mode"] == "lead"
     assert payload["chosen"]["candidate_index"] == payload["candidates"][0]["candidate_index"]
+    assert payload["chosen"]["average_projected_raw_hand_points"] == payload["candidates"][0]["average_projected_raw_hand_points"]
     assert payload["chosen"]["average_projected_score_delta"] == payload["candidates"][0]["average_projected_score_delta"]
     assert payload["chosen"]["average_projected_hand_points"] == payload["candidates"][0]["average_projected_hand_points"]
     assert payload["chosen"]["average_projected_total_score"] == payload["candidates"][0]["average_projected_total_score"]

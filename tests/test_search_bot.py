@@ -129,6 +129,7 @@ def test_search_bot_v1_choose_play_uses_search_evaluation_and_private_memory(
                     candidate=candidates[0],
                     candidate_index=0,
                     rollout_summaries=(first_summary_a, first_summary_b),
+                    average_projected_raw_hand_points=7.0,
                     average_projected_hand_points=7.0,
                     average_projected_score_delta=7.0,
                     average_projected_total_score=7.0,
@@ -138,6 +139,7 @@ def test_search_bot_v1_choose_play_uses_search_evaluation_and_private_memory(
                     candidate=candidates[1],
                     candidate_index=1,
                     rollout_summaries=(second_summary_a, second_summary_b),
+                    average_projected_raw_hand_points=2.0,
                     average_projected_hand_points=2.0,
                     average_projected_score_delta=2.0,
                     average_projected_total_score=2.0,
@@ -187,6 +189,7 @@ def test_search_bot_v1_choose_play_uses_search_evaluation_and_private_memory(
     assert reason.chosen.follows_led_suit is False
     assert reason.chosen.is_point_card is False
     assert reason.chosen.trick_points_so_far == 0
+    assert reason.chosen.average_projected_raw_hand_points == 2.0
     assert reason.chosen.average_projected_hand_points == 2.0
     assert reason.chosen.average_projected_score_delta == 2.0
     assert reason.chosen.average_projected_total_score == 2.0
@@ -246,6 +249,7 @@ def test_search_bot_v1_marks_baseline_comparison_agreement(
                     candidate=candidates[0],
                     candidate_index=0,
                     rollout_summaries=(first_summary,),
+                    average_projected_raw_hand_points=4.0,
                     average_projected_hand_points=4.0,
                     average_projected_score_delta=4.0,
                     average_projected_total_score=4.0,
@@ -255,6 +259,7 @@ def test_search_bot_v1_marks_baseline_comparison_agreement(
                     candidate=candidates[1],
                     candidate_index=1,
                     rollout_summaries=(second_summary,),
+                    average_projected_raw_hand_points=1.0,
                     average_projected_hand_points=1.0,
                     average_projected_score_delta=1.0,
                     average_projected_total_score=1.0,
@@ -331,6 +336,7 @@ def test_search_bot_v1_uses_full_heuristic_order_on_exact_search_ties(
                     candidate=candidates[0],
                     candidate_index=0,
                     rollout_summaries=(first_summary,),
+                    average_projected_raw_hand_points=3.0,
                     average_projected_hand_points=3.0,
                     average_projected_score_delta=3.0,
                     average_projected_total_score=3.0,
@@ -340,6 +346,7 @@ def test_search_bot_v1_uses_full_heuristic_order_on_exact_search_ties(
                     candidate=candidates[1],
                     candidate_index=1,
                     rollout_summaries=(second_summary,),
+                    average_projected_raw_hand_points=3.0,
                     average_projected_hand_points=3.0,
                     average_projected_score_delta=3.0,
                     average_projected_total_score=3.0,
@@ -349,6 +356,7 @@ def test_search_bot_v1_uses_full_heuristic_order_on_exact_search_ties(
                     candidate=candidates[2],
                     candidate_index=2,
                     rollout_summaries=(third_summary,),
+                    average_projected_raw_hand_points=3.0,
                     average_projected_hand_points=3.0,
                     average_projected_score_delta=3.0,
                     average_projected_total_score=3.0,
@@ -442,6 +450,7 @@ def test_search_bot_v1_falls_back_to_heuristic_v3_on_impossible_world() -> None:
     assert reason.world_count == 0
     assert reason.requested_world_count == 2
     assert reason.chosen.card == search_card
+    assert reason.chosen.average_projected_raw_hand_points is None
     assert reason.chosen.average_projected_score_delta is None
     assert reason.chosen.average_projected_hand_points is None
     assert reason.chosen.average_projected_total_score is None
@@ -522,6 +531,7 @@ def test_search_bot_v1_falls_back_to_heuristic_v3_on_empty_world_set(
     assert reason.requested_world_count == 4
     assert reason.world_count == 0
     assert reason.chosen.card == search_card
+    assert reason.chosen.average_projected_raw_hand_points is None
     assert reason.chosen.average_projected_score_delta is None
     assert reason.baseline_comparison is None
     assert reason.candidates == ()
@@ -603,19 +613,23 @@ def _rollout_summary(
     candidate,
     sample_index: int,
     score_delta: int,
+    raw_hand_points: int | None = None,
     hand_points: int,
 ) -> SearchRolloutSummary:
     projected_scores = {player_id: 0 for player_id in PLAYER_IDS}
     projected_score_deltas = {player_id: 0 for player_id in PLAYER_IDS}
+    projected_raw_hand_points = {player_id: 0 for player_id in PLAYER_IDS}
     projected_hand_points = {player_id: 0 for player_id in PLAYER_IDS}
     projected_scores[PlayerId(0)] = score_delta
     projected_score_deltas[PlayerId(0)] = score_delta
+    projected_raw_hand_points[PlayerId(0)] = hand_points if raw_hand_points is None else raw_hand_points
     projected_hand_points[PlayerId(0)] = hand_points
     return SearchRolloutSummary(
         world_sample_index=sample_index,
         world_sample_seed=100 + sample_index,
         root_player_id=PlayerId(0),
         candidate=candidate,
+        projected_raw_hand_points=projected_raw_hand_points,
         projected_hand_points=projected_hand_points,
         projected_score_deltas=projected_score_deltas,
         projected_scores=projected_scores,

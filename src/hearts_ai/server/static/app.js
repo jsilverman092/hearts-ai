@@ -318,7 +318,10 @@ function renderSearchPlayDecisionLines(payload) {
         flags.push("base");
       }
       const suffix = flags.length > 0 ? ` [${flags.join(", ")}]` : "";
-      lines.push(`- ${candidate.card} d=${formatDebugScore(candidate.average_projected_score_delta)}${suffix}`);
+      lines.push(
+        `- ${candidate.card} d=${formatDebugScore(candidate.average_projected_score_delta)} ` +
+        `r=${formatDebugScore(candidate.average_projected_raw_hand_points)}${suffix}`
+      );
     }
     lines.push("");
   }

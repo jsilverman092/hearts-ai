@@ -53,6 +53,10 @@ def test_evaluate_root_candidates_aggregates_root_metrics_from_rollouts() -> Non
     for candidate_evaluation in evaluation.candidate_evaluations:
         summaries = candidate_evaluation.rollout_summaries
         assert len(summaries) == 3
+        assert candidate_evaluation.average_projected_raw_hand_points == fmean(
+            summary.projected_raw_hand_points[PlayerId(0)]
+            for summary in summaries
+        )
         assert candidate_evaluation.average_projected_hand_points == fmean(
             summary.projected_hand_points[PlayerId(0)]
             for summary in summaries
@@ -164,9 +168,11 @@ def _candidate_evaluation(
     card: Card,
     candidate_index: int,
     score_delta: float,
+    raw_hand_points: float | None = None,
     hand_points: float,
     total_score: float,
 ) -> RootCandidateEvaluation:
+    average_projected_raw_hand_points = hand_points if raw_hand_points is None else raw_hand_points
     return RootCandidateEvaluation(
         candidate=RootMoveCandidate(
             card=card,
@@ -177,6 +183,7 @@ def _candidate_evaluation(
         ),
         candidate_index=candidate_index,
         rollout_summaries=(),
+        average_projected_raw_hand_points=average_projected_raw_hand_points,
         average_projected_hand_points=hand_points,
         average_projected_score_delta=score_delta,
         average_projected_total_score=total_score,

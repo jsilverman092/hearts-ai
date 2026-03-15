@@ -29,6 +29,7 @@ class RootCandidateEvaluation:
     candidate: RootMoveCandidate
     candidate_index: int
     rollout_summaries: tuple[SearchRolloutSummary, ...]
+    average_projected_raw_hand_points: float
     average_projected_hand_points: float
     average_projected_score_delta: float
     average_projected_total_score: float
@@ -75,6 +76,10 @@ def evaluate_root_candidate(
         candidate=candidate,
         candidate_index=candidate_index,
         rollout_summaries=rollout_summaries,
+        average_projected_raw_hand_points=fmean(
+            summary.projected_raw_hand_points[root_player_id]
+            for summary in rollout_summaries
+        ),
         average_projected_hand_points=fmean(
             summary.projected_hand_points[root_player_id]
             for summary in rollout_summaries

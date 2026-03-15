@@ -54,6 +54,7 @@ class SearchPlayCandidateReason:
     follows_led_suit: bool
     is_point_card: bool
     trick_points_so_far: int
+    average_projected_raw_hand_points: float
     average_projected_hand_points: float
     average_projected_score_delta: float
     average_projected_total_score: float
@@ -70,6 +71,7 @@ class SearchChosenMoveReason:
     follows_led_suit: bool
     is_point_card: bool
     trick_points_so_far: int
+    average_projected_raw_hand_points: float | None
     average_projected_hand_points: float | None
     average_projected_score_delta: float | None
     average_projected_total_score: float | None
@@ -87,6 +89,7 @@ class SearchComparedMoveReason:
     follows_led_suit: bool
     is_point_card: bool
     trick_points_so_far: int
+    average_projected_raw_hand_points: float
     average_projected_hand_points: float
     average_projected_score_delta: float
     average_projected_total_score: float

@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 from hearts_ai.engine.cards import Card
 from hearts_ai.engine.errors import InvalidStateError
 from hearts_ai.engine.game import is_hand_over, play_card
-from hearts_ai.engine.scoring import hand_points
+from hearts_ai.engine.scoring import hand_points, trick_points
 from hearts_ai.engine.state import GameState
 from hearts_ai.engine.types import PLAYER_IDS, PlayerId
 from hearts_ai.search.candidates import RootMoveCandidate
@@ -37,6 +37,7 @@ class SearchRolloutSummary:
     world_sample_seed: int
     root_player_id: PlayerId
     candidate: RootMoveCandidate
+    projected_raw_hand_points: Mapping[PlayerId, int]
     projected_hand_points: Mapping[PlayerId, int]
     projected_score_deltas: Mapping[PlayerId, int]
     projected_scores: Mapping[PlayerId, int]
@@ -122,6 +123,10 @@ def summarize_rollout(
     if not final_state.hand_scored:
         raise InvalidStateError("Completed rollout state must already be hand-scored.")
 
+    projected_raw_hand_points_raw = {
+        player_id: sum(trick_points(trick) for trick in final_state.taken_tricks[player_id])
+        for player_id in PLAYER_IDS
+    }
     projected_hand_points_raw = hand_points(final_state.taken_tricks)
     projected_score_deltas_raw = {
         player_id: final_state.scores[player_id] - starting_scores[player_id]
@@ -136,6 +141,7 @@ def summarize_rollout(
         world_sample_seed=world.sample_seed,
         root_player_id=world.root_player_id,
         candidate=candidate,
+        projected_raw_hand_points=MappingProxyType(projected_raw_hand_points_raw),
         projected_hand_points=MappingProxyType(projected_hand_points_raw),
         projected_score_deltas=MappingProxyType(projected_score_deltas_raw),
         projected_scores=MappingProxyType(projected_scores_raw),

@@ -19,6 +19,11 @@ def _serialize_search_chosen_move_reason(reason: SearchChosenMoveReason) -> Seri
         "follows_led_suit": bool(reason.follows_led_suit),
         "is_point_card": bool(reason.is_point_card),
         "trick_points_so_far": int(reason.trick_points_so_far),
+        "average_projected_raw_hand_points": (
+            float(reason.average_projected_raw_hand_points)
+            if reason.average_projected_raw_hand_points is not None
+            else None
+        ),
         "average_projected_hand_points": (
             float(reason.average_projected_hand_points)
             if reason.average_projected_hand_points is not None
@@ -51,6 +56,7 @@ def _serialize_search_compared_move_reason(reason: SearchComparedMoveReason) -> 
         "follows_led_suit": bool(reason.follows_led_suit),
         "is_point_card": bool(reason.is_point_card),
         "trick_points_so_far": int(reason.trick_points_so_far),
+        "average_projected_raw_hand_points": float(reason.average_projected_raw_hand_points),
         "average_projected_hand_points": float(reason.average_projected_hand_points),
         "average_projected_score_delta": float(reason.average_projected_score_delta),
         "average_projected_total_score": float(reason.average_projected_total_score),
@@ -106,6 +112,7 @@ def serialize_search_play_decision_reason(reason: SearchPlayDecisionReason) -> S
                 "follows_led_suit": bool(candidate.follows_led_suit),
                 "is_point_card": bool(candidate.is_point_card),
                 "trick_points_so_far": int(candidate.trick_points_so_far),
+                "average_projected_raw_hand_points": float(candidate.average_projected_raw_hand_points),
                 "average_projected_hand_points": float(candidate.average_projected_hand_points),
                 "average_projected_score_delta": float(candidate.average_projected_score_delta),
                 "average_projected_total_score": float(candidate.average_projected_total_score),
