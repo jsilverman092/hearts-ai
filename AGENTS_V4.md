@@ -714,10 +714,37 @@ Do not bake runtime thresholds into CI immediately.
 
 ### Phase 2: `search_v1`
 
-1. Add bot class and factory registration.
-2. Reuse `heuristic_v3` pass policy.
-3. Add root-only sampled-world play search.
-4. Add deterministic tie-break and default configuration.
+1. Add bot shell and factory registration.
+   - Sub-step 1: define `search_v1` configuration dataclass
+     - world count
+     - playout seed rules
+     - fallback behavior toggles
+   - Sub-step 2: add bot class skeleton and factory registration
+     - bot name wiring
+     - constructor defaults
+     - no search logic yet
+   - Sub-step 3: delegate pass policy to `heuristic_v3`
+     - preserve current pass/debug behavior where practical
+   - Sub-step 4: add bot construction and pass-policy smoke tests
+2. Add root-only sampled-world play evaluation.
+   - Sub-step 1: build `SearchPlayerView` and root candidates
+   - Sub-step 2: sample one shared `DeterminizedWorldSet` per decision
+     - common random numbers across root moves
+   - Sub-step 3: simulate each candidate across the shared world set
+   - Sub-step 4: aggregate rollout summaries into candidate scores
+     - average projected hand points
+     - average projected score delta
+     - utility summary for final choice
+3. Add final move selection and determinism rules.
+   - Sub-step 1: define deterministic aggregation and tie-break order
+   - Sub-step 2: choose final play and store a structured reason payload
+   - Sub-step 3: add fixed-seed determinism tests
+   - Sub-step 4: add anti-cheating invariance tests against true hidden live hands
+4. Add baseline safeguards and defaults.
+   - Sub-step 1: fallback behavior for impossible sampling or empty world sets
+   - Sub-step 2: set safe default configuration values
+   - Sub-step 3: add targeted regression tests versus `heuristic_v3`
+   - Sub-step 4: leave hooks for later benchmark/config wiring
 
 ### Phase 3: Explanation and Comparison
 
