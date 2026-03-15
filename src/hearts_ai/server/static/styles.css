@@ -33,7 +33,7 @@ body {
 }
 
 .page {
-  width: min(1180px, 100% - 1.2rem);
+  width: min(1360px, 100% - 1rem);
   margin: 1rem auto 2.4rem;
   display: grid;
   gap: 0.9rem;
@@ -714,6 +714,100 @@ button:focus-visible {
 
 .hidden {
   display: none !important;
+}
+
+@media (min-width: 1080px) {
+  .page {
+    width: min(1560px, 100% - 1rem);
+  }
+
+  .table {
+    grid-template-columns: minmax(0, 2.45fr) minmax(220px, 0.6fr);
+    grid-template-areas:
+      "table pace"
+      "table debug"
+      "pass meta"
+      "hand meta";
+    align-items: start;
+    gap: 0.65rem;
+  }
+
+  .table-card {
+    grid-area: table;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+  }
+
+  .pace-card {
+    grid-area: pace;
+    width: 100%;
+  }
+
+  .debug-card {
+    grid-area: debug;
+    width: 100%;
+  }
+
+  #passPanel {
+    grid-area: pass;
+    width: 100%;
+  }
+
+  .hand-card {
+    grid-area: hand;
+    width: 100%;
+  }
+
+  .meta-card {
+    grid-area: meta;
+    width: 100%;
+  }
+
+  .table-card {
+    min-height: 100%;
+  }
+
+  #passPanel .hand-grid,
+  .hand-card .hand-grid {
+    display: grid;
+    grid-template-columns: repeat(var(--card-count, 13), minmax(0, 1fr));
+    gap: 0.24rem;
+  }
+
+  #passPanel .card-btn,
+  .hand-card .card-btn {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    padding: 0.2rem;
+    display: flex;
+  }
+
+  #passPanel .playing-card,
+  .hand-card .playing-card {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 56 / 76;
+  }
+
+  #passPanel .playing-card .corner,
+  .hand-card .playing-card .corner {
+    font-size: 0.72rem;
+    margin-left: 0.3rem;
+    margin-top: 0.2rem;
+  }
+
+  #passPanel .playing-card .corner.bottom,
+  .hand-card .playing-card .corner.bottom {
+    margin-right: 0.3rem;
+    margin-bottom: 0.22rem;
+  }
+
+  #passPanel .playing-card .suit,
+  .hand-card .playing-card .suit {
+    font-size: 1.35rem;
+  }
 }
 
 @media (max-width: 980px) {
