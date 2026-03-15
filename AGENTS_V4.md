@@ -748,10 +748,26 @@ Do not bake runtime thresholds into CI immediately.
 
 ### Phase 3: Explanation and Comparison
 
-1. Add search reason payload dataclasses.
+1. Refine search reason payloads.
+   - Sub-step 1: review the current `SearchPlayDecisionReason` against viewer/debug needs
+   - Sub-step 2: add any missing stable explanation fields needed for comparison and display
+   - Sub-step 3: keep payload shape serializer-backed and deterministic
+   - Sub-step 4: add focused payload/serialization tests
 2. Add baseline-heuristic comparison inside search explanations.
+   - Sub-step 1: define comparison model/types for `search_v1` vs `heuristic_v3`
+   - Sub-step 2: evaluate baseline `heuristic_v3` alongside the search choice on the same live decision
+   - Sub-step 3: attach comparison summaries to the search reason payload
+   - Sub-step 4: add agreement/disagreement regression tests
 3. Extend server snapshot serialization.
+   - Sub-step 1: verify the generic reason boundary is sufficient or extend it minimally
+   - Sub-step 2: ensure table snapshot/debug capture carries search payloads cleanly
+   - Sub-step 3: preserve current heuristic viewer/debug behavior
+   - Sub-step 4: add focused server tests for search recommendation/debug capture
 4. Extend UI rendering for search recommendation/explanation panels.
+   - Sub-step 1: render search payloads without breaking heuristic payload rendering
+   - Sub-step 2: add comparison-specific lines for search vs baseline explanations
+   - Sub-step 3: keep the panel concise and readable for normal use
+   - Sub-step 4: add lightweight UI-facing regression coverage where practical
 
 ### Phase 4: Tests and Benchmark Tooling
 
