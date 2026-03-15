@@ -253,6 +253,37 @@ def test_viewer_advisory_bot_preference_rejects_unknown_bot_type() -> None:
         manager.set_viewer_advisory_bot(table.table_code, player_secret=player_secret, bot_name="unknown-bot")
 
 
+def _advance_single_human_table_to_turn(
+    manager: TableManager,
+    *,
+    table_code: str,
+    player_secret: str,
+    viewer_seat: int = 0,
+) -> None:
+    viewer_player_id = PlayerId(viewer_seat)
+    for _ in range(200):
+        current = manager.get_table(table_code)
+        if current.phase == "playing" and current.state.turn == viewer_player_id:
+            return
+        if current.phase == "passing":
+            if viewer_player_id not in current.pending_passes:
+                chosen_cards = list(sorted(current.state.hands[viewer_player_id])[: current.config.pass_count])
+                manager.submit_pass(
+                    table_code,
+                    player_secret=player_secret,
+                    cards=[str(card) for card in chosen_cards],
+                )
+            else:
+                manager.advance_one_action(table_code, player_secret=player_secret)
+            continue
+        if current.phase in {"playing", "hand_scoring"}:
+            manager.advance_one_action(table_code, player_secret=player_secret)
+            continue
+        if current.phase == "game_over":
+            raise AssertionError("Reached game_over before the viewer turn.")
+    raise AssertionError("Did not reach the requested viewer turn.")
+
+
 def test_snapshot_includes_viewer_pass_recommendation_for_supported_bot() -> None:
     manager = TableManager()
     table, player_secret = manager.create_table(display_name="Host", target_score=50, seed=7)
@@ -346,6 +377,49 @@ def test_snapshot_viewer_recommendation_preserves_heuristic_v3_payload_shape() -
     )
 
     assert recommendation["payload"] == serialize_bot_decision_reason(advisory_bot, "pass")
+
+
+def test_snapshot_viewer_recommendation_preserves_search_v1_play_payload_shape() -> None:
+    manager = TableManager()
+    table, player_secret = manager.create_table(display_name="Host", target_score=50, seed=17)
+    manager.claim_seat(table.table_code, player_secret=player_secret, seat=0)
+    manager.add_bot(table.table_code, seat=1, bot_name="random")
+    manager.add_bot(table.table_code, seat=2, bot_name="random")
+    manager.add_bot(table.table_code, seat=3, bot_name="random")
+    manager.set_viewer_advisory_bot(table.table_code, player_secret=player_secret, bot_name="search_v1")
+
+    _advance_single_human_table_to_turn(
+        manager,
+        table_code=table.table_code,
+        player_secret=player_secret,
+        viewer_seat=0,
+    )
+
+    current = manager.get_table(table.table_code)
+    snapshot = table_snapshot(current, viewer_secret=player_secret)
+    recommendation = snapshot["debug_viewer_recommendation"]
+
+    assert recommendation is not None
+    assert recommendation["status"] == "ok"
+    assert recommendation["decision_kind"] == "play"
+    assert recommendation["bot_name"] == "search_v1"
+
+    advisory_rng_seed = (
+        (current.seed << 16)
+        ^ (current.state.hand_number << 8)
+        ^ (current.state.trick_number << 2)
+        ^ 0
+        ^ sum(ord(ch) for ch in "search_v1")
+    )
+    advisory_rng = random.Random(advisory_rng_seed)
+    advisory_state = copy.deepcopy(current.state)
+    advisory_bot = create_bot("search_v1", player_id=PlayerId(0))
+    advisory_bot.choose_play(state=advisory_state, rng=advisory_rng)
+
+    assert recommendation["payload"] == serialize_bot_decision_reason(advisory_bot, "play")
+    assert recommendation["payload"]["chosen"] is not None
+    assert recommendation["payload"]["baseline_comparison"] is not None
+    assert isinstance(recommendation["payload"]["candidates"], list)
 
 
 def test_snapshot_marks_bot_with_unregistered_reason_serializer_as_unsupported(
@@ -802,6 +876,35 @@ def test_snapshot_debug_last_bot_decision_preserves_heuristic_v3_payload_shape()
     assert isinstance(debug, dict)
     bot = current.bot_runtime_session.bot_for_player(PlayerId(debug["seat"]))
     assert debug["payload"] == serialize_bot_decision_reason(bot, debug["decision_kind"])
+
+
+def test_snapshot_debug_last_bot_decision_preserves_search_v1_play_payload_shape() -> None:
+    manager = TableManager()
+    table, host_secret = manager.create_table(display_name="Host", target_score=30, seed=45)
+    manager.add_bot(table.table_code, seat=0, bot_name="search_v1")
+    manager.add_bot(table.table_code, seat=1, bot_name="search_v1")
+    manager.add_bot(table.table_code, seat=2, bot_name="search_v1")
+    manager.add_bot(table.table_code, seat=3, bot_name="search_v1")
+
+    for _ in range(64):
+        result = manager.advance_one_action(table.table_code, player_secret=host_secret)
+        if result.action == "bot_card_played":
+            break
+    else:
+        raise AssertionError("Did not capture a search_v1 play decision action.")
+
+    current = manager.get_table(table.table_code)
+    snapshot = table_snapshot(current, viewer_secret=host_secret)
+    debug = snapshot["debug_last_bot_decision"]
+
+    assert isinstance(debug, dict)
+    assert debug["bot_name"] == "search_v1"
+    assert debug["decision_kind"] == "play"
+    bot = current.bot_runtime_session.bot_for_player(PlayerId(debug["seat"]))
+    assert debug["payload"] == serialize_bot_decision_reason(bot, "play")
+    assert debug["payload"]["chosen"] is not None
+    assert debug["payload"]["baseline_comparison"] is not None
+    assert isinstance(debug["payload"]["candidates"], list)
 
 
 def test_snapshot_exposes_generic_debug_decision_payload_for_reason_capable_bot(
