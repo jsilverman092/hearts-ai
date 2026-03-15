@@ -150,3 +150,53 @@ def test_simulate_games_notifies_runtime_session_for_initial_and_dealt_hands(
     simulate_games(seed=1, games=1, target_score=50)
 
     assert spy.events == ["game", "hand:1", "hand:2"]
+
+
+def test_simulate_games_creates_fresh_runtime_session_per_game(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _SpyRuntimeSession:
+        def __init__(self) -> None:
+            self.events: list[str] = []
+
+        def notify_new_game(self) -> None:
+            self.events.append("game")
+
+        def notify_new_hand(self, state: GameState) -> None:
+            self.events.append(f"hand:{state.hand_number}")
+
+        def bot_for_player(self, player_id):  # pragma: no cover - should not be reached in this test
+            raise AssertionError(f"bot_for_player should not be called for player {player_id!r}")
+
+    created_sessions: list[_SpyRuntimeSession] = []
+
+    class _SpyRuntimeFactory:
+        @classmethod
+        def from_bot_names(cls, bot_names):
+            assert tuple(bot_names) == ("random", "random", "random", "random")
+            session = _SpyRuntimeSession()
+            created_sessions.append(session)
+            return session
+
+    def _fake_new_game(*, rng, config):
+        del rng
+        state = GameState(config=config)
+        state.hand_number = 1
+        state.pass_direction = "left"
+        state.pass_applied = True
+        state.scores = {player_id: 0 for player_id in PLAYER_IDS}
+        return state
+
+    def _fake_play_hand(*, state, runtime_session, rng, recorder=None):
+        del state, runtime_session, rng, recorder
+
+    monkeypatch.setattr(cli_module, "BotRuntimeSession", _SpyRuntimeFactory)
+    monkeypatch.setattr(cli_module, "resolve_bot_names", lambda bot_spec: ("random",) * 4)
+    monkeypatch.setattr(cli_module, "new_game", _fake_new_game)
+    monkeypatch.setattr(cli_module, "_play_hand", _fake_play_hand)
+    monkeypatch.setattr(cli_module, "is_game_over", lambda state: True)
+
+    simulate_games(seed=1, games=2, target_score=50)
+
+    assert len(created_sessions) == 2
+    assert [session.events for session in created_sessions] == [["game", "hand:1"], ["game", "hand:1"]]

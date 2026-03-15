@@ -80,6 +80,41 @@ def test_all_heuristic_bot_table_is_deterministic() -> None:
     assert finished_one.state.scores == finished_two.state.scores
 
 
+def test_all_random_bot_table_is_deterministic() -> None:
+    manager_one = TableManager()
+    table_one, player_secret_one = manager_one.create_table(display_name="Host", target_score=20, seed=5)
+    manager_one.add_bot(table_one.table_code, seat=0, bot_name="random")
+    manager_one.add_bot(table_one.table_code, seat=1, bot_name="random")
+    manager_one.add_bot(table_one.table_code, seat=2, bot_name="random")
+    manager_one.add_bot(table_one.table_code, seat=3, bot_name="random")
+
+    for _ in range(2000):
+        current = manager_one.get_table(table_one.table_code)
+        if current.phase == "game_over":
+            break
+        manager_one.advance_one_action(table_one.table_code, player_secret=player_secret_one)
+
+    finished_one = manager_one.get_table(table_one.table_code)
+    assert finished_one.phase == "game_over"
+
+    manager_two = TableManager()
+    table_two, player_secret_two = manager_two.create_table(display_name="Host", target_score=20, seed=5)
+    manager_two.add_bot(table_two.table_code, seat=0, bot_name="random")
+    manager_two.add_bot(table_two.table_code, seat=1, bot_name="random")
+    manager_two.add_bot(table_two.table_code, seat=2, bot_name="random")
+    manager_two.add_bot(table_two.table_code, seat=3, bot_name="random")
+
+    for _ in range(2000):
+        current = manager_two.get_table(table_two.table_code)
+        if current.phase == "game_over":
+            break
+        manager_two.advance_one_action(table_two.table_code, player_secret=player_secret_two)
+
+    finished_two = manager_two.get_table(table_two.table_code)
+    assert finished_two.phase == "game_over"
+    assert finished_one.state.scores == finished_two.state.scores
+
+
 def test_add_bot_persists_bot_type_in_table_and_snapshot() -> None:
     manager = TableManager()
     table, player_secret = manager.create_table(display_name="Host", target_score=50, seed=7)
@@ -200,6 +235,68 @@ def test_server_table_reuses_persistent_bot_instances_across_actions(
         manager.advance_one_action(table.table_code, player_secret=host_secret)
 
     assert sorted(created) == [("random", 0), ("random", 1), ("random", 2), ("random", 3)]
+
+
+def test_server_table_runtime_resets_hand_state_but_preserves_bot_instances_within_game(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    created_bots: dict[int, _TrackingBot] = {}
+
+    class _TrackingBot:
+        def __init__(self, player_id: int) -> None:
+            self.player_id = player_id
+            self.game_notifications = 0
+            self.hand_notifications: list[int] = []
+            self.completed_hand_play_counts: list[int] = []
+            self.plays_this_hand = 0
+
+        def choose_pass(self, hand, state, rng):
+            del state, rng
+            return list(sorted(hand)[:3])
+
+        def choose_play(self, state, rng):
+            del rng
+            self.plays_this_hand += 1
+            return legal_moves(state, self.player_id)[0]
+
+        def on_new_game(self) -> None:
+            self.game_notifications += 1
+
+        def on_new_hand(self, state) -> None:
+            if self.hand_notifications:
+                self.completed_hand_play_counts.append(self.plays_this_hand)
+            self.plays_this_hand = 0
+            self.hand_notifications.append(state.hand_number)
+
+    def _tracking_create_bot(bot_name, player_id):
+        del bot_name
+        bot = _TrackingBot(int(player_id))
+        created_bots[int(player_id)] = bot
+        return bot
+
+    monkeypatch.setattr(bot_runtime_module, "create_bot", _tracking_create_bot)
+
+    manager = TableManager()
+    table, host_secret = manager.create_table(display_name="Host", target_score=100, seed=41)
+    manager.add_bot(table.table_code, seat=0, bot_name="random")
+    manager.add_bot(table.table_code, seat=1, bot_name="random")
+    manager.add_bot(table.table_code, seat=2, bot_name="random")
+    manager.add_bot(table.table_code, seat=3, bot_name="random")
+
+    for _ in range(200):
+        current = manager.get_table(table.table_code)
+        if current.state.hand_number > 1:
+            break
+        manager.advance_one_action(table.table_code, player_secret=host_secret)
+    else:
+        raise AssertionError("Did not reach the next hand.")
+
+    assert sorted(created_bots) == [0, 1, 2, 3]
+    for player_id, bot in created_bots.items():
+        assert bot.game_notifications == 1
+        assert bot.hand_notifications[:2] == [1, 2]
+        assert bot.completed_hand_play_counts == [13], f"unexpected hand play counts for player {player_id}"
+        assert bot.plays_this_hand == 0
 
 
 def test_add_bot_rejects_configuration_after_game_start() -> None:
