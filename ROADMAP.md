@@ -140,6 +140,16 @@ Important implementation note:
   - a dedicated rollout policy used to project future play inside search
 - That separation matters because otherwise changes to the baseline also change the search bot's internal evaluation behavior.
 
+Search performance and scale-up:
+- Higher sampled-world counts will likely be useful, but current shallow search will eventually need explicit speed work.
+- Likely future speed/scale paths:
+  - a cheaper dedicated rollout policy rather than reusing the full baseline bot forever
+  - root-candidate pruning so obviously weak moves are not fully simulated
+  - more caching and reuse of per-world / per-decision derived data
+  - selective rollout depth or cheaper late-line simulation where justified
+  - only later, if needed, carefully controlled parallelism that preserves determinism
+- The project should treat these as enablers for stronger sampled-world search, not as premature optimization.
+
 Why this comes before RL:
 - Easier to validate.
 - Easier to debug.
