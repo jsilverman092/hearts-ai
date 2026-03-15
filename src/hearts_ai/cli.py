@@ -5,6 +5,14 @@ import random
 from pathlib import Path
 from typing import Sequence
 
+from hearts_ai.benchmarking import (
+    DEFAULT_SEARCH_BENCHMARK_PRESET,
+    available_search_benchmark_preset_names,
+    benchmark_search_world_counts as run_search_world_count_benchmark,
+    format_benchmark_summary,
+    parse_search_world_counts,
+    run_benchmark_summary,
+)
 from hearts_ai.bots.factory import resolve_bot_names
 from hearts_ai.bots.runtime import BotRuntimeSession
 from hearts_ai.engine.errors import InvalidStateError
@@ -88,51 +96,31 @@ def benchmark_games(
     target_score: int,
     bot_spec: str | None = None,
 ) -> list[str]:
-    if games <= 0:
-        raise ValueError(f"games must be > 0, got {games}")
-    if target_score <= 0:
-        raise ValueError(f"target_score must be > 0, got {target_score}")
-
     bot_names = resolve_bot_names(bot_spec)
-    wins = {player_id: 0.0 for player_id in PLAYER_IDS}
-    total_points = {player_id: 0 for player_id in PLAYER_IDS}
-    total_ranks = {player_id: 0.0 for player_id in PLAYER_IDS}
+    summary = run_benchmark_summary(
+        seed=seed,
+        games=games,
+        target_score=target_score,
+        bot_names=bot_names,
+    )
+    return format_benchmark_summary(summary)
 
-    for offset in range(games):
-        rng = random.Random(seed + offset)
-        state = new_game(rng=rng, config=GameConfig(target_score=target_score))
-        runtime_session = BotRuntimeSession.from_bot_names(bot_names)
-        runtime_session.notify_new_game()
-        runtime_session.notify_new_hand(state)
 
-        while True:
-            _play_hand(state=state, runtime_session=runtime_session, rng=rng)
-            if is_game_over(state):
-                break
-            deal(state=state, rng=rng)
-            runtime_session.notify_new_hand(state)
-
-        winners = _winner_ids(state.scores)
-        winner_share = 1.0 / len(winners)
-        for winner in winners:
-            wins[PlayerId(winner)] += winner_share
-        ranks = _average_ranks(state.scores)
-        for player_id in PLAYER_IDS:
-            total_points[player_id] += state.scores[player_id]
-            total_ranks[player_id] += ranks[player_id]
-
-    output_lines = [
-        f"BENCHMARK GAMES {games} SEED_START {seed} TARGET {target_score} "
-        f"BOTS {','.join(bot_names)}"
-    ]
-    for player_id in PLAYER_IDS:
-        output_lines.append(
-            f"P{int(player_id)} BOT {bot_names[int(player_id)]} "
-            f"WIN_RATE {wins[player_id] / games:.3f} "
-            f"AVG_POINTS {total_points[player_id] / games:.3f} "
-            f"AVG_RANK {total_ranks[player_id] / games:.3f}"
-        )
-    return output_lines
+def benchmark_search_world_counts(
+    seed: int,
+    games: int,
+    target_score: int,
+    preset: str = DEFAULT_SEARCH_BENCHMARK_PRESET,
+    world_counts_spec: str | None = None,
+) -> list[str]:
+    world_counts = parse_search_world_counts(world_counts_spec)
+    return run_search_world_count_benchmark(
+        seed=seed,
+        games=games,
+        target_score=target_score,
+        preset_name=preset,
+        world_counts=world_counts,
+    )
 
 
 def replay_records(path: str) -> list[str]:
@@ -192,6 +180,42 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Bot names for seats as 'name' or 'n0,n1,n2,n3'.",
     )
 
+    search_benchmark_parser = subparsers.add_parser(
+        "benchmark-search",
+        help="Run codified search_v1 world-count sweeps against a benchmark preset.",
+    )
+    search_benchmark_parser.add_argument(
+        "--seed",
+        type=int,
+        default=1,
+        help="Starting seed for benchmark games.",
+    )
+    search_benchmark_parser.add_argument(
+        "--games",
+        type=int,
+        default=20,
+        help="Number of games to benchmark per world count.",
+    )
+    search_benchmark_parser.add_argument(
+        "--target-score",
+        type=int,
+        default=30,
+        help="Game ends when any player reaches this score.",
+    )
+    search_benchmark_parser.add_argument(
+        "--preset",
+        type=str,
+        default=DEFAULT_SEARCH_BENCHMARK_PRESET,
+        choices=available_search_benchmark_preset_names(),
+        help="Codified seat matrix for the search sweep.",
+    )
+    search_benchmark_parser.add_argument(
+        "--world-counts",
+        type=str,
+        default=None,
+        help="Comma-separated search_v1 world counts. Default: 1,2,4,8.",
+    )
+
     replay_parser = subparsers.add_parser("replay", help="Replay and verify one or more recorded games.")
     replay_parser.add_argument("path", type=str, help="Path to replay JSONL file.")
 
@@ -222,6 +246,21 @@ def main(argv: Sequence[str] | None = None) -> int:
                 games=args.games,
                 target_score=args.target_score,
                 bot_spec=args.bots,
+            )
+        except ValueError as exc:
+            parser.error(str(exc))
+        for line in lines:
+            print(line)
+        return 0
+
+    if args.command == "benchmark-search":
+        try:
+            lines = benchmark_search_world_counts(
+                seed=args.seed,
+                games=args.games,
+                target_score=args.target_score,
+                preset=args.preset,
+                world_counts_spec=args.world_counts,
             )
         except ValueError as exc:
             parser.error(str(exc))
@@ -290,14 +329,4 @@ def _winner_ids(scores: dict[PlayerId, int]) -> list[int]:
     return [int(player_id) for player_id in PLAYER_IDS if scores[player_id] == best_score]
 
 
-def _average_ranks(scores: dict[PlayerId, int]) -> dict[PlayerId, float]:
-    sorted_scores = sorted(scores.values())
-    ranks: dict[PlayerId, float] = {}
-    for player_id in PLAYER_IDS:
-        score = scores[player_id]
-        positions = [index + 1 for index, current in enumerate(sorted_scores) if current == score]
-        ranks[player_id] = sum(positions) / len(positions)
-    return ranks
-
-
-__all__ = ["benchmark_games", "main", "replay_records", "simulate_games"]
+__all__ = ["benchmark_games", "benchmark_search_world_counts", "main", "replay_records", "simulate_games"]

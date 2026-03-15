@@ -21,6 +21,18 @@ Run simulation CLI:
 python -m hearts_ai play --seed 1 --games 1 --target-score 50
 ```
 
+Run deterministic benchmarks:
+
+```bash
+python -m hearts_ai benchmark --seed 1 --games 20 --target-score 30 --bots heuristic_v3
+python -m hearts_ai benchmark-search --seed 1 --games 10 --target-score 30 --preset mixed_search_field --world-counts 1,2,4,8
+```
+
+Default `benchmark-search` presets:
+
+- `mixed_search_field`: `search_v1,heuristic_v3,heuristic_v2,random`
+- `all_search_v1`: `search_v1,search_v1,search_v1,search_v1`
+
 Record and replay:
 
 ```bash

@@ -1,10 +1,11 @@
 import pytest
 
 import hearts_ai.cli as cli_module
+from hearts_ai.benchmarking import DEFAULT_SEARCH_WORLD_COUNTS
 from hearts_ai.engine.cards import Card, Rank, Suit
 from hearts_ai.engine.state import GameState
 from hearts_ai.engine.types import PLAYER_IDS, PlayerId
-from hearts_ai.cli import benchmark_games, main, simulate_games
+from hearts_ai.cli import benchmark_games, benchmark_search_world_counts, main, simulate_games
 
 
 def test_simulate_games_is_deterministic() -> None:
@@ -71,6 +72,35 @@ def test_cli_main_benchmark_prints_expected_lines(capsys: pytest.CaptureFixture[
     assert captured == expected
 
 
+def test_cli_main_benchmark_search_prints_expected_lines(capsys: pytest.CaptureFixture[str]) -> None:
+    expected = benchmark_search_world_counts(
+        seed=11,
+        games=1,
+        target_score=15,
+        preset="mixed_search_field",
+        world_counts_spec="1,2",
+    )
+    exit_code = main(
+        [
+            "benchmark-search",
+            "--seed",
+            "11",
+            "--games",
+            "1",
+            "--target-score",
+            "15",
+            "--preset",
+            "mixed_search_field",
+            "--world-counts",
+            "1,2",
+        ]
+    )
+    captured = capsys.readouterr().out.strip().splitlines()
+
+    assert exit_code == 0
+    assert captured == expected
+
+
 def test_benchmark_games_supports_heuristic_bot_name() -> None:
     lines = benchmark_games(seed=2, games=3, target_score=30, bot_spec="heuristic")
     assert lines[0] == "BENCHMARK GAMES 3 SEED_START 2 TARGET 30 BOTS heuristic,heuristic,heuristic,heuristic"
@@ -103,6 +133,33 @@ def test_benchmark_games_supports_search_v1_bot_name(
         "BENCHMARK GAMES 3 SEED_START 2 TARGET 30 "
         "BOTS search_v1,search_v1,search_v1,search_v1"
     )
+
+
+def test_benchmark_search_world_counts_uses_default_world_counts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recorded: dict[str, object] = {}
+
+    def _fake_search_benchmark(*, seed, games, target_score, preset_name, world_counts):
+        recorded["seed"] = seed
+        recorded["games"] = games
+        recorded["target_score"] = target_score
+        recorded["preset_name"] = preset_name
+        recorded["world_counts"] = world_counts
+        return ["ok"]
+
+    monkeypatch.setattr(cli_module, "run_search_world_count_benchmark", _fake_search_benchmark)
+
+    lines = benchmark_search_world_counts(seed=3, games=2, target_score=25)
+
+    assert lines == ["ok"]
+    assert recorded == {
+        "seed": 3,
+        "games": 2,
+        "target_score": 25,
+        "preset_name": "mixed_search_field",
+        "world_counts": DEFAULT_SEARCH_WORLD_COUNTS,
+    }
 
 
 def test_simulate_games_notifies_runtime_session_for_initial_and_dealt_hands(
