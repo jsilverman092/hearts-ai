@@ -4,8 +4,12 @@ from hearts_ai.search.candidates import RootMoveCandidate, SearchPlayMode, build
 from hearts_ai.search.evaluate import (
     RootCandidateEvaluation,
     RootMoveEvaluationSet,
+    SELECTION_POLICY,
     evaluate_root_candidate,
     evaluate_root_candidates,
+    rank_root_candidate_evaluations,
+    select_best_root_candidate,
+    selection_key_for_candidate,
 )
 from hearts_ai.search.knowledge import build_public_knowledge
 from hearts_ai.search.memory import SeatPrivateMemory
@@ -45,6 +49,7 @@ __all__ = [
     "RootMoveCandidate",
     "RootCandidateEvaluation",
     "RootMoveEvaluationSet",
+    "SELECTION_POLICY",
     "SampledHiddenHands",
     "SearchRolloutResult",
     "SearchRolloutSummary",
@@ -62,8 +67,11 @@ __all__ = [
     "clone_determinized_state",
     "evaluate_root_candidate",
     "evaluate_root_candidates",
+    "rank_root_candidate_evaluations",
     "sample_determinized_world",
     "sample_determinized_worlds",
+    "select_best_root_candidate",
+    "selection_key_for_candidate",
     "simulate_root_candidate",
     "summarize_rollout",
 ]

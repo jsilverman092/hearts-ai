@@ -1,8 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Literal
 
+from hearts_ai.engine.cards import Card
 from hearts_ai.search.simulation import HeuristicPlayoutConfig
+from hearts_ai.search.candidates import SearchPlayMode
+
+SearchSelectionMetric = Literal[
+    "average_projected_score_delta",
+    "average_projected_hand_points",
+    "average_projected_total_score",
+    "candidate_index",
+]
 
 
 @dataclass(slots=True, frozen=True)
@@ -24,4 +34,36 @@ class SearchBotConfig:
             )
 
 
-__all__ = ["SearchBotConfig"]
+@dataclass(slots=True, frozen=True)
+class SearchPlayCandidateReason:
+    card: Card
+    mode: SearchPlayMode
+    candidate_index: int
+    selection_rank: int
+    selected: bool
+    follows_led_suit: bool
+    is_point_card: bool
+    trick_points_so_far: int
+    average_projected_hand_points: float
+    average_projected_score_delta: float
+    average_projected_total_score: float
+    average_root_utility: float
+
+
+@dataclass(slots=True, frozen=True)
+class SearchPlayDecisionReason:
+    chosen_card: Card
+    mode: SearchPlayMode
+    trick_number: int
+    world_count: int
+    world_base_seed: int
+    selection_policy: tuple[SearchSelectionMetric, ...]
+    candidates: tuple[SearchPlayCandidateReason, ...]
+
+
+__all__ = [
+    "SearchBotConfig",
+    "SearchPlayCandidateReason",
+    "SearchPlayDecisionReason",
+    "SearchSelectionMetric",
+]

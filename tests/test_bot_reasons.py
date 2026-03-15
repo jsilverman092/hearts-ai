@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import pytest
 
 from hearts_ai.bots.heuristic_bot import HeuristicBotV2, HeuristicBotV3
+from hearts_ai.bots.search import SearchBotConfig, SearchBotV1
 from hearts_ai.bots.reasons import (
     DecisionReasonSerializerRegistry,
     peek_bot_decision_reason,
@@ -13,6 +14,8 @@ from hearts_ai.bots.reasons import (
     serialize_decision_reason,
 )
 from hearts_ai.engine.game import new_game
+from hearts_ai.engine.cards import make_deck
+from hearts_ai.engine.state import GameState
 from hearts_ai.engine.types import PlayerId
 
 
@@ -150,3 +153,55 @@ def test_heuristic_v2_play_reason_uses_generic_boundary_without_payload_change()
     assert peek_bot_decision_reason(bot, "play") is legacy_reason
     assert serialize_bot_decision_reason(bot, "play") == _expected_play_payload(legacy_reason)
     assert _expected_play_payload(legacy_reason)["chosen_card"] == str(chosen_card)
+
+
+def test_search_v1_play_reason_uses_generic_boundary() -> None:
+    state = _full_search_state_with_rotating_hidden_hands(rotation=0)
+    bot = SearchBotV1(player_id=PlayerId(0), config=SearchBotConfig(world_count=2))
+
+    chosen_card = bot.choose_play(state=state, rng=random.Random(37))
+    reason = peek_bot_decision_reason(bot, "play")
+    payload = serialize_bot_decision_reason(bot, "play")
+
+    assert reason is not None
+    assert payload is not None
+    assert payload["chosen_card"] == str(chosen_card)
+    assert payload["mode"] == "lead"
+    assert payload["world_count"] == 2
+    assert payload["selection_policy"] == [
+        "average_projected_score_delta",
+        "average_projected_hand_points",
+        "average_projected_total_score",
+        "candidate_index",
+    ]
+    assert isinstance(payload["candidates"], list)
+    assert payload["candidates"][0]["selected"] is True
+    assert payload["candidates"][0]["selection_rank"] == 1
+    assert payload["candidates"][0]["card"] == str(chosen_card)
+
+
+def _full_search_state_with_rotating_hidden_hands(*, rotation: int) -> GameState:
+    deck = tuple(make_deck())
+    own_hand = list(deck[:13])
+    hidden_chunks = [
+        list(deck[13:26]),
+        list(deck[26:39]),
+        list(deck[39:52]),
+    ]
+    hidden_chunks = hidden_chunks[rotation:] + hidden_chunks[:rotation]
+
+    state = GameState()
+    state.hands = {
+        PlayerId(0): sorted(own_hand),
+        PlayerId(1): sorted(hidden_chunks[0]),
+        PlayerId(2): sorted(hidden_chunks[1]),
+        PlayerId(3): sorted(hidden_chunks[2]),
+    }
+    state.taken_tricks = {PlayerId(index): [] for index in range(4)}
+    state.scores = {PlayerId(index): 0 for index in range(4)}
+    state.turn = PlayerId(0)
+    state.trick_number = 0
+    state.hand_number = 1
+    state.pass_direction = "left"
+    state.pass_applied = True
+    return state

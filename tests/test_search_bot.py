@@ -1,10 +1,11 @@
 import random
+from copy import deepcopy
 
 import pytest
 
 import hearts_ai.bots.search.bots as search_bot_module
 from hearts_ai.bots.heuristic import HeuristicBotV3
-from hearts_ai.bots.search import SearchBotConfig, SearchBotV1
+from hearts_ai.bots.search import SearchBotConfig, SearchBotV1, SearchPlayDecisionReason
 from hearts_ai.engine.cards import Card, Rank, Suit, make_deck
 from hearts_ai.engine.rules import legal_moves
 from hearts_ai.engine.state import GameState
@@ -111,6 +112,7 @@ def test_search_bot_v1_choose_play_uses_search_evaluation_and_private_memory(
             candidate_evaluations=(
                 RootCandidateEvaluation(
                     candidate=candidates[0],
+                    candidate_index=0,
                     rollout_summaries=(),
                     average_projected_hand_points=7.0,
                     average_projected_score_delta=7.0,
@@ -119,6 +121,7 @@ def test_search_bot_v1_choose_play_uses_search_evaluation_and_private_memory(
                 ),
                 RootCandidateEvaluation(
                     candidate=candidates[1],
+                    candidate_index=1,
                     rollout_summaries=(),
                     average_projected_hand_points=2.0,
                     average_projected_score_delta=2.0,
@@ -148,3 +151,63 @@ def test_search_bot_v1_choose_play_uses_search_evaluation_and_private_memory(
     assert seen["playout_seed_offset"] == 17
     assert seen["passed_card_seen"] is True
     assert isinstance(seen["seed"], int)
+    reason = bot.peek_last_decision_reason("play")
+    assert isinstance(reason, SearchPlayDecisionReason)
+    assert reason.chosen_card == Card(Suit.SPADES, Rank.ACE)
+    assert reason.candidates[0].selected is True
+    assert reason.candidates[0].card == Card(Suit.SPADES, Rank.ACE)
+    assert reason.candidates[0].selection_rank == 1
+
+
+def test_search_bot_v1_choose_play_is_deterministic_under_fixed_seed() -> None:
+    state = _full_state_with_rotating_hidden_hands(rotation=0)
+
+    first_bot = SearchBotV1(player_id=PlayerId(0), config=SearchBotConfig(world_count=3))
+    second_bot = SearchBotV1(player_id=PlayerId(0), config=SearchBotConfig(world_count=3))
+
+    first_card = first_bot.choose_play(state=deepcopy(state), rng=random.Random(211))
+    second_card = second_bot.choose_play(state=deepcopy(state), rng=random.Random(211))
+
+    assert first_card == second_card
+    assert first_bot.peek_last_decision_reason("play") == second_bot.peek_last_decision_reason("play")
+
+
+def test_search_bot_v1_choose_play_is_invariant_to_hidden_live_assignment() -> None:
+    first_state = _full_state_with_rotating_hidden_hands(rotation=0)
+    second_state = _full_state_with_rotating_hidden_hands(rotation=1)
+
+    first_bot = SearchBotV1(player_id=PlayerId(0), config=SearchBotConfig(world_count=3))
+    second_bot = SearchBotV1(player_id=PlayerId(0), config=SearchBotConfig(world_count=3))
+
+    first_card = first_bot.choose_play(state=first_state, rng=random.Random(307))
+    second_card = second_bot.choose_play(state=second_state, rng=random.Random(307))
+
+    assert first_card == second_card
+    assert first_bot.peek_last_decision_reason("play") == second_bot.peek_last_decision_reason("play")
+
+
+def _full_state_with_rotating_hidden_hands(*, rotation: int) -> GameState:
+    deck = tuple(make_deck())
+    own_hand = list(deck[:13])
+    hidden_chunks = [
+        list(deck[13:26]),
+        list(deck[26:39]),
+        list(deck[39:52]),
+    ]
+    hidden_chunks = hidden_chunks[rotation:] + hidden_chunks[:rotation]
+
+    state = GameState()
+    state.hands = {
+        PlayerId(0): sorted(own_hand),
+        PlayerId(1): sorted(hidden_chunks[0]),
+        PlayerId(2): sorted(hidden_chunks[1]),
+        PlayerId(3): sorted(hidden_chunks[2]),
+    }
+    state.taken_tricks = {player_id: [] for player_id in PLAYER_IDS}
+    state.scores = {player_id: 0 for player_id in PLAYER_IDS}
+    state.turn = PlayerId(0)
+    state.trick_number = 0
+    state.hand_number = 1
+    state.pass_direction = "left"
+    state.pass_applied = True
+    return state
