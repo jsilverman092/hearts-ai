@@ -772,9 +772,54 @@ Do not bake runtime thresholds into CI immediately.
 ### Phase 4: Tests and Benchmark Tooling
 
 1. Add low-level support tests.
+   - Sub-step 1: add sampler constraint edge-case tests
+     - impossible allocation fixtures
+     - void-respecting assignment fixtures
+     - own-pass-memory constraint fixtures
+   - Sub-step 2: add rollout summary edge-case tests
+     - moon scoring projection checks
+     - raw-vs-scored projection checks
+     - fixed-seed per-world summary checks
+   - Sub-step 3: add search-view and runtime integration edge-case tests
+     - private-memory reset/visibility cases
+     - hidden-information invariance edge cases
+   - Sub-step 4: keep these tests narrow, deterministic, and fixture-driven
 2. Add scenario regression suite.
+   - Sub-step 1: define reusable scenario fixture helpers/builders
+     - concise state constructors
+     - deterministic seat/hand setup helpers
+   - Sub-step 2: add early high-spade lead regressions
+     - suspicious early `QS` lead fixtures
+     - suspicious early `KS` lead fixtures
+     - frame these as strategic regression checks, not rules bugs
+   - Sub-step 3: add at least one late-hand counting case
+     - known remaining-card fixture
+     - public-inference-sensitive decision
+   - Sub-step 4: add search-vs-heuristic disagreement fixtures
+     - agreement case
+     - disagreement case with expected preferred move
 3. Add deterministic integration tests.
-4. Add codified mixed-field benchmark runner or CLI extension.
+   - Sub-step 1: add fixed-seed end-to-end `search_v1` table/game runs
+   - Sub-step 2: add repeated-run equality checks for the same seed/config
+   - Sub-step 3: add mixed-field deterministic checks
+     - `search_v1` vs `heuristic_v3`
+     - `search_v1` vs mixed opponents
+   - Sub-step 4: keep runtime bounded so these stay practical in CI/dev loops
+4. Add codified benchmark runner or CLI extension with parameter sweep support.
+   - Sub-step 1: define stable benchmark matrix inputs
+     - bot lineup presets
+     - seed sets
+     - target score / game count presets
+   - Sub-step 2: add explicit `world_count` sweep support
+     - at minimum `1, 2, 4, 8`
+     - optionally `16` for slower comparison runs
+   - Sub-step 3: keep output stable and comparable
+     - per-bot score summaries
+     - rank/win summaries
+     - runtime summary
+   - Sub-step 4: use the tooling for disciplined parameter tuning
+     - first focus on `world_count`
+     - avoid tuning multiple secondary knobs at once unless clearly justified
 
 ### UI Follow-Up: Live Table Layout and Controls
 
