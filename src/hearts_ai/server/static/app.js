@@ -87,6 +87,7 @@ const dom = {
   fastForwardToggle: document.getElementById("fastForwardToggle"),
   metaLine: document.getElementById("metaLine"),
   infoLine: document.getElementById("infoLine"),
+  handCard: document.getElementById("handCard"),
   handGrid: document.getElementById("handGrid"),
   passPanel: document.getElementById("passPanel"),
   passCards: document.getElementById("passCards"),
@@ -1430,6 +1431,12 @@ function renderPassPanel(snapshot) {
   dom.submitPassBtn.disabled = alreadySubmitted || appState.selectedPassCards.size !== passCount;
 }
 
+function renderCardPanels(snapshot) {
+  const showPassPanel = snapshot.phase === "passing" && snapshot.viewer_seat !== null;
+  dom.passPanel.classList.toggle("hidden", !showPassPanel);
+  dom.handCard.classList.toggle("hidden", showPassPanel);
+}
+
 function renderHand(snapshot) {
   dom.handGrid.innerHTML = "";
   const legal = new Set(snapshot.viewer_legal_moves || []);
@@ -1545,6 +1552,7 @@ function render(snapshot = appState.snapshot) {
   }
 
   renderTable(snapshot);
+  renderCardPanels(snapshot);
   renderPassPanel(snapshot);
   renderHand(snapshot);
   renderBeginHandButton(snapshot);
