@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import TypeAlias
 
@@ -32,8 +32,52 @@ class PublicKnowledge:
     qs_live: bool = True
     played_count_by_suit: Mapping[Suit, int] = field(default_factory=dict)
     unplayed_count_by_suit: Mapping[Suit, int] = field(default_factory=dict)
+    remaining_ranks_by_suit: Mapping[Suit, tuple[int, ...]] = field(default_factory=dict)
+    lowest_remaining_rank_by_suit: Mapping[Suit, int | None] = field(default_factory=dict)
+    highest_remaining_rank_by_suit: Mapping[Suit, int | None] = field(default_factory=dict)
     remaining_cards_by_player: Mapping[PlayerId, int] = field(default_factory=dict)
     void_suits_by_player: Mapping[PlayerId, frozenset[Suit]] = field(default_factory=dict)
+
+    def player_is_void(self, *, player_id: PlayerId, suit: Suit) -> bool:
+        return suit in self.void_suits_by_player.get(player_id, frozenset())
+
+    def suit_exhausted_outside_hand(self, *, suit: Suit, own_hand: Iterable[Card]) -> bool:
+        own_unplayed_count = sum(
+            1
+            for card in own_hand
+            if card.suit == suit and card in self.unplayed_cards
+        )
+        return self.unplayed_count_by_suit.get(suit, 0) == own_unplayed_count
+
+    def possible_unplayed_cards_for_opponent(
+        self,
+        *,
+        player_id: PlayerId,
+        own_hand: Iterable[Card],
+    ) -> frozenset[Card]:
+        if self.remaining_cards_by_player.get(player_id, 0) <= 0:
+            return frozenset()
+        own_unplayed_cards = frozenset(card for card in own_hand if card in self.unplayed_cards)
+        blocked_suits = self.void_suits_by_player.get(player_id, frozenset())
+        return frozenset(
+            card
+            for card in self.unplayed_cards
+            if card not in own_unplayed_cards and card.suit not in blocked_suits
+        )
+
+    def impossible_unplayed_cards_for_opponent(
+        self,
+        *,
+        player_id: PlayerId,
+        own_hand: Iterable[Card],
+    ) -> frozenset[Card]:
+        if self.remaining_cards_by_player.get(player_id, 0) <= 0:
+            return frozenset(self.unplayed_cards)
+        possible_cards = self.possible_unplayed_cards_for_opponent(
+            player_id=player_id,
+            own_hand=own_hand,
+        )
+        return frozenset(card for card in self.unplayed_cards if card not in possible_cards)
 
 
 @dataclass(slots=True, frozen=True)

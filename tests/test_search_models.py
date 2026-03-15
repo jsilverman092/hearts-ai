@@ -11,6 +11,9 @@ def test_search_player_view_models_are_instantiable() -> None:
         qs_live=True,
         played_count_by_suit={suit: 0 for suit in Suit},
         unplayed_count_by_suit={suit: 13 for suit in Suit},
+        remaining_ranks_by_suit={suit: tuple(int(rank) for rank in Rank) for suit in Suit},
+        lowest_remaining_rank_by_suit={suit: int(Rank.TWO) for suit in Suit},
+        highest_remaining_rank_by_suit={suit: int(Rank.ACE) for suit in Suit},
         remaining_cards_by_player={player_id: 13 for player_id in PLAYER_IDS},
         void_suits_by_player={player_id: frozenset() for player_id in PLAYER_IDS},
     )
@@ -102,6 +105,9 @@ def test_build_search_player_view_projects_only_acting_hand_and_public_state() -
     assert Card(Suit.CLUBS, Rank.ACE) in view.public_knowledge.seen_cards
     assert Card(Suit.SPADES, Rank.QUEEN) in view.public_knowledge.seen_cards
     assert Card(Suit.HEARTS, Rank.NINE) in view.public_knowledge.unplayed_cards
+    assert view.public_knowledge.remaining_ranks_by_suit[Suit.SPADES] == (2, 3, 4, 5, 6, 7, 8, 9, 11)
+    assert view.public_knowledge.lowest_remaining_rank_by_suit[Suit.SPADES] == 2
+    assert view.public_knowledge.highest_remaining_rank_by_suit[Suit.SPADES] == 11
     assert view.public_knowledge.remaining_cards_by_player[PlayerId(0)] == 2
     assert view.public_knowledge.remaining_cards_by_player[PlayerId(1)] == 1
     assert view.public_knowledge.void_suits_by_player[PlayerId(2)] == frozenset({Suit.DIAMONDS})
