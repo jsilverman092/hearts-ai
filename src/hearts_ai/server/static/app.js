@@ -31,7 +31,7 @@ const appState = {
   receivedPassCardsByHand: {},
   beginHandPendingByHand: {},
   debugViewerRecommendationEnabled: true,
-  debugOpponentReasonEnabled: false,
+  debugOpponentReasonEnabled: true,
   pacePanelOpen: false,
   debugPanelOpen: false,
 };
@@ -253,10 +253,13 @@ function renderPassDecisionLines(decision) {
   lines.push(`Selected: ${selected.join(" ") || "-"}`);
   const candidates = Array.isArray(payload.candidates) ? payload.candidates : [];
   const top = candidates.slice(0, 5);
-  lines.push("Top pass candidates:");
-  for (const candidate of top) {
-    const score = Array.isArray(candidate.score) ? candidate.score.join(",") : "";
-    lines.push(`- ${candidate.card} [${score}]`);
+  if (top.length > 0) {
+    lines.push("");
+    lines.push("Top pass candidates:");
+    for (const candidate of top) {
+      const score = Array.isArray(candidate.score) ? candidate.score.join(",") : "";
+      lines.push(`- ${candidate.card} [${score}]`);
+    }
   }
   return lines;
 }
@@ -318,7 +321,7 @@ function renderSearchPlayDecisionLines(payload) {
       ) {
         flags.push("b");
       }
-      const suffix = flags.length > 0 ? ` [${flags.join(", ")}]` : "";
+      const suffix = flags.length > 0 ? ` [${flags.join("")}]` : "";
       lines.push(
         `- ${candidate.card} d=${formatDebugScore(candidate.average_projected_score_delta)} ` +
         `r=${formatDebugScore(candidate.average_projected_raw_hand_points)}${suffix}`
@@ -378,7 +381,7 @@ function renderPlayDecisionLines(decision) {
 function renderDecisionHeaderLines(decision) {
   const payload = decision.payload || {};
   const lines = [`Seat P${decision.seat} (${decision.bot_name})`];
-  if (!isSearchPlayDecisionPayload(payload)) {
+  if (decision.decision_kind !== "pass" && !isSearchPlayDecisionPayload(payload)) {
     lines.push(
       `Kind ${decision.decision_kind}  Hand ${decision.hand_number}  Trick ${decision.trick_number}`
     );
