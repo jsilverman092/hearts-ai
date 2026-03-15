@@ -4,6 +4,7 @@ from hearts_ai.bots.search.bots import SearchBotV1
 from hearts_ai.bots.search.models import (
     SearchBotConfig,
     SearchPlayCandidateReason,
+    SearchChosenMoveReason,
     SearchPlayDecisionReason,
     SearchSelectionMetric,
     SearchSelectionSource,
@@ -16,6 +17,7 @@ from hearts_ai.bots.search.reasons import (
 __all__ = [
     "SearchBotConfig",
     "SearchPlayCandidateReason",
+    "SearchChosenMoveReason",
     "SearchPlayDecisionReason",
     "SearchSelectionMetric",
     "SearchSelectionSource",

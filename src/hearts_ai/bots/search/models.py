@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
-from hearts_ai.engine.cards import Card
+from hearts_ai.engine.cards import Card, Suit
 from hearts_ai.search.candidates import SearchPlayMode
 from hearts_ai.search.simulation import HeuristicPlayoutConfig
 
@@ -60,10 +60,31 @@ class SearchPlayCandidateReason:
 
 
 @dataclass(slots=True, frozen=True)
+class SearchChosenMoveReason:
+    """Compact summary of the chosen root move for display/debug surfaces."""
+
+    card: Card
+    mode: SearchPlayMode
+    candidate_index: int
+    follows_led_suit: bool
+    is_point_card: bool
+    trick_points_so_far: int
+    average_projected_hand_points: float | None
+    average_projected_score_delta: float | None
+    average_projected_total_score: float | None
+    average_root_utility: float | None
+
+
+@dataclass(slots=True, frozen=True)
 class SearchPlayDecisionReason:
     chosen_card: Card
     mode: SearchPlayMode
     trick_number: int
+    legal_move_count: int
+    evaluated_candidate_count: int
+    current_trick_size: int
+    led_suit: Suit | None
+    chosen: SearchChosenMoveReason
     requested_world_count: int
     world_count: int
     world_base_seed: int
@@ -76,6 +97,7 @@ class SearchPlayDecisionReason:
 __all__ = [
     "SearchBotConfig",
     "SearchPlayCandidateReason",
+    "SearchChosenMoveReason",
     "SearchPlayDecisionReason",
     "SearchSelectionMetric",
     "SearchSelectionSource",

@@ -160,6 +160,20 @@ def test_search_bot_v1_choose_play_uses_search_evaluation_and_private_memory(
     reason = bot.peek_last_decision_reason("play")
     assert isinstance(reason, SearchPlayDecisionReason)
     assert reason.chosen_card == Card(Suit.SPADES, Rank.ACE)
+    assert reason.legal_move_count == 2
+    assert reason.evaluated_candidate_count == 2
+    assert reason.current_trick_size == 0
+    assert reason.led_suit is None
+    assert reason.chosen.card == Card(Suit.SPADES, Rank.ACE)
+    assert reason.chosen.mode == "lead"
+    assert reason.chosen.candidate_index == 1
+    assert reason.chosen.follows_led_suit is False
+    assert reason.chosen.is_point_card is False
+    assert reason.chosen.trick_points_so_far == 0
+    assert reason.chosen.average_projected_hand_points == 2.0
+    assert reason.chosen.average_projected_score_delta == 2.0
+    assert reason.chosen.average_projected_total_score == 2.0
+    assert reason.chosen.average_root_utility == -2.0
     assert reason.requested_world_count == 5
     assert reason.world_count == 1
     assert reason.selection_source == "search"
@@ -216,8 +230,17 @@ def test_search_bot_v1_falls_back_to_heuristic_v3_on_impossible_world() -> None:
     reason = search_bot.peek_last_decision_reason("play")
     assert isinstance(reason, SearchPlayDecisionReason)
     assert reason.selection_source == "heuristic_fallback_impossible_world"
+    assert reason.legal_move_count == 1
+    assert reason.evaluated_candidate_count == 0
+    assert reason.current_trick_size == 0
+    assert reason.led_suit is None
     assert reason.world_count == 0
     assert reason.requested_world_count == 2
+    assert reason.chosen.card == search_card
+    assert reason.chosen.average_projected_score_delta is None
+    assert reason.chosen.average_projected_hand_points is None
+    assert reason.chosen.average_projected_total_score is None
+    assert reason.chosen.average_root_utility is None
     assert reason.candidates == ()
     assert "cannot still be in the root hand" in (reason.fallback_message or "")
 
@@ -286,8 +309,14 @@ def test_search_bot_v1_falls_back_to_heuristic_v3_on_empty_world_set(
     reason = search_bot.peek_last_decision_reason("play")
     assert isinstance(reason, SearchPlayDecisionReason)
     assert reason.selection_source == "heuristic_fallback_empty_world_set"
+    assert reason.legal_move_count == 2
+    assert reason.evaluated_candidate_count == 0
+    assert reason.current_trick_size == 0
+    assert reason.led_suit is None
     assert reason.requested_world_count == 4
     assert reason.world_count == 0
+    assert reason.chosen.card == search_card
+    assert reason.chosen.average_projected_score_delta is None
     assert reason.candidates == ()
 
 

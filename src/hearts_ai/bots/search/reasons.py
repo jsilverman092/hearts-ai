@@ -1,9 +1,40 @@
 from __future__ import annotations
 
 from hearts_ai.bots.reasons import SerializedReasonPayload, register_default_reason_serializer
-from hearts_ai.bots.search.models import SearchPlayDecisionReason
+from hearts_ai.bots.search.models import SearchChosenMoveReason, SearchPlayDecisionReason
 
 _REGISTERED = False
+
+
+def _serialize_search_chosen_move_reason(reason: SearchChosenMoveReason) -> SerializedReasonPayload:
+    return {
+        "card": str(reason.card),
+        "mode": str(reason.mode),
+        "candidate_index": int(reason.candidate_index),
+        "follows_led_suit": bool(reason.follows_led_suit),
+        "is_point_card": bool(reason.is_point_card),
+        "trick_points_so_far": int(reason.trick_points_so_far),
+        "average_projected_hand_points": (
+            float(reason.average_projected_hand_points)
+            if reason.average_projected_hand_points is not None
+            else None
+        ),
+        "average_projected_score_delta": (
+            float(reason.average_projected_score_delta)
+            if reason.average_projected_score_delta is not None
+            else None
+        ),
+        "average_projected_total_score": (
+            float(reason.average_projected_total_score)
+            if reason.average_projected_total_score is not None
+            else None
+        ),
+        "average_root_utility": (
+            float(reason.average_root_utility)
+            if reason.average_root_utility is not None
+            else None
+        ),
+    }
 
 
 def serialize_search_play_decision_reason(reason: SearchPlayDecisionReason) -> SerializedReasonPayload:
@@ -11,6 +42,11 @@ def serialize_search_play_decision_reason(reason: SearchPlayDecisionReason) -> S
         "chosen_card": str(reason.chosen_card),
         "mode": str(reason.mode),
         "trick_number": int(reason.trick_number),
+        "legal_move_count": int(reason.legal_move_count),
+        "evaluated_candidate_count": int(reason.evaluated_candidate_count),
+        "current_trick_size": int(reason.current_trick_size),
+        "led_suit": reason.led_suit.short_name if reason.led_suit is not None else None,
+        "chosen": _serialize_search_chosen_move_reason(reason.chosen),
         "requested_world_count": int(reason.requested_world_count),
         "world_count": int(reason.world_count),
         "world_base_seed": int(reason.world_base_seed),

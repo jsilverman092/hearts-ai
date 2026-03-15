@@ -8,6 +8,7 @@ from hearts_ai.bots.reasons import DecisionKind
 from hearts_ai.bots.heuristic import HeuristicBotV3
 from hearts_ai.bots.search.models import (
     SearchBotConfig,
+    SearchChosenMoveReason,
     SearchPlayCandidateReason,
     SearchPlayDecisionReason,
 )
@@ -15,6 +16,8 @@ from hearts_ai.engine.cards import Card
 from hearts_ai.engine.state import GameState
 from hearts_ai.engine.types import Hand, PlayerId
 from hearts_ai.search import (
+    RootCandidateEvaluation,
+    RootMoveCandidate,
     SELECTION_POLICY,
     SeatPrivateMemory,
     build_root_move_candidates,
@@ -116,6 +119,11 @@ class SearchBotV1:
             chosen_card=selected.candidate.card,
             mode=selected.candidate.mode,
             trick_number=state.trick_number,
+            legal_move_count=len(view.legal_moves),
+            evaluated_candidate_count=len(evaluation.candidate_evaluations),
+            current_trick_size=len(view.current_trick),
+            led_suit=view.current_trick[0][1].suit if view.current_trick else None,
+            chosen=_chosen_move_reason_from_evaluation(selected),
             requested_world_count=self.config.world_count,
             world_count=len(evaluation.world_set.worlds),
             world_base_seed=evaluation.base_seed,
@@ -158,11 +166,19 @@ class SearchBotV1:
         fallback_message: str,
     ) -> Card:
         chosen_card = self._heuristic_delegate.choose_play(state=state, rng=rng)
-        fallback_candidate = _candidate_for_card(view=view, card=chosen_card)
+        fallback_candidate_index, fallback_candidate = _candidate_for_card(view=view, card=chosen_card)
         self._last_play_reason = SearchPlayDecisionReason(
             chosen_card=chosen_card,
             mode=fallback_candidate.mode,
             trick_number=state.trick_number,
+            legal_move_count=len(view.legal_moves),
+            evaluated_candidate_count=0,
+            current_trick_size=len(view.current_trick),
+            led_suit=view.current_trick[0][1].suit if view.current_trick else None,
+            chosen=_chosen_move_reason_from_candidate(
+                candidate=fallback_candidate,
+                candidate_index=fallback_candidate_index,
+            ),
             requested_world_count=self.config.world_count,
             world_count=0,
             world_base_seed=world_base_seed,
@@ -174,11 +190,48 @@ class SearchBotV1:
         return chosen_card
 
 
-def _candidate_for_card(*, view, card: Card):
-    for candidate in build_root_move_candidates(view):
+def _candidate_for_card(*, view, card: Card) -> tuple[int, RootMoveCandidate]:
+    for candidate_index, candidate in enumerate(build_root_move_candidates(view)):
         if candidate.card == card:
-            return candidate
+            return candidate_index, candidate
     raise ValueError(f"Chosen card {card} was not present in root move candidates.")
+
+
+def _chosen_move_reason_from_evaluation(
+    evaluation: RootCandidateEvaluation,
+) -> SearchChosenMoveReason:
+    candidate = evaluation.candidate
+    return SearchChosenMoveReason(
+        card=candidate.card,
+        mode=candidate.mode,
+        candidate_index=evaluation.candidate_index,
+        follows_led_suit=candidate.follows_led_suit,
+        is_point_card=candidate.is_point_card,
+        trick_points_so_far=candidate.trick_points_so_far,
+        average_projected_hand_points=evaluation.average_projected_hand_points,
+        average_projected_score_delta=evaluation.average_projected_score_delta,
+        average_projected_total_score=evaluation.average_projected_total_score,
+        average_root_utility=evaluation.average_root_utility,
+    )
+
+
+def _chosen_move_reason_from_candidate(
+    *,
+    candidate: RootMoveCandidate,
+    candidate_index: int,
+) -> SearchChosenMoveReason:
+    return SearchChosenMoveReason(
+        card=candidate.card,
+        mode=candidate.mode,
+        candidate_index=candidate_index,
+        follows_led_suit=candidate.follows_led_suit,
+        is_point_card=candidate.is_point_card,
+        trick_points_so_far=candidate.trick_points_so_far,
+        average_projected_hand_points=None,
+        average_projected_score_delta=None,
+        average_projected_total_score=None,
+        average_root_utility=None,
+    )
 
 
 __all__ = ["SearchBotV1"]

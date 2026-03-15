@@ -167,10 +167,21 @@ def test_search_v1_play_reason_uses_generic_boundary() -> None:
     assert payload is not None
     assert payload["chosen_card"] == str(chosen_card)
     assert payload["mode"] == "lead"
+    assert payload["legal_move_count"] == 1
+    assert payload["evaluated_candidate_count"] == 1
+    assert payload["current_trick_size"] == 0
+    assert payload["led_suit"] is None
     assert payload["requested_world_count"] == 2
     assert payload["world_count"] == 2
     assert payload["selection_source"] == "search"
     assert payload["fallback_message"] is None
+    assert payload["chosen"]["card"] == str(chosen_card)
+    assert payload["chosen"]["mode"] == "lead"
+    assert payload["chosen"]["candidate_index"] == payload["candidates"][0]["candidate_index"]
+    assert payload["chosen"]["average_projected_score_delta"] == payload["candidates"][0]["average_projected_score_delta"]
+    assert payload["chosen"]["average_projected_hand_points"] == payload["candidates"][0]["average_projected_hand_points"]
+    assert payload["chosen"]["average_projected_total_score"] == payload["candidates"][0]["average_projected_total_score"]
+    assert payload["chosen"]["average_root_utility"] == payload["candidates"][0]["average_root_utility"]
     assert payload["selection_policy"] == [
         "average_projected_score_delta",
         "average_projected_hand_points",
