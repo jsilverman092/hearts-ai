@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from types import MappingProxyType
 
 from hearts_ai.engine.rules import legal_moves
@@ -45,6 +46,7 @@ def build_search_player_view(
         pass_direction=state.pass_direction,
         pass_applied=state.pass_applied,
         target_score=state.config.target_score,
+        config=deepcopy(state.config),
         public_knowledge=build_public_knowledge(state=state),
         private_knowledge=private,
     )

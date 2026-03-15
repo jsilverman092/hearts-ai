@@ -12,10 +12,22 @@ from hearts_ai.search.models import (
     VisibleTrickPlay,
 )
 from hearts_ai.search.view import build_search_player_view
+from hearts_ai.search.worlds import (
+    DeterminizedWorld,
+    DeterminizedWorldSet,
+    ImpossibleWorldError,
+    SampledHiddenHands,
+    sample_determinized_world,
+    sample_determinized_worlds,
+)
 
 __all__ = [
+    "DeterminizedWorld",
+    "DeterminizedWorldSet",
+    "ImpossibleWorldError",
     "PublicKnowledge",
     "RootMoveCandidate",
+    "SampledHiddenHands",
     "SearchPlayerView",
     "SearchPlayMode",
     "SeatPrivateMemory",
@@ -26,4 +38,6 @@ __all__ = [
     "VisibleTrickPlay",
     "build_root_move_candidates",
     "build_search_player_view",
+    "sample_determinized_world",
+    "sample_determinized_worlds",
 ]

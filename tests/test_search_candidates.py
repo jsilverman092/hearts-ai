@@ -1,5 +1,5 @@
 from hearts_ai.engine.cards import Card, Rank, Suit
-from hearts_ai.engine.state import GameState
+from hearts_ai.engine.state import GameConfig, GameState
 from hearts_ai.engine.types import PLAYER_IDS, PlayerId
 from hearts_ai.search import (
     PublicKnowledge,
@@ -41,6 +41,7 @@ def test_build_root_move_candidates_orders_cards_deterministically_in_lead_mode(
         pass_direction="left",
         pass_applied=True,
         target_score=50,
+        config=GameConfig(target_score=50),
         public_knowledge=_empty_public_knowledge(),
     )
 

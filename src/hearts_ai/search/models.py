@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import TypeAlias
 
 from hearts_ai.engine.cards import Card, Suit
+from hearts_ai.engine.state import GameConfig
 from hearts_ai.engine.types import PlayerId
 
 VisibleTrickPlay: TypeAlias = tuple[PlayerId, Card]
@@ -116,6 +117,7 @@ class SearchPlayerView:
     pass_direction: str
     pass_applied: bool
     target_score: int
+    config: GameConfig
     public_knowledge: PublicKnowledge
     private_knowledge: SeatPrivateKnowledge = field(default_factory=SeatPrivateKnowledge)
 

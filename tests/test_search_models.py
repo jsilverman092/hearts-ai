@@ -1,5 +1,6 @@
 from hearts_ai.engine.state import GameState
 from hearts_ai.engine.cards import Card, Rank, Suit
+from hearts_ai.engine.state import GameConfig
 from hearts_ai.engine.types import PLAYER_IDS, PlayerId
 from hearts_ai.search import PublicKnowledge, SearchPlayerView, SeatPrivateKnowledge, build_search_player_view
 
@@ -34,6 +35,7 @@ def test_search_player_view_models_are_instantiable() -> None:
         pass_direction="left",
         pass_applied=True,
         target_score=50,
+        config=GameConfig(target_score=50),
         public_knowledge=knowledge,
         private_knowledge=private,
     )
@@ -101,6 +103,8 @@ def test_build_search_player_view_projects_only_acting_hand_and_public_state() -
     assert view.turn == PlayerId(0)
     assert view.hearts_broken is True
     assert view.target_score == state.config.target_score
+    assert view.config == state.config
+    assert view.config is not state.config
     assert view.public_knowledge.qs_live is False
     assert Card(Suit.CLUBS, Rank.ACE) in view.public_knowledge.seen_cards
     assert Card(Suit.SPADES, Rank.QUEEN) in view.public_knowledge.seen_cards
