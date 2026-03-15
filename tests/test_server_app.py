@@ -20,6 +20,7 @@ def test_root_serves_ui_shell() -> None:
     assert 'id="autoplayBtn"' in response.text
     assert 'id="stepBtn"' in response.text
     assert 'id="paceRange"' in response.text
+    assert "Show latest bot explanation" in response.text
 
 
 def test_create_table_rejects_non_boolean_auto_advance() -> None:

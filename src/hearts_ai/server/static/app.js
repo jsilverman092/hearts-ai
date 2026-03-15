@@ -209,6 +209,10 @@ function renderPassDecisionLines(decision) {
   const lines = [];
   const payload = decision.payload || {};
   const selected = Array.isArray(payload.selected_cards) ? payload.selected_cards : [];
+  if (selected.length === 0 && !Array.isArray(payload.candidates) && payload.label) {
+    lines.push(`Reason: ${payload.label}`);
+    return lines;
+  }
   lines.push(`Selected: ${selected.join(" ") || "-"}`);
   const candidates = Array.isArray(payload.candidates) ? payload.candidates : [];
   const top = candidates.slice(0, 5);
@@ -220,9 +224,8 @@ function renderPassDecisionLines(decision) {
   return lines;
 }
 
-function renderPlayDecisionLines(decision) {
+function renderHeuristicPlayDecisionLines(payload) {
   const lines = [];
-  const payload = decision.payload || {};
   lines.push(`Mode: ${payload.mode || "-"}`);
   lines.push(`Chosen: ${payload.chosen_card || "-"}`);
   lines.push(`Moon target: ${payload.moon_defense_target ?? "-"}`);
@@ -240,6 +243,139 @@ function renderPlayDecisionLines(decision) {
     }
   }
   return lines;
+}
+
+function renderSearchPlayDecisionLines(payload) {
+  const lines = [];
+  const chosen = payload.chosen && typeof payload.chosen === "object" ? payload.chosen : null;
+  const comparison =
+    payload.baseline_comparison && typeof payload.baseline_comparison === "object"
+      ? payload.baseline_comparison
+      : null;
+  const baseline =
+    comparison && comparison.baseline && typeof comparison.baseline === "object"
+      ? comparison.baseline
+      : null;
+
+  lines.push(`Mode: ${payload.mode || "-"}`);
+  lines.push(`Chosen: ${payload.chosen_card || "-"}`);
+  lines.push(`Source: ${payload.selection_source || "-"}`);
+  lines.push(`Worlds: ${payload.world_count ?? "-"} / ${payload.requested_world_count ?? "-"}`);
+  lines.push(`Candidates: ${payload.evaluated_candidate_count ?? "-"} eval / ${payload.legal_move_count ?? "-"} legal`);
+  if (payload.current_trick_size || payload.led_suit) {
+    lines.push(`Trick context: size=${payload.current_trick_size ?? 0} led=${payload.led_suit || "-"}`);
+  }
+
+  if (chosen) {
+    const chosenFacts = [];
+    if (chosen.follows_led_suit) {
+      chosenFacts.push("follow");
+    }
+    if (chosen.is_point_card) {
+      chosenFacts.push("point");
+    }
+    if (Number(chosen.trick_points_so_far || 0) > 0) {
+      chosenFacts.push(`trick=${chosen.trick_points_so_far}`);
+    }
+    if (chosen.average_projected_score_delta !== null && chosen.average_projected_score_delta !== undefined) {
+      lines.push(
+        `Chosen eval: delta=${formatDebugScore(chosen.average_projected_score_delta)} ` +
+        `hand=${formatDebugScore(chosen.average_projected_hand_points)} ` +
+        `total=${formatDebugScore(chosen.average_projected_total_score)} ` +
+        `util=${formatDebugScore(chosen.average_root_utility)}`
+      );
+    }
+    if (chosenFacts.length > 0) {
+      lines.push(`Chosen facts: ${chosenFacts.join(", ")}`);
+    }
+  }
+
+  if (comparison) {
+    const agreement = comparison.agrees_with_search ? "agree" : "disagree";
+    lines.push(
+      `Baseline ${comparison.baseline_bot_name || "heuristic_v3"}: ${baseline?.card || "-"} ` +
+      `(${agreement}, rank ${baseline?.selection_rank ?? "-"})`
+    );
+    lines.push(
+      `Vs baseline: delta=${formatDebugScore(comparison.mean_projected_score_delta_advantage)} ` +
+      `util=${formatDebugScore(comparison.mean_root_utility_gain)}`
+    );
+    lines.push(
+      `Worlds: win ${comparison.worlds_search_better ?? 0} ` +
+      `tie ${comparison.worlds_tied ?? 0} ` +
+      `lose ${comparison.worlds_baseline_better ?? 0}`
+    );
+    lines.push(
+      `Range: best +${formatDebugScore(comparison.best_case_root_utility_gain)} ` +
+      `worst -${formatDebugScore(comparison.worst_case_root_utility_loss)}`
+    );
+  }
+
+  if (payload.fallback_message) {
+    lines.push(`Fallback: ${payload.fallback_message}`);
+  }
+
+  const candidates = Array.isArray(payload.candidates) ? payload.candidates : [];
+  if (candidates.length > 0) {
+    lines.push("Top search candidates:");
+    for (const candidate of candidates.slice(0, 3)) {
+      const flags = [];
+      if (candidate.selected) {
+        flags.push("selected");
+      }
+      if (
+        baseline &&
+        baseline.card === candidate.card &&
+        baseline.candidate_index === candidate.candidate_index
+      ) {
+        flags.push("baseline");
+      }
+      if (candidate.is_point_card) {
+        flags.push("point");
+      }
+      if (candidate.follows_led_suit) {
+        flags.push("follow");
+      }
+      if (Number(candidate.trick_points_so_far || 0) > 0) {
+        flags.push(`trick=${candidate.trick_points_so_far}`);
+      }
+      const suffix = flags.length > 0 ? ` [${flags.join(", ")}]` : "";
+      lines.push(
+        `- #${candidate.selection_rank} ${candidate.card} ` +
+        `delta=${formatDebugScore(candidate.average_projected_score_delta)} ` +
+        `hand=${formatDebugScore(candidate.average_projected_hand_points)} ` +
+        `util=${formatDebugScore(candidate.average_root_utility)}${suffix}`
+      );
+    }
+  }
+
+  return lines;
+}
+
+function renderGenericPlayDecisionLines(payload) {
+  const lines = [];
+  if (payload.chosen_card || payload.mode) {
+    lines.push(`Mode: ${payload.mode || "-"}`);
+    lines.push(`Chosen: ${payload.chosen_card || "-"}`);
+  }
+  if (payload.label) {
+    lines.push(`Reason: ${payload.label}`);
+  }
+  if (lines.length === 0) {
+    lines.push("No structured play payload.");
+  }
+  return lines;
+}
+
+function renderPlayDecisionLines(decision) {
+  const payload = decision.payload || {};
+  if (payload.selection_policy && payload.chosen) {
+    return renderSearchPlayDecisionLines(payload);
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, "moon_defense_target")) {
+    return renderHeuristicPlayDecisionLines(payload);
+  }
+  return renderGenericPlayDecisionLines(payload);
 }
 
 function renderViewerRecommendation(snapshot = appState.snapshot) {
@@ -287,11 +423,11 @@ function renderOpponentReason(snapshot = appState.snapshot) {
     return;
   }
   if (!appState.debugOpponentReasonEnabled) {
-    dom.debugOpponentContent.textContent = "Enable to inspect latest heuristic_v2/v3 opponent decision.";
+    dom.debugOpponentContent.textContent = "Enable to inspect the latest bot decision.";
     return;
   }
   if (!snapshot || !snapshot.debug_last_bot_decision) {
-    dom.debugOpponentContent.textContent = "No heuristic_v2/v3 decision captured yet.";
+    dom.debugOpponentContent.textContent = "No bot decision captured yet.";
     return;
   }
 
