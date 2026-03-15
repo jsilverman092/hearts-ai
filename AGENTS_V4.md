@@ -609,7 +609,37 @@ Do not bake runtime thresholds into CI immediately.
      - not the full search bot
      - just enough to prove the interface is usable
 2. Add persistent bot runtime/session support for server and CLI.
+   - Sub-step 1: audit current bot lifecycle differences
+     - CLI bot instances persist within a simulated game
+     - server bot instances are recreated per action
+   - Sub-step 2: define the runtime/session abstraction
+     - persistent bot instances by seat
+     - reset hooks for new hand / new game
+     - no search-specific behavior yet
+   - Sub-step 3: wire CLI through the runtime layer
+     - behavior-preserving first
+     - determinism must remain unchanged
+   - Sub-step 4: wire server `Table` through the runtime layer
+     - persistent per-seat bot instances
+     - preserve current gameplay flow and pacing behavior
+   - Sub-step 5: add lifecycle and determinism tests
+     - memory persists within a hand
+     - runtime resets correctly between hands / games
+     - determinism remains unchanged
 3. Add generic reason serialization hooks so search payloads have a place to go.
+   - Sub-step 1: define a generic decision-reason interface / serializer boundary
+     - pass reason path
+     - play reason path
+     - unsupported-bot fallback behavior
+   - Sub-step 2: adapt heuristic bots to the generic boundary without changing payload shape
+     - preserve current `heuristic_v2` / `heuristic_v3` output
+   - Sub-step 3: refactor server snapshot capture to use the generic serialization path
+     - opponent debug decisions
+     - viewer recommendation path
+   - Sub-step 4: add serialization-path tests
+     - heuristic payloads stay unchanged
+     - unsupported bots remain explicit
+     - viewer recommendation path still works
 
 ### Phase 1: Search Support Layer
 
