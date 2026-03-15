@@ -129,6 +129,65 @@ def test_sample_determinized_world_rejects_known_pass_to_publicly_void_recipient
         raise AssertionError("Expected impossible-world rejection for void-recipient pass fact.")
 
 
+def test_sample_determinized_world_rejects_known_passed_card_still_in_root_hand() -> None:
+    passed_card = Card(Suit.DIAMONDS, Rank.ACE)
+    view = _manual_view(
+        own_hand=(Card(Suit.CLUBS, Rank.TWO), passed_card),
+        unplayed_cards=(
+            Card(Suit.CLUBS, Rank.TWO),
+            passed_card,
+            Card(Suit.SPADES, Rank.KING),
+        ),
+        remaining_cards_by_player={
+            PlayerId(0): 2,
+            PlayerId(1): 1,
+            PlayerId(2): 0,
+            PlayerId(3): 0,
+        },
+        private_knowledge=SeatPrivateKnowledge(
+            passed_cards_by_recipient={PlayerId(1): (passed_card,)}
+        ),
+    )
+
+    try:
+        sample_determinized_world(view=view, seed=23)
+    except ImpossibleWorldError as exc:
+        assert "root hand" in str(exc).lower()
+    else:
+        raise AssertionError("Expected impossible-world rejection for a passed card still in root hand.")
+
+
+def test_sample_determinized_world_rejects_duplicate_passed_card_recipient_assignments() -> None:
+    duplicated_card = Card(Suit.DIAMONDS, Rank.ACE)
+    view = _manual_view(
+        own_hand=(Card(Suit.CLUBS, Rank.TWO),),
+        unplayed_cards=(
+            Card(Suit.CLUBS, Rank.TWO),
+            duplicated_card,
+            Card(Suit.SPADES, Rank.KING),
+        ),
+        remaining_cards_by_player={
+            PlayerId(0): 1,
+            PlayerId(1): 1,
+            PlayerId(2): 1,
+            PlayerId(3): 0,
+        },
+        private_knowledge=SeatPrivateKnowledge(
+            passed_cards_by_recipient={
+                PlayerId(1): (duplicated_card,),
+                PlayerId(2): (duplicated_card,),
+            }
+        ),
+    )
+
+    try:
+        sample_determinized_world(view=view, seed=29)
+    except ImpossibleWorldError as exc:
+        assert "multiple recipients" in str(exc).lower()
+    else:
+        raise AssertionError("Expected impossible-world rejection for duplicated passed-card recipients.")
+
+
 def test_sample_determinized_world_rejects_forced_hand_overflow() -> None:
     view = _manual_view(
         own_hand=(Card(Suit.CLUBS, Rank.TWO),),
@@ -181,6 +240,31 @@ def test_sample_determinized_world_preserves_full_game_config_snapshot() -> None
     assert view.config is not state.config
     assert world.state.config == state.config
     assert world.state.config is not state.config
+
+
+def test_sample_determinized_worlds_stay_invariant_to_true_hidden_assignment_with_private_pass_fact() -> None:
+    state_a = _full_state_with_rotating_hidden_hands(rotation=0)
+    state_b = _full_state_with_rotating_hidden_hands(rotation=1)
+    passed_card = Card(Suit.DIAMONDS, Rank.TWO)
+    private = SeatPrivateKnowledge(
+        passed_cards_by_recipient={PlayerId(1): (passed_card,)}
+    )
+
+    view_a = build_search_player_view(
+        state=state_a,
+        player_id=PlayerId(0),
+        private_knowledge=private,
+    )
+    view_b = build_search_player_view(
+        state=state_b,
+        player_id=PlayerId(0),
+        private_knowledge=private,
+    )
+
+    worlds_a = sample_determinized_worlds(view=view_a, seed=47, world_count=4)
+    worlds_b = sample_determinized_worlds(view=view_b, seed=47, world_count=4)
+
+    assert worlds_a == worlds_b
 
 
 def _full_state_with_rotating_hidden_hands(*, rotation: int) -> GameState:

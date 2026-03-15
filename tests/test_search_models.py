@@ -188,3 +188,59 @@ def test_build_search_player_view_is_invariant_to_hidden_opponent_assignment() -
     view_b = build_search_player_view(state=state_b, player_id=PlayerId(0))
 
     assert view_a == view_b
+
+
+def test_build_search_player_view_is_invariant_to_hidden_assignment_with_private_knowledge() -> None:
+    private = SeatPrivateKnowledge(
+        passed_cards_by_recipient={PlayerId(1): (Card(Suit.SPADES, Rank.QUEEN),)}
+    )
+
+    def build_state(
+        *,
+        p1_hand: list[Card],
+        p2_hand: list[Card],
+        p3_hand: list[Card],
+    ) -> GameState:
+        state = GameState()
+        state.hands = {
+            PlayerId(0): [
+                Card(Suit.CLUBS, Rank.THREE),
+                Card(Suit.HEARTS, Rank.NINE),
+            ],
+            PlayerId(1): p1_hand,
+            PlayerId(2): p2_hand,
+            PlayerId(3): p3_hand,
+        }
+        state.taken_tricks = {player_id: [] for player_id in PLAYER_IDS}
+        state.scores = {player_id: 0 for player_id in PLAYER_IDS}
+        state.hearts_broken = False
+        state.turn = PlayerId(0)
+        state.trick_number = 2
+        state.hand_number = 1
+        state.pass_direction = "left"
+        state.pass_applied = True
+        return state
+
+    state_a = build_state(
+        p1_hand=[Card(Suit.DIAMONDS, Rank.FOUR), Card(Suit.SPADES, Rank.FIVE)],
+        p2_hand=[Card(Suit.CLUBS, Rank.SIX), Card(Suit.DIAMONDS, Rank.SEVEN)],
+        p3_hand=[Card(Suit.HEARTS, Rank.TEN), Card(Suit.SPADES, Rank.JACK)],
+    )
+    state_b = build_state(
+        p1_hand=[Card(Suit.HEARTS, Rank.TEN), Card(Suit.SPADES, Rank.JACK)],
+        p2_hand=[Card(Suit.DIAMONDS, Rank.FOUR), Card(Suit.SPADES, Rank.FIVE)],
+        p3_hand=[Card(Suit.CLUBS, Rank.SIX), Card(Suit.DIAMONDS, Rank.SEVEN)],
+    )
+
+    view_a = build_search_player_view(
+        state=state_a,
+        player_id=PlayerId(0),
+        private_knowledge=private,
+    )
+    view_b = build_search_player_view(
+        state=state_b,
+        player_id=PlayerId(0),
+        private_knowledge=private,
+    )
+
+    assert view_a == view_b

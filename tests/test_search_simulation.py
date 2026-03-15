@@ -48,6 +48,21 @@ def test_simulate_root_candidate_is_deterministic_under_fixed_seed() -> None:
     assert first.summary.root_utility == -float(first.summary.projected_score_deltas[PlayerId(0)])
 
 
+def test_simulate_root_candidate_defaults_to_world_sample_seed() -> None:
+    state = _full_state_with_rotating_hidden_hands(rotation=0)
+    view = build_search_player_view(state=state, player_id=PlayerId(0))
+    candidate = build_root_move_candidates(view)[0]
+    world = sample_determinized_world(view=view, seed=37, sample_index=2)
+
+    implicit = simulate_root_candidate(world=world, candidate=candidate)
+    explicit = simulate_root_candidate(world=world, candidate=candidate, seed=world.sample_seed)
+
+    assert implicit.summary == explicit.summary
+    assert implicit.final_state == explicit.final_state
+    assert implicit.summary.world_sample_seed == 37
+    assert implicit.summary.world_sample_index == 2
+
+
 def test_simulate_root_candidate_completes_each_sampled_world_legally() -> None:
     state = _full_state_with_rotating_hidden_hands(rotation=0)
     view = build_search_player_view(state=state, player_id=PlayerId(0))
@@ -162,6 +177,81 @@ def test_summarize_rollout_scores_successful_moon_as_zero_delta_for_shooter() ->
     assert summary.projected_hand_points[PlayerId(1)] == 26
     assert summary.projected_hand_points[PlayerId(2)] == 26
     assert summary.projected_hand_points[PlayerId(3)] == 26
+
+
+def test_summarize_rollout_scores_opponent_moon_as_positive_delta_for_root() -> None:
+    final_state = GameState()
+    final_state.hands = {player_id: [] for player_id in PLAYER_IDS}
+    final_state.taken_tricks = {player_id: [] for player_id in PLAYER_IDS}
+    final_state.trick_in_progress = []
+    final_state.scores = {
+        PlayerId(0): 18,
+        PlayerId(1): 7,
+        PlayerId(2): 12,
+        PlayerId(3): 20,
+    }
+
+    moon_cards = [
+        Card(Suit.HEARTS, Rank.TWO),
+        Card(Suit.HEARTS, Rank.THREE),
+        Card(Suit.HEARTS, Rank.FOUR),
+        Card(Suit.HEARTS, Rank.FIVE),
+        Card(Suit.HEARTS, Rank.SIX),
+        Card(Suit.HEARTS, Rank.SEVEN),
+        Card(Suit.HEARTS, Rank.EIGHT),
+        Card(Suit.HEARTS, Rank.NINE),
+        Card(Suit.HEARTS, Rank.TEN),
+        Card(Suit.HEARTS, Rank.JACK),
+        Card(Suit.HEARTS, Rank.QUEEN),
+        Card(Suit.HEARTS, Rank.KING),
+    ]
+    final_state.taken_tricks[PlayerId(2)] = [
+        [(PlayerId(2), card)]
+        for card in moon_cards
+    ] + [[
+        (PlayerId(2), Card(Suit.HEARTS, Rank.ACE)),
+        (PlayerId(2), Card(Suit.SPADES, Rank.QUEEN)),
+    ]]
+
+    assert is_hand_over(final_state) is True
+    starting_scores = dict(final_state.scores)
+    score_hand(final_state)
+
+    world = DeterminizedWorld(
+        root_player_id=PlayerId(0),
+        sample_index=1,
+        sample_seed=17,
+        hidden_hands={
+            PlayerId(1): (),
+            PlayerId(2): (),
+            PlayerId(3): (),
+        },
+        state=final_state,
+    )
+    candidate = RootMoveCandidate(
+        card=Card(Suit.CLUBS, Rank.TWO),
+        mode="lead",
+        follows_led_suit=False,
+        is_point_card=False,
+        trick_points_so_far=0,
+    )
+
+    summary = summarize_rollout(
+        world=world,
+        candidate=candidate,
+        starting_scores=starting_scores,
+        final_state=final_state,
+    )
+
+    assert summary.projected_raw_hand_points[PlayerId(0)] == 0
+    assert summary.projected_hand_points[PlayerId(0)] == 26
+    assert summary.projected_score_deltas[PlayerId(0)] == 26
+    assert summary.projected_scores[PlayerId(0)] == starting_scores[PlayerId(0)] + 26
+    assert summary.root_utility == -26.0
+
+    assert summary.projected_raw_hand_points[PlayerId(2)] == 26
+    assert summary.projected_hand_points[PlayerId(2)] == 0
+    assert summary.projected_score_deltas[PlayerId(2)] == 0
 
 
 def _full_state_with_rotating_hidden_hands(*, rotation: int) -> GameState:
