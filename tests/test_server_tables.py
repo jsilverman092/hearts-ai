@@ -1,3 +1,5 @@
+import copy
+import random
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -5,11 +7,14 @@ import pytest
 
 import hearts_ai.bots.runtime as bot_runtime_module
 import hearts_ai.server.tables as tables_module
+from hearts_ai.bots.factory import create_bot
 from hearts_ai.bots.reasons import register_default_reason_serializer
+from hearts_ai.bots.reasons import serialize_bot_decision_reason
 from hearts_ai.engine.game import is_hand_over
 from hearts_ai.engine.record import replay_jsonl
 from hearts_ai.engine.rules import legal_moves
 from hearts_ai.engine.scoring import trick_points
+from hearts_ai.engine.types import PlayerId
 from hearts_ai.server.state_views import table_snapshot
 from hearts_ai.server.tables import InvalidTableActionError, TableManager, UnauthorizedError
 
@@ -58,6 +63,49 @@ class _GenericReasonBot:
         if decision_kind == "play":
             return self._play_reason
         raise AssertionError(f"Unexpected decision kind: {decision_kind}")
+
+
+@dataclass(frozen=True)
+class _UnregisteredDecisionReason:
+    label: str
+
+
+class _UnregisteredReasonBot:
+    def __init__(self, player_id) -> None:
+        self.player_id = player_id
+        self._pass_reason: _UnregisteredDecisionReason | None = None
+
+    def choose_pass(self, hand, state, rng):
+        del rng
+        chosen = list(sorted(hand)[: state.config.pass_count])
+        self._pass_reason = _UnregisteredDecisionReason(label="unregistered")
+        return chosen
+
+    def choose_play(self, state, rng):
+        del state, rng
+        raise AssertionError("choose_play should not be reached in unregistered-reason viewer test.")
+
+    def peek_last_decision_reason(self, decision_kind: str):
+        if decision_kind == "pass":
+            return self._pass_reason
+        return None
+
+
+class _MissingReasonBot:
+    def __init__(self, player_id) -> None:
+        self.player_id = player_id
+
+    def choose_pass(self, hand, state, rng):
+        del rng
+        return list(sorted(hand)[: state.config.pass_count])
+
+    def choose_play(self, state, rng):
+        del state, rng
+        raise AssertionError("choose_play should not be reached in missing-reason viewer test.")
+
+    def peek_last_decision_reason(self, decision_kind: str):
+        del decision_kind
+        return None
 
 
 def test_table_starts_after_all_seats_filled() -> None:
@@ -263,6 +311,83 @@ def test_snapshot_supports_generic_viewer_recommendation_payload_for_non_heurist
     assert recommendation["bot_name"] == "random"
     assert recommendation["decision_kind"] == "pass"
     assert recommendation["payload"]["label"].startswith("pass:")
+
+
+def test_snapshot_viewer_recommendation_preserves_heuristic_v3_payload_shape() -> None:
+    manager = TableManager()
+    table, player_secret = manager.create_table(display_name="Host", target_score=50, seed=7)
+    manager.claim_seat(table.table_code, player_secret=player_secret, seat=0)
+    manager.add_bot(table.table_code, seat=1, bot_name="random")
+    manager.add_bot(table.table_code, seat=2, bot_name="random")
+    manager.add_bot(table.table_code, seat=3, bot_name="random")
+    manager.set_viewer_advisory_bot(table.table_code, player_secret=player_secret, bot_name="heuristic_v3")
+
+    current = manager.get_table(table.table_code)
+    snapshot = table_snapshot(current, viewer_secret=player_secret)
+    recommendation = snapshot["debug_viewer_recommendation"]
+
+    assert recommendation is not None
+    assert recommendation["status"] == "ok"
+
+    advisory_rng_seed = (
+        (current.seed << 16)
+        ^ (current.state.hand_number << 8)
+        ^ (current.state.trick_number << 2)
+        ^ 0
+        ^ sum(ord(ch) for ch in "heuristic_v3")
+    )
+    advisory_rng = random.Random(advisory_rng_seed)
+    advisory_state = copy.deepcopy(current.state)
+    advisory_bot = create_bot("heuristic_v3", player_id=PlayerId(0))
+    advisory_bot.choose_pass(
+        hand=advisory_state.hands[PlayerId(0)],
+        state=advisory_state,
+        rng=advisory_rng,
+    )
+
+    assert recommendation["payload"] == serialize_bot_decision_reason(advisory_bot, "pass")
+
+
+def test_snapshot_marks_bot_with_unregistered_reason_serializer_as_unsupported(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(tables_module, "create_bot", lambda bot_name, player_id: _UnregisteredReasonBot(player_id))
+
+    manager = TableManager()
+    table, player_secret = manager.create_table(display_name="Host", target_score=50, seed=7)
+    manager.claim_seat(table.table_code, player_secret=player_secret, seat=0)
+    manager.add_bot(table.table_code, seat=1, bot_name="random")
+    manager.add_bot(table.table_code, seat=2, bot_name="random")
+    manager.add_bot(table.table_code, seat=3, bot_name="random")
+    manager.set_viewer_advisory_bot(table.table_code, player_secret=player_secret, bot_name="random")
+
+    snapshot = table_snapshot(manager.get_table(table.table_code), viewer_secret=player_secret)
+    recommendation = snapshot["debug_viewer_recommendation"]
+
+    assert recommendation is not None
+    assert recommendation["status"] == "unsupported_bot"
+    assert recommendation["message"] == "No explanation payload support for advisory bot 'random'."
+
+
+def test_snapshot_marks_bot_with_missing_reason_after_action_as_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(tables_module, "create_bot", lambda bot_name, player_id: _MissingReasonBot(player_id))
+
+    manager = TableManager()
+    table, player_secret = manager.create_table(display_name="Host", target_score=50, seed=7)
+    manager.claim_seat(table.table_code, player_secret=player_secret, seat=0)
+    manager.add_bot(table.table_code, seat=1, bot_name="random")
+    manager.add_bot(table.table_code, seat=2, bot_name="random")
+    manager.add_bot(table.table_code, seat=3, bot_name="random")
+    manager.set_viewer_advisory_bot(table.table_code, player_secret=player_secret, bot_name="random")
+
+    snapshot = table_snapshot(manager.get_table(table.table_code), viewer_secret=player_secret)
+    recommendation = snapshot["debug_viewer_recommendation"]
+
+    assert recommendation is not None
+    assert recommendation["status"] == "error"
+    assert recommendation["message"] == "Recommendation bot did not expose a reason payload."
 
 
 def test_add_bot_rejects_unknown_bot_type() -> None:
@@ -631,6 +756,30 @@ def test_snapshot_exposes_heuristic_v2_debug_decision_payload() -> None:
     else:
         assert "chosen_card" in debug["payload"]
         assert "candidates" in debug["payload"]
+
+
+def test_snapshot_debug_last_bot_decision_preserves_heuristic_v3_payload_shape() -> None:
+    manager = TableManager()
+    table, host_secret = manager.create_table(display_name="Host", target_score=30, seed=35)
+    manager.add_bot(table.table_code, seat=0, bot_name="heuristic_v3")
+    manager.add_bot(table.table_code, seat=1, bot_name="heuristic_v3")
+    manager.add_bot(table.table_code, seat=2, bot_name="heuristic_v3")
+    manager.add_bot(table.table_code, seat=3, bot_name="heuristic_v3")
+
+    for _ in range(16):
+        result = manager.advance_one_action(table.table_code, player_secret=host_secret)
+        if result.action in {"bot_pass_submitted", "bot_card_played"}:
+            break
+    else:
+        raise AssertionError("Did not capture a heuristic_v3 decision action.")
+
+    current = manager.get_table(table.table_code)
+    snapshot = table_snapshot(current, viewer_secret=host_secret)
+    debug = snapshot["debug_last_bot_decision"]
+
+    assert isinstance(debug, dict)
+    bot = current.bot_runtime_session.bot_for_player(PlayerId(debug["seat"]))
+    assert debug["payload"] == serialize_bot_decision_reason(bot, debug["decision_kind"])
 
 
 def test_snapshot_exposes_generic_debug_decision_payload_for_reason_capable_bot(
