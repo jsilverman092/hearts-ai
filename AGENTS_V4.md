@@ -841,6 +841,29 @@ This should stay scoped as a focused UX cleanup, not a redesign of the whole app
    - Sub-step 1: keep seat totals and current hand points where they already work well
    - Sub-step 2: do not move that scoring information into a separate meta panel unless there is a clear gain
 
+### Phase 4.5: Benchmark Execution and Tuning
+
+With Phase 4 tooling in place, the next work should be disciplined benchmark execution rather than more implementation churn.
+
+1. Run codified `benchmark-search` sweeps.
+   - run `mixed_search_field`
+   - run `all_search_v1`
+   - start with `world_count = 1, 2, 4, 8`
+   - optionally add `16` as a slower comparison point if needed
+2. Summarize runtime and strength tradeoffs.
+   - compare win rate, average points, and average rank
+   - compare runtime cost per sweep setting
+   - look for diminishing returns past the lower world counts
+3. Decide whether to raise the default `search_v1.world_count`.
+   - prefer a benchmark-backed change, not an intuition-only change
+   - keep usability/runtime in view alongside strength
+4. Write results to a dedicated benchmark report.
+   - create `AGENTS_V4_BENCHMARK_REPORT.md`
+   - include benchmark matrix, outputs, observations, and recommendation
+5. Only after the benchmark report, decide whether follow-up tuning is warranted.
+   - if needed, add 1-2 more scenario fixtures for behaviors exposed by the benchmark runs
+   - avoid tuning multiple secondary knobs at once unless the report justifies it
+
 ## Acceptance Criteria For This Phase
 
 This phase should count as complete when all of the following are true:
