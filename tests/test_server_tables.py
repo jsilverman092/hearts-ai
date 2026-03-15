@@ -1,14 +1,63 @@
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
 
 import hearts_ai.bots.runtime as bot_runtime_module
+import hearts_ai.server.tables as tables_module
+from hearts_ai.bots.reasons import register_default_reason_serializer
 from hearts_ai.engine.game import is_hand_over
 from hearts_ai.engine.record import replay_jsonl
 from hearts_ai.engine.rules import legal_moves
 from hearts_ai.engine.scoring import trick_points
 from hearts_ai.server.state_views import table_snapshot
 from hearts_ai.server.tables import InvalidTableActionError, TableManager, UnauthorizedError
+
+
+@dataclass(frozen=True)
+class _GenericDecisionReason:
+    label: str
+
+
+_GENERIC_DECISION_REASON_REGISTERED = False
+
+
+def _register_generic_decision_reason_serializer() -> None:
+    global _GENERIC_DECISION_REASON_REGISTERED
+    if _GENERIC_DECISION_REASON_REGISTERED:
+        return
+    register_default_reason_serializer(
+        _GenericDecisionReason,
+        lambda reason: {"label": reason.label},
+    )
+    _GENERIC_DECISION_REASON_REGISTERED = True
+
+
+class _GenericReasonBot:
+    def __init__(self, player_id) -> None:
+        self.player_id = player_id
+        self._pass_reason: _GenericDecisionReason | None = None
+        self._play_reason: _GenericDecisionReason | None = None
+
+    def choose_pass(self, hand, state, rng):
+        del rng
+        chosen = list(sorted(hand)[: state.config.pass_count])
+        label = ",".join(str(card) for card in chosen)
+        self._pass_reason = _GenericDecisionReason(label=f"pass:{label}")
+        return chosen
+
+    def choose_play(self, state, rng):
+        del rng
+        card = legal_moves(state, self.player_id)[0]
+        self._play_reason = _GenericDecisionReason(label=f"play:{card}")
+        return card
+
+    def peek_last_decision_reason(self, decision_kind: str):
+        if decision_kind == "pass":
+            return self._pass_reason
+        if decision_kind == "play":
+            return self._play_reason
+        raise AssertionError(f"Unexpected decision kind: {decision_kind}")
 
 
 def test_table_starts_after_all_seats_filled() -> None:
@@ -190,6 +239,30 @@ def test_snapshot_marks_unsupported_viewer_recommendation_bot() -> None:
     assert recommendation is not None
     assert recommendation["status"] == "unsupported_bot"
     assert recommendation["bot_name"] == "random"
+
+
+def test_snapshot_supports_generic_viewer_recommendation_payload_for_non_heuristic_bot_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _register_generic_decision_reason_serializer()
+    monkeypatch.setattr(tables_module, "create_bot", lambda bot_name, player_id: _GenericReasonBot(player_id))
+
+    manager = TableManager()
+    table, player_secret = manager.create_table(display_name="Host", target_score=50, seed=7)
+    manager.claim_seat(table.table_code, player_secret=player_secret, seat=0)
+    manager.add_bot(table.table_code, seat=1, bot_name="random")
+    manager.add_bot(table.table_code, seat=2, bot_name="random")
+    manager.add_bot(table.table_code, seat=3, bot_name="random")
+    manager.set_viewer_advisory_bot(table.table_code, player_secret=player_secret, bot_name="random")
+
+    snapshot = table_snapshot(manager.get_table(table.table_code), viewer_secret=player_secret)
+    recommendation = snapshot["debug_viewer_recommendation"]
+
+    assert recommendation is not None
+    assert recommendation["status"] == "ok"
+    assert recommendation["bot_name"] == "random"
+    assert recommendation["decision_kind"] == "pass"
+    assert recommendation["payload"]["label"].startswith("pass:")
 
 
 def test_add_bot_rejects_unknown_bot_type() -> None:
@@ -558,6 +631,36 @@ def test_snapshot_exposes_heuristic_v2_debug_decision_payload() -> None:
     else:
         assert "chosen_card" in debug["payload"]
         assert "candidates" in debug["payload"]
+
+
+def test_snapshot_exposes_generic_debug_decision_payload_for_reason_capable_bot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _register_generic_decision_reason_serializer()
+    monkeypatch.setattr(bot_runtime_module, "create_bot", lambda bot_name, player_id: _GenericReasonBot(player_id))
+
+    manager = TableManager()
+    table, host_secret = manager.create_table(display_name="Host", target_score=30, seed=39)
+    manager.add_bot(table.table_code, seat=0, bot_name="random")
+    manager.add_bot(table.table_code, seat=1, bot_name="random")
+    manager.add_bot(table.table_code, seat=2, bot_name="random")
+    manager.add_bot(table.table_code, seat=3, bot_name="random")
+
+    for _ in range(8):
+        result = manager.advance_one_action(table.table_code, player_secret=host_secret)
+        if result.action in {"bot_pass_submitted", "bot_card_played"}:
+            break
+    else:
+        raise AssertionError("Did not capture a generic reason-capable bot action.")
+
+    current = manager.get_table(table.table_code)
+    snapshot = table_snapshot(current, viewer_secret=host_secret)
+    debug = snapshot["debug_last_bot_decision"]
+
+    assert isinstance(debug, dict)
+    assert debug["bot_name"] == "random"
+    assert debug["decision_kind"] in {"pass", "play"}
+    assert debug["payload"]["label"].startswith(f"{debug['decision_kind']}:")
 
 
 def test_snapshot_debug_decision_is_none_when_no_heuristic_v2_action() -> None:

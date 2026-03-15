@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from hearts_ai.bots.factory import create_bot, normalize_bot_name
+from hearts_ai.bots.reasons import DecisionKind, peek_bot_decision_reason, serialize_decision_reason
 from hearts_ai.bots.runtime import BotRuntimeSession
 from hearts_ai.engine.cards import Card, Rank, Suit
 from hearts_ai.engine.game import apply_pass, deal, is_game_over, is_hand_over, new_game, play_card
@@ -266,7 +267,7 @@ class Table:
                 "message": "Viewer recommendations are available only for human-controlled seats.",
             }
 
-        decision_kind: Literal["pass", "play"] | None = None
+        decision_kind: DecisionKind | None = None
         if self.phase == "passing":
             if viewer_seat in self.pending_passes:
                 return {
@@ -288,17 +289,6 @@ class Table:
             }
 
         advisory_bot_name = self.viewer_advisory_bot_name(viewer_secret) or "heuristic_v3"
-        if advisory_bot_name not in {"heuristic_v2", "heuristic_v3"}:
-            return {
-                "status": "unsupported_bot",
-                "seat": int(viewer_seat),
-                "bot_name": advisory_bot_name,
-                "decision_kind": decision_kind,
-                "hand_number": self.state.hand_number,
-                "trick_number": self.state.trick_number,
-                "message": f"No explanation payload support for advisory bot '{advisory_bot_name}'.",
-            }
-
         advisory_rng_seed = (
             (self.seed << 16)
             ^ (self.state.hand_number << 8)
@@ -317,10 +307,8 @@ class Table:
                     state=advisory_state,
                     rng=advisory_rng,
                 )
-                payload = _serialize_heuristic_v2_pass_reason(advisory_bot)
             else:
                 advisory_bot.choose_play(state=advisory_state, rng=advisory_rng)
-                payload = _serialize_heuristic_v2_play_reason(advisory_bot)
         except Exception as exc:
             return {
                 "status": "error",
@@ -332,15 +320,38 @@ class Table:
                 "message": f"Failed to generate recommendation: {exc}",
             }
 
-        if payload is None:
+        reason = peek_bot_decision_reason(advisory_bot, decision_kind)
+        if reason is None:
+            if callable(getattr(advisory_bot, "peek_last_decision_reason", None)):
+                return {
+                    "status": "error",
+                    "seat": int(viewer_seat),
+                    "bot_name": advisory_bot_name,
+                    "decision_kind": decision_kind,
+                    "hand_number": self.state.hand_number,
+                    "trick_number": self.state.trick_number,
+                    "message": "Recommendation bot did not expose a reason payload.",
+                }
             return {
-                "status": "error",
+                "status": "unsupported_bot",
                 "seat": int(viewer_seat),
                 "bot_name": advisory_bot_name,
                 "decision_kind": decision_kind,
                 "hand_number": self.state.hand_number,
                 "trick_number": self.state.trick_number,
-                "message": "Recommendation bot did not expose a reason payload.",
+                "message": f"No explanation payload support for advisory bot '{advisory_bot_name}'.",
+            }
+
+        payload = serialize_decision_reason(reason)
+        if payload is None:
+            return {
+                "status": "unsupported_bot",
+                "seat": int(viewer_seat),
+                "bot_name": advisory_bot_name,
+                "decision_kind": decision_kind,
+                "hand_number": self.state.hand_number,
+                "trick_number": self.state.trick_number,
+                "message": f"No explanation payload support for advisory bot '{advisory_bot_name}'.",
             }
 
         return {
@@ -528,21 +539,16 @@ class Table:
     def _reset_bot_runtime_session(self) -> None:
         self.bot_runtime_session = BotRuntimeSession(bot_names=dict(self.bot_seat_types))
 
-    def _capture_bot_debug_decision(self, *, player_id: PlayerId, bot: Any, decision_kind: str) -> None:
-        bot_name = self.bot_name_for_seat(player_id)
-        if bot_name not in {"heuristic_v2", "heuristic_v3"}:
+    def _capture_bot_debug_decision(self, *, player_id: PlayerId, bot: Any, decision_kind: DecisionKind) -> None:
+        reason = peek_bot_decision_reason(bot, decision_kind)
+        if reason is None:
             return
-        if decision_kind == "pass":
-            payload = _serialize_heuristic_v2_pass_reason(bot)
-        elif decision_kind == "play":
-            payload = _serialize_heuristic_v2_play_reason(bot)
-        else:
-            return
+        payload = serialize_decision_reason(reason)
         if payload is None:
             return
         self.debug_last_bot_decision = {
             "seat": int(player_id),
-            "bot_name": bot_name,
+            "bot_name": self.bot_name_for_seat(player_id),
             "decision_kind": decision_kind,
             "hand_number": self.state.hand_number,
             "trick_number": self.state.trick_number,
@@ -693,49 +699,6 @@ def _card_from_code(code: str) -> Card:
     if rank_code not in _CARD_RANKS:
         raise InvalidTableActionError(f"Invalid card rank in card code: {code!r}.")
     return Card(suit=_CARD_SUITS[suit_code], rank=_CARD_RANKS[rank_code])
-
-
-def _serialize_heuristic_v2_pass_reason(bot: Any) -> dict[str, Any] | None:
-    peek = getattr(bot, "_peek_last_pass_reason", None)
-    if not callable(peek):
-        return None
-    reason = peek()
-    if reason is None:
-        return None
-    return {
-        "selected_cards": [str(card) for card in reason.selected_cards],
-        "candidates": [
-            {
-                "card": str(candidate.card),
-                "score": [int(value) for value in candidate.score],
-            }
-            for candidate in reason.candidates
-        ],
-    }
-
-
-def _serialize_heuristic_v2_play_reason(bot: Any) -> dict[str, Any] | None:
-    peek = getattr(bot, "_peek_last_play_reason", None)
-    if not callable(peek):
-        return None
-    reason = peek()
-    if reason is None:
-        return None
-    return {
-        "mode": str(reason.mode),
-        "chosen_card": str(reason.chosen_card),
-        "moon_defense_target": int(reason.moon_defense_target) if reason.moon_defense_target is not None else None,
-        "candidates": [
-            {
-                "card": str(candidate.card),
-                "base_score": float(candidate.base_score),
-                "rollout_score": float(candidate.rollout_score),
-                "total_score": float(candidate.total_score),
-                "tags": [str(tag) for tag in candidate.tags],
-            }
-            for candidate in reason.candidates
-        ],
-    }
 
 
 __all__ = [
