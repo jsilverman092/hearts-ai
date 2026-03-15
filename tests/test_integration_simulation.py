@@ -96,3 +96,24 @@ def test_engine_full_game_deterministic_with_heuristic_v3_bots() -> None:
     final_scores, hands_played = result_one
     assert hands_played >= 1
     assert any(score >= 50 for score in final_scores.values())
+
+
+def test_engine_full_game_deterministic_with_search_v1_bots() -> None:
+    result_one = _run_full_game(seed=11, target_score=15, bot_spec="search_v1")
+    result_two = _run_full_game(seed=11, target_score=15, bot_spec="search_v1")
+
+    assert result_one == result_two
+    final_scores, hands_played = result_one
+    assert hands_played >= 1
+    assert any(score >= 15 for score in final_scores.values())
+
+
+def test_engine_full_game_deterministic_with_mixed_search_field() -> None:
+    bot_spec = "search_v1,heuristic_v3,heuristic_v2,random"
+    result_one = _run_full_game(seed=11, target_score=15, bot_spec=bot_spec)
+    result_two = _run_full_game(seed=11, target_score=15, bot_spec=bot_spec)
+
+    assert result_one == result_two
+    final_scores, hands_played = result_one
+    assert hands_played >= 1
+    assert any(score >= 15 for score in final_scores.values())

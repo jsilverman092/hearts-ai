@@ -109,6 +109,28 @@ class _MissingReasonBot:
         return None
 
 
+def _run_bot_table_to_game_over(
+    *,
+    seed: int,
+    target_score: int,
+    bot_names: list[str],
+) -> tuple[TableManager, str]:
+    manager = TableManager()
+    table, player_secret = manager.create_table(display_name="Host", target_score=target_score, seed=seed)
+    for seat, bot_name in enumerate(bot_names):
+        manager.add_bot(table.table_code, seat=seat, bot_name=bot_name)
+
+    for _ in range(2000):
+        current = manager.get_table(table.table_code)
+        if current.phase == "game_over":
+            break
+        manager.advance_one_action(table.table_code, player_secret=player_secret)
+
+    finished = manager.get_table(table.table_code)
+    assert finished.phase == "game_over"
+    return manager, table.table_code
+
+
 def test_table_starts_after_all_seats_filled() -> None:
     manager = TableManager()
     table, player_secret = manager.create_table(display_name="Jason", target_score=50, seed=7)
@@ -211,6 +233,45 @@ def test_all_random_bot_table_is_deterministic() -> None:
     finished_two = manager_two.get_table(table_two.table_code)
     assert finished_two.phase == "game_over"
     assert finished_one.state.scores == finished_two.state.scores
+
+
+def test_all_search_v1_bot_table_is_deterministic() -> None:
+    manager_one, table_code_one = _run_bot_table_to_game_over(
+        seed=17,
+        target_score=15,
+        bot_names=["search_v1", "search_v1", "search_v1", "search_v1"],
+    )
+    finished_one = manager_one.get_table(table_code_one)
+
+    manager_two, table_code_two = _run_bot_table_to_game_over(
+        seed=17,
+        target_score=15,
+        bot_names=["search_v1", "search_v1", "search_v1", "search_v1"],
+    )
+    finished_two = manager_two.get_table(table_code_two)
+
+    assert finished_one.state.scores == finished_two.state.scores
+    assert any(score >= 15 for score in finished_one.state.scores.values())
+
+
+def test_mixed_field_table_with_search_v1_is_deterministic() -> None:
+    bot_names = ["search_v1", "heuristic_v3", "heuristic_v2", "random"]
+    manager_one, table_code_one = _run_bot_table_to_game_over(
+        seed=11,
+        target_score=15,
+        bot_names=bot_names,
+    )
+    finished_one = manager_one.get_table(table_code_one)
+
+    manager_two, table_code_two = _run_bot_table_to_game_over(
+        seed=11,
+        target_score=15,
+        bot_names=bot_names,
+    )
+    finished_two = manager_two.get_table(table_code_two)
+
+    assert finished_one.state.scores == finished_two.state.scores
+    assert any(score >= 15 for score in finished_one.state.scores.values())
 
 
 def test_add_bot_persists_bot_type_in_table_and_snapshot() -> None:
