@@ -19,6 +19,7 @@ const appState = {
   autoplayEnabled: true,
   fastForwardToMyTurn: false,
   trickHoldUntilMs: 0,
+  trickHoldManual: false,
   heldTrickKey: null,
   seenLastTrickKey: null,
   hasRenderedSnapshot: false,
@@ -308,14 +309,14 @@ function renderSearchPlayDecisionLines(payload) {
     for (const candidate of candidates.slice(0, 3)) {
       const flags = [];
       if (candidate.selected) {
-        flags.push("sel");
+        flags.push("s");
       }
       if (
         baseline &&
         baseline.card === candidate.card &&
         baseline.candidate_index === candidate.candidate_index
       ) {
-        flags.push("base");
+        flags.push("b");
       }
       const suffix = flags.length > 0 ? ` [${flags.join(", ")}]` : "";
       lines.push(
@@ -588,6 +589,16 @@ function clearTrickHoldTimer() {
   appState.trickHoldTimer = null;
 }
 
+function releaseTrickHold({ rerender = false } = {}) {
+  clearTrickHoldTimer();
+  appState.trickHoldUntilMs = 0;
+  appState.trickHoldManual = false;
+  appState.heldTrickKey = null;
+  if (rerender) {
+    render();
+  }
+}
+
 function lastTrickKey(snapshot = appState.snapshot) {
   if (!snapshot || !snapshot.last_trick) {
     return null;
@@ -603,18 +614,23 @@ function isTrickHoldActive(snapshot = appState.snapshot) {
   if (appState.heldTrickKey !== key) {
     return false;
   }
+  if (appState.trickHoldManual) {
+    return true;
+  }
   return Date.now() < appState.trickHoldUntilMs;
 }
 
-function activateTrickHold(trickKey) {
+function activateTrickHold(trickKey, { manual = false } = {}) {
   appState.heldTrickKey = trickKey;
-  appState.trickHoldUntilMs = Date.now() + TRICK_HOLD_MS;
   clearTrickHoldTimer();
-  appState.trickHoldTimer = window.setTimeout(() => {
+  appState.trickHoldManual = manual;
+  if (manual) {
     appState.trickHoldUntilMs = 0;
-    appState.heldTrickKey = null;
-    appState.trickHoldTimer = null;
-    render();
+    return;
+  }
+  appState.trickHoldUntilMs = Date.now() + TRICK_HOLD_MS;
+  appState.trickHoldTimer = window.setTimeout(() => {
+    releaseTrickHold({ rerender: true });
   }, TRICK_HOLD_MS);
 }
 
@@ -628,7 +644,9 @@ function maybeActivateTrickHold(snapshot) {
     return;
   }
   if (trickKey !== appState.seenLastTrickKey) {
-    activateTrickHold(trickKey);
+    activateTrickHold(trickKey, {
+      manual: !appState.autoplayEnabled && canControlPace(snapshot),
+    });
     appState.seenLastTrickKey = trickKey;
   }
 }
@@ -661,6 +679,12 @@ function canControlPace(snapshot) {
 
 function setAutoplayEnabled(enabled) {
   appState.autoplayEnabled = Boolean(enabled);
+  if (!appState.autoplayEnabled && appState.heldTrickKey && isTrickHoldActive()) {
+    activateTrickHold(appState.heldTrickKey, { manual: true });
+  }
+  if (appState.autoplayEnabled && appState.trickHoldManual) {
+    releaseTrickHold({ rerender: false });
+  }
   updatePaceControls();
   scheduleAutoAdvance();
 }
@@ -675,6 +699,9 @@ function toggleAutoplay() {
 function requestStepAdvance() {
   if (!dom.stepBtn || dom.stepBtn.disabled) {
     return;
+  }
+  if (appState.trickHoldManual && isTrickHoldActive()) {
+    releaseTrickHold({ rerender: false });
   }
   void advanceOneAction();
 }
@@ -1046,7 +1073,7 @@ function connectWebSocket() {
   socket.addEventListener("close", () => {
     setConnectionStatus("offline", false);
     clearAdvanceTimer();
-    clearTrickHoldTimer();
+    releaseTrickHold({ rerender: false });
     appState.advanceInFlight = false;
     if (!appState.tableCode) {
       return;
@@ -1454,7 +1481,7 @@ function render(snapshot = appState.snapshot) {
     dom.viewerSeatValue.textContent = "spectator";
     dom.tableSection.classList.add("hidden");
     clearAdvanceTimer();
-    clearTrickHoldTimer();
+    releaseTrickHold({ rerender: false });
     dom.beginHandBtn.classList.add("hidden");
     appState.hasRenderedSnapshot = false;
     updatePaceControls(null);
