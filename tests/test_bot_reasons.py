@@ -196,7 +196,7 @@ def test_search_v1_play_reason_uses_generic_boundary() -> None:
         "average_projected_score_delta",
         "average_projected_hand_points",
         "average_projected_total_score",
-        "heuristic_v3_exact_tie",
+        "heuristic_v3_exact_tie_order",
         "candidate_index",
     ]
     assert isinstance(payload["candidates"], list)

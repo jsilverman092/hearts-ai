@@ -11,7 +11,7 @@ SearchSelectionMetric = Literal[
     "average_projected_score_delta",
     "average_projected_hand_points",
     "average_projected_total_score",
-    "heuristic_v3_exact_tie",
+    "heuristic_v3_exact_tie_order",
     "candidate_index",
 ]
 SearchSelectionSource = Literal[

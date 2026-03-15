@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from statistics import fmean
 
 from hearts_ai.bots.reasons import DecisionKind
-from hearts_ai.bots.heuristic import HeuristicBotV3
+from hearts_ai.bots.heuristic import HeuristicBotV3, PlayDecisionReason
 from hearts_ai.bots.search.models import (
     SearchBotConfig,
     SearchBaselineComparisonReason,
@@ -35,7 +35,7 @@ SEARCH_BOT_V1_SELECTION_POLICY = (
     "average_projected_score_delta",
     "average_projected_hand_points",
     "average_projected_total_score",
-    "heuristic_v3_exact_tie",
+    "heuristic_v3_exact_tie_order",
     "candidate_index",
 )
 
@@ -123,14 +123,15 @@ class SearchBotV1:
                 fallback_message="Search evaluation produced no sampled worlds to rank.",
             )
 
-        baseline_card = _choose_baseline_heuristic_card(
+        heuristic_ordered_cards = _heuristic_ordered_cards(
             state=state,
             player_id=self.player_id,
             seed=decision_seed,
         )
+        baseline_card = heuristic_ordered_cards[0]
         ranked = _rank_candidate_evaluations_with_baseline_tiebreak(
             evaluation=evaluation,
-            baseline_card=baseline_card,
+            heuristic_ordered_cards=heuristic_ordered_cards,
         )
         selected = ranked[0]
         self._last_play_reason = SearchPlayDecisionReason(
@@ -270,32 +271,44 @@ def _search_metric_key(evaluation: RootCandidateEvaluation) -> tuple[float, floa
 def _rank_candidate_evaluations_with_baseline_tiebreak(
     *,
     evaluation: RootMoveEvaluationSet,
-    baseline_card: Card,
+    heuristic_ordered_cards: tuple[Card, ...],
 ) -> tuple[RootCandidateEvaluation, ...]:
-    baseline_evaluation = _candidate_evaluation_for_card(
-        evaluation=evaluation,
-        card=baseline_card,
-    )
+    heuristic_rank_by_card = {
+        card: rank
+        for rank, card in enumerate(heuristic_ordered_cards)
+    }
     return tuple(
         sorted(
             evaluation.candidate_evaluations,
             key=lambda candidate_evaluation: (
                 *_search_metric_key(candidate_evaluation),
-                0 if candidate_evaluation.candidate.card == baseline_evaluation.candidate.card else 1,
+                heuristic_rank_by_card.get(
+                    candidate_evaluation.candidate.card,
+                    len(heuristic_rank_by_card),
+                ),
                 candidate_evaluation.candidate_index,
             ),
         )
     )
 
 
-def _choose_baseline_heuristic_card(
+def _heuristic_ordered_cards(
     *,
     state: GameState,
     player_id: PlayerId,
     seed: int,
-) -> Card:
+) -> tuple[Card, ...]:
     bot = HeuristicBotV3(player_id=player_id)
-    return bot.choose_play(state=deepcopy(state), rng=random.Random(seed))
+    chosen_card = bot.choose_play(state=deepcopy(state), rng=random.Random(seed))
+    reason = bot.peek_last_decision_reason("play")
+    if not isinstance(reason, PlayDecisionReason):
+        raise TypeError("HeuristicBotV3 did not expose a structured play decision reason.")
+    ordered_cards = tuple(candidate.card for candidate in reason.candidates)
+    if not ordered_cards:
+        raise ValueError("HeuristicBotV3 produced no candidate ordering for tie-break use.")
+    if ordered_cards[0] != chosen_card:
+        raise ValueError("HeuristicBotV3 candidate ordering was inconsistent with its chosen card.")
+    return ordered_cards
 
 
 def _baseline_comparison_for_card(

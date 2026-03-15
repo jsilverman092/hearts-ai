@@ -149,8 +149,11 @@ def test_search_bot_v1_choose_play_uses_search_evaluation_and_private_memory(
     monkeypatch.setattr(search_bot_module, "evaluate_root_candidates", fake_evaluate_root_candidates)
     monkeypatch.setattr(
         search_bot_module,
-        "_choose_baseline_heuristic_card",
-        lambda **kwargs: Card(Suit.CLUBS, Rank.FIVE),
+        "_heuristic_ordered_cards",
+        lambda **kwargs: (
+            Card(Suit.CLUBS, Rank.FIVE),
+            Card(Suit.SPADES, Rank.ACE),
+        ),
     )
 
     bot = SearchBotV1(
@@ -263,8 +266,11 @@ def test_search_bot_v1_marks_baseline_comparison_agreement(
     monkeypatch.setattr(search_bot_module, "evaluate_root_candidates", fake_evaluate_root_candidates)
     monkeypatch.setattr(
         search_bot_module,
-        "_choose_baseline_heuristic_card",
-        lambda **kwargs: Card(Suit.SPADES, Rank.ACE),
+        "_heuristic_ordered_cards",
+        lambda **kwargs: (
+            Card(Suit.SPADES, Rank.ACE),
+            Card(Suit.CLUBS, Rank.FIVE),
+        ),
     )
 
     bot = SearchBotV1(player_id=PlayerId(0), config=SearchBotConfig(world_count=3))
@@ -286,12 +292,16 @@ def test_search_bot_v1_marks_baseline_comparison_agreement(
     assert reason.baseline_comparison.best_case_root_utility_gain == 0.0
 
 
-def test_search_bot_v1_prefers_heuristic_baseline_on_exact_search_tie(
+def test_search_bot_v1_uses_full_heuristic_order_on_exact_search_ties(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     state = GameState()
     state.hands = {
-        PlayerId(0): [Card(Suit.CLUBS, Rank.FIVE), Card(Suit.SPADES, Rank.ACE)],
+        PlayerId(0): [
+            Card(Suit.SPADES, Rank.THREE),
+            Card(Suit.SPADES, Rank.SIX),
+            Card(Suit.SPADES, Rank.ACE),
+        ],
         PlayerId(1): [Card(Suit.CLUBS, Rank.TWO)],
         PlayerId(2): [Card(Suit.CLUBS, Rank.THREE)],
         PlayerId(3): [Card(Suit.CLUBS, Rank.FOUR)],
@@ -307,6 +317,7 @@ def test_search_bot_v1_prefers_heuristic_baseline_on_exact_search_tie(
         candidates = build_root_move_candidates(kwargs["view"])
         first_summary = _rollout_summary(candidate=candidates[0], sample_index=0, score_delta=3, hand_points=3)
         second_summary = _rollout_summary(candidate=candidates[1], sample_index=0, score_delta=3, hand_points=3)
+        third_summary = _rollout_summary(candidate=candidates[2], sample_index=0, score_delta=3, hand_points=3)
         return RootMoveEvaluationSet(
             root_player_id=kwargs["view"].player_id,
             base_seed=kwargs["seed"],
@@ -334,14 +345,27 @@ def test_search_bot_v1_prefers_heuristic_baseline_on_exact_search_tie(
                     average_projected_total_score=3.0,
                     average_root_utility=-3.0,
                 ),
+                RootCandidateEvaluation(
+                    candidate=candidates[2],
+                    candidate_index=2,
+                    rollout_summaries=(third_summary,),
+                    average_projected_hand_points=3.0,
+                    average_projected_score_delta=3.0,
+                    average_projected_total_score=3.0,
+                    average_root_utility=-3.0,
+                ),
             ),
         )
 
     monkeypatch.setattr(search_bot_module, "evaluate_root_candidates", fake_evaluate_root_candidates)
     monkeypatch.setattr(
         search_bot_module,
-        "_choose_baseline_heuristic_card",
-        lambda **kwargs: Card(Suit.SPADES, Rank.ACE),
+        "_heuristic_ordered_cards",
+        lambda **kwargs: (
+            Card(Suit.SPADES, Rank.ACE),
+            Card(Suit.SPADES, Rank.SIX),
+            Card(Suit.SPADES, Rank.THREE),
+        ),
     )
 
     bot = SearchBotV1(player_id=PlayerId(0), config=SearchBotConfig(world_count=3))
@@ -351,15 +375,17 @@ def test_search_bot_v1_prefers_heuristic_baseline_on_exact_search_tie(
     reason = bot.peek_last_decision_reason("play")
     assert isinstance(reason, SearchPlayDecisionReason)
     assert reason.chosen.card == Card(Suit.SPADES, Rank.ACE)
-    assert reason.chosen.candidate_index == 1
+    assert reason.chosen.candidate_index == 2
     assert reason.baseline_comparison is not None
     assert reason.baseline_comparison.agrees_with_search is True
     assert reason.baseline_comparison.baseline.selection_rank == 1
     assert reason.candidates[0].card == Card(Suit.SPADES, Rank.ACE)
     assert reason.candidates[0].selected is True
     assert reason.candidates[0].selection_rank == 1
-    assert reason.candidates[1].card == Card(Suit.CLUBS, Rank.FIVE)
+    assert reason.candidates[1].card == Card(Suit.SPADES, Rank.SIX)
     assert reason.candidates[1].selection_rank == 2
+    assert reason.candidates[2].card == Card(Suit.SPADES, Rank.THREE)
+    assert reason.candidates[2].selection_rank == 3
 
 
 def test_search_bot_v1_choose_play_is_deterministic_under_fixed_seed() -> None:
