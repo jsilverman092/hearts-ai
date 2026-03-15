@@ -1,4 +1,4 @@
-# Search Phase Plan
+# Hearts AI Plan (AGENTS_V4: Search Support And search_v1)
 
 ## Purpose
 
