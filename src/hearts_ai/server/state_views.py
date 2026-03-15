@@ -101,6 +101,7 @@ def table_snapshot(table: Table, *, viewer_secret: str | None = None) -> dict[st
         "trick_number": table.state.trick_number,
         "pass_direction": table.state.pass_direction,
         "hearts_broken": table.state.hearts_broken,
+        "hand_scored": table.state.hand_scored,
         "turn": int(table.state.turn) if table.state.turn is not None else None,
         "scores": scores,
         "seat_hand_points": seat_hand_points,

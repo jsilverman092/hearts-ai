@@ -1179,8 +1179,9 @@ function renderSeat(snapshot, seat, seatPosition) {
   const seatKey = String(seat.seat);
   const cumulativeScore = Number(snapshot.scores[seatKey] || 0);
   const currentHandPoints = Number(snapshot.seat_hand_points[seatKey] || 0);
+  const isLiveHandInProgress = snapshot.phase === "playing" && !snapshot.hand_scored;
   const liveTotalScore =
-    snapshot.phase === "playing" ? cumulativeScore + currentHandPoints : cumulativeScore;
+    isLiveHandInProgress ? cumulativeScore + currentHandPoints : cumulativeScore;
   if (snapshot.viewer_seat === seat.seat) {
     seatBox.classList.add("you");
   }

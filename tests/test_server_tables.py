@@ -10,6 +10,7 @@ import hearts_ai.server.tables as tables_module
 from hearts_ai.bots.factory import create_bot
 from hearts_ai.bots.reasons import register_default_reason_serializer
 from hearts_ai.bots.reasons import serialize_bot_decision_reason
+from hearts_ai.engine.cards import Card, Rank, Suit
 from hearts_ai.engine.game import is_hand_over
 from hearts_ai.engine.record import replay_jsonl
 from hearts_ai.engine.rules import legal_moves
@@ -251,6 +252,55 @@ def test_viewer_advisory_bot_preference_rejects_unknown_bot_type() -> None:
 
     with pytest.raises(InvalidTableActionError):
         manager.set_viewer_advisory_bot(table.table_code, player_secret=player_secret, bot_name="unknown-bot")
+
+
+def test_snapshot_exposes_hand_scored_during_playing_end_of_hand_window() -> None:
+    manager = TableManager()
+    table, player_secret = manager.create_table(display_name="Host", target_score=50, seed=11)
+    manager.claim_seat(table.table_code, player_secret=player_secret, seat=0)
+
+    current = manager.get_table(table.table_code)
+    current.phase = "playing"
+    current.state.pass_applied = True
+    current.state.hand_scored = False
+    current.state.hearts_broken = True
+    current.state.turn = PlayerId(0)
+    current.state.trick_number = 12
+    current.state.scores = {
+        PlayerId(0): 10,
+        PlayerId(1): 20,
+        PlayerId(2): 30,
+        PlayerId(3): 40,
+    }
+    current.state.hands = {
+        PlayerId(0): [Card(Suit.CLUBS, Rank.THREE)],
+        PlayerId(1): [],
+        PlayerId(2): [],
+        PlayerId(3): [],
+    }
+    current.state.taken_tricks = {
+        PlayerId(0): [[(PlayerId(0), Card(Suit.HEARTS, Rank.TWO))]],
+        PlayerId(1): [],
+        PlayerId(2): [],
+        PlayerId(3): [],
+    }
+    current.state.trick_in_progress = [
+        (PlayerId(1), Card(Suit.CLUBS, Rank.TWO)),
+        (PlayerId(2), Card(Suit.CLUBS, Rank.FOUR)),
+        (PlayerId(3), Card(Suit.CLUBS, Rank.FIVE)),
+    ]
+
+    current.play(player_secret, "3C")
+
+    assert current.phase == "playing"
+    assert current.state.hand_scored is True
+    assert is_hand_over(current.state) is True
+
+    snapshot = table_snapshot(current, viewer_secret=player_secret)
+    assert snapshot["phase"] == "playing"
+    assert snapshot["hand_scored"] is True
+    assert snapshot["scores"]["0"] == 11
+    assert snapshot["seat_hand_points"]["0"] == 1
 
 
 def _advance_single_human_table_to_turn(
