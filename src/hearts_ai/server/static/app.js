@@ -216,7 +216,7 @@ function formatSignedDebugScore(value) {
   if (!Number.isFinite(numeric)) {
     return String(value);
   }
-  return `${numeric >= 0 ? "+" : ""}${numeric.toFixed(3)}`;
+  return `${numeric >= 0 ? "+" : ""}${numeric.toFixed(2)}`;
 }
 
 function formatSearchSelectionSource(source) {

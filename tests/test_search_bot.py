@@ -286,6 +286,82 @@ def test_search_bot_v1_marks_baseline_comparison_agreement(
     assert reason.baseline_comparison.best_case_root_utility_gain == 0.0
 
 
+def test_search_bot_v1_prefers_heuristic_baseline_on_exact_search_tie(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [Card(Suit.CLUBS, Rank.FIVE), Card(Suit.SPADES, Rank.ACE)],
+        PlayerId(1): [Card(Suit.CLUBS, Rank.TWO)],
+        PlayerId(2): [Card(Suit.CLUBS, Rank.THREE)],
+        PlayerId(3): [Card(Suit.CLUBS, Rank.FOUR)],
+    }
+    state.trick_in_progress = []
+    state.hearts_broken = True
+    state.turn = PlayerId(0)
+    state.trick_number = 3
+    state.pass_direction = "left"
+    state.pass_applied = True
+
+    def fake_evaluate_root_candidates(**kwargs) -> RootMoveEvaluationSet:
+        candidates = build_root_move_candidates(kwargs["view"])
+        first_summary = _rollout_summary(candidate=candidates[0], sample_index=0, score_delta=3, hand_points=3)
+        second_summary = _rollout_summary(candidate=candidates[1], sample_index=0, score_delta=3, hand_points=3)
+        return RootMoveEvaluationSet(
+            root_player_id=kwargs["view"].player_id,
+            base_seed=kwargs["seed"],
+            world_set=DeterminizedWorldSet(
+                root_player_id=kwargs["view"].player_id,
+                base_seed=kwargs["seed"],
+                worlds=(object(),),
+            ),
+            candidate_evaluations=(
+                RootCandidateEvaluation(
+                    candidate=candidates[0],
+                    candidate_index=0,
+                    rollout_summaries=(first_summary,),
+                    average_projected_hand_points=3.0,
+                    average_projected_score_delta=3.0,
+                    average_projected_total_score=3.0,
+                    average_root_utility=-3.0,
+                ),
+                RootCandidateEvaluation(
+                    candidate=candidates[1],
+                    candidate_index=1,
+                    rollout_summaries=(second_summary,),
+                    average_projected_hand_points=3.0,
+                    average_projected_score_delta=3.0,
+                    average_projected_total_score=3.0,
+                    average_root_utility=-3.0,
+                ),
+            ),
+        )
+
+    monkeypatch.setattr(search_bot_module, "evaluate_root_candidates", fake_evaluate_root_candidates)
+    monkeypatch.setattr(
+        search_bot_module,
+        "_choose_baseline_heuristic_card",
+        lambda **kwargs: Card(Suit.SPADES, Rank.ACE),
+    )
+
+    bot = SearchBotV1(player_id=PlayerId(0), config=SearchBotConfig(world_count=3))
+    chosen = bot.choose_play(state=state, rng=random.Random(173))
+
+    assert chosen == Card(Suit.SPADES, Rank.ACE)
+    reason = bot.peek_last_decision_reason("play")
+    assert isinstance(reason, SearchPlayDecisionReason)
+    assert reason.chosen.card == Card(Suit.SPADES, Rank.ACE)
+    assert reason.chosen.candidate_index == 1
+    assert reason.baseline_comparison is not None
+    assert reason.baseline_comparison.agrees_with_search is True
+    assert reason.baseline_comparison.baseline.selection_rank == 1
+    assert reason.candidates[0].card == Card(Suit.SPADES, Rank.ACE)
+    assert reason.candidates[0].selected is True
+    assert reason.candidates[0].selection_rank == 1
+    assert reason.candidates[1].card == Card(Suit.CLUBS, Rank.FIVE)
+    assert reason.candidates[1].selection_rank == 2
+
+
 def test_search_bot_v1_choose_play_is_deterministic_under_fixed_seed() -> None:
     state = _full_state_with_rotating_hidden_hands(rotation=0)
 

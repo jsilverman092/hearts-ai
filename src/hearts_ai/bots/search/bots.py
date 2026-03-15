@@ -23,16 +23,21 @@ from hearts_ai.search import (
     RootCandidateEvaluation,
     RootMoveEvaluationSet,
     RootMoveCandidate,
-    SELECTION_POLICY,
     SeatPrivateMemory,
     build_root_move_candidates,
     build_search_player_view,
     evaluate_root_candidates,
-    rank_root_candidate_evaluations,
 )
 from hearts_ai.search.worlds import ImpossibleWorldError
 
 _MAX_DECISION_SEED = 2**63 - 1
+SEARCH_BOT_V1_SELECTION_POLICY = (
+    "average_projected_score_delta",
+    "average_projected_hand_points",
+    "average_projected_total_score",
+    "heuristic_v3_exact_tie",
+    "candidate_index",
+)
 
 
 @dataclass(slots=True)
@@ -118,13 +123,16 @@ class SearchBotV1:
                 fallback_message="Search evaluation produced no sampled worlds to rank.",
             )
 
-        ranked = rank_root_candidate_evaluations(evaluation)
-        selected = ranked[0]
         baseline_card = _choose_baseline_heuristic_card(
             state=state,
             player_id=self.player_id,
             seed=decision_seed,
         )
+        ranked = _rank_candidate_evaluations_with_baseline_tiebreak(
+            evaluation=evaluation,
+            baseline_card=baseline_card,
+        )
+        selected = ranked[0]
         self._last_play_reason = SearchPlayDecisionReason(
             chosen_card=selected.candidate.card,
             mode=selected.candidate.mode,
@@ -137,7 +145,7 @@ class SearchBotV1:
             requested_world_count=self.config.world_count,
             world_count=len(evaluation.world_set.worlds),
             world_base_seed=evaluation.base_seed,
-            selection_policy=SELECTION_POLICY,
+            selection_policy=SEARCH_BOT_V1_SELECTION_POLICY,
             selection_source="search",
             fallback_message=None,
             baseline_comparison=_baseline_comparison_for_card(
@@ -198,7 +206,7 @@ class SearchBotV1:
             requested_world_count=self.config.world_count,
             world_count=0,
             world_base_seed=world_base_seed,
-            selection_policy=SELECTION_POLICY,
+            selection_policy=SEARCH_BOT_V1_SELECTION_POLICY,
             selection_source=selection_source,
             fallback_message=fallback_message,
             baseline_comparison=None,
@@ -248,6 +256,35 @@ def _chosen_move_reason_from_candidate(
         average_projected_score_delta=None,
         average_projected_total_score=None,
         average_root_utility=None,
+    )
+
+
+def _search_metric_key(evaluation: RootCandidateEvaluation) -> tuple[float, float, float]:
+    return (
+        evaluation.average_projected_score_delta,
+        evaluation.average_projected_hand_points,
+        evaluation.average_projected_total_score,
+    )
+
+
+def _rank_candidate_evaluations_with_baseline_tiebreak(
+    *,
+    evaluation: RootMoveEvaluationSet,
+    baseline_card: Card,
+) -> tuple[RootCandidateEvaluation, ...]:
+    baseline_evaluation = _candidate_evaluation_for_card(
+        evaluation=evaluation,
+        card=baseline_card,
+    )
+    return tuple(
+        sorted(
+            evaluation.candidate_evaluations,
+            key=lambda candidate_evaluation: (
+                *_search_metric_key(candidate_evaluation),
+                0 if candidate_evaluation.candidate.card == baseline_evaluation.candidate.card else 1,
+                candidate_evaluation.candidate_index,
+            ),
+        )
     )
 
 
