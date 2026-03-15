@@ -644,9 +644,73 @@ Do not bake runtime thresholds into CI immediately.
 ### Phase 1: Search Support Layer
 
 1. Add public knowledge extraction.
+   - Sub-step 1: define the neutral `PublicKnowledge` surface
+     - card-seen / unplayed tracking
+     - `QS` live / dead
+     - per-suit remaining structure
+     - remaining cards by seat
+   - Sub-step 2: implement deterministic extraction from `GameState`
+     - current trick
+     - taken tricks
+     - public suit-follow history
+   - Sub-step 3: add negative-information helpers
+     - void suits by player
+     - suit exhaustion outside own hand
+     - remaining-card constraints by opponent
+   - Sub-step 4: add focused regression tests
+     - stable extraction under fixed public state
+     - invariance to hidden opponent-hand assignment
+     - exact void / exhaustion fixtures
 2. Add private own-pass memory.
+   - Sub-step 1: define `SeatPrivateMemory`
+     - passed cards by recipient
+     - hand-scoped reset semantics
+     - query helpers for known passed dangers
+   - Sub-step 2: wire pass-memory capture into bot/runtime lifecycle
+     - record on pass choice
+     - preserve across later actions in the same hand / game
+   - Sub-step 3: surface private memory into `SearchPlayerView`
+     - read-only search-facing snapshot
+     - no leakage into engine state
+   - Sub-step 4: add focused tests
+     - memory recorded correctly
+     - memory resets on new hand / game
+     - known-passed-card queries behave deterministically
 3. Add determinized world sampling.
+   - Sub-step 1: define sampled-world types and sampler API
+     - `DeterminizedWorld`
+     - sampled hidden-hand assignment shape
+     - seed / replay contract
+   - Sub-step 2: implement constrained world generation
+     - own hand excluded from opponent allocation
+     - played cards / current trick respected
+     - remaining hand sizes respected
+     - void constraints respected
+     - private known-pass facts respected
+   - Sub-step 3: make candidate evaluation reuse a shared world set
+     - common random numbers across root moves
+     - deterministic world ordering
+   - Sub-step 4: add hard sampler tests
+     - legality / conservation of cards
+     - fixed-seed determinism
+     - anti-cheating invariance against true hidden live hands
+     - explicit impossible-world rejection fixtures
 4. Add whole-hand simulation harness with deterministic heuristic playouts.
+   - Sub-step 1: define simulation entrypoints
+     - clone determinized state
+     - apply root candidate
+     - roll hand to completion
+   - Sub-step 2: wire deterministic playout bots
+     - `heuristic_v3` policy reuse
+     - rollout-disabled / low-noise configuration
+   - Sub-step 3: define rollout result summary
+     - projected hand points
+     - projected total score delta
+     - utility output for later aggregation
+   - Sub-step 4: add harness tests
+     - deterministic repeated simulation under fixed seed
+     - legal completion from sampled worlds
+     - no mutation of source world / source state
 
 ### Phase 2: `search_v1`
 
