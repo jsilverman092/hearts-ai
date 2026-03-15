@@ -31,6 +31,8 @@ const appState = {
   beginHandPendingByHand: {},
   debugViewerRecommendationEnabled: true,
   debugOpponentReasonEnabled: false,
+  pacePanelOpen: false,
+  debugPanelOpen: false,
 };
 
 const SEAT_POSITIONS = ["south", "west", "north", "east"];
@@ -77,6 +79,8 @@ const dom = {
   lastTrickLine: document.getElementById("lastTrickLine"),
   autoplayBtn: document.getElementById("autoplayBtn"),
   stepBtn: document.getElementById("stepBtn"),
+  pacePanelToggle: document.getElementById("pacePanelToggle"),
+  pacePanelBody: document.getElementById("pacePanelBody"),
   paceRange: document.getElementById("paceRange"),
   paceValue: document.getElementById("paceValue"),
   fastForwardToggle: document.getElementById("fastForwardToggle"),
@@ -88,6 +92,8 @@ const dom = {
   passHint: document.getElementById("passHint"),
   submitPassBtn: document.getElementById("submitPassBtn"),
   beginHandBtn: document.getElementById("beginHandBtn"),
+  debugPanelToggle: document.getElementById("debugPanelToggle"),
+  debugPanelBody: document.getElementById("debugPanelBody"),
   debugViewerToggle: document.getElementById("debugViewerToggle"),
   debugViewerContent: document.getElementById("debugViewerContent"),
   debugOpponentToggle: document.getElementById("debugOpponentToggle"),
@@ -449,6 +455,39 @@ function renderOpponentReason(snapshot = appState.snapshot) {
 function renderDebugPanels(snapshot = appState.snapshot) {
   renderViewerRecommendation(snapshot);
   renderOpponentReason(snapshot);
+}
+
+function updateCollapsiblePanels() {
+  if (dom.pacePanelBody && dom.pacePanelToggle) {
+    dom.pacePanelBody.classList.toggle("hidden", !appState.pacePanelOpen);
+    dom.pacePanelToggle.setAttribute("aria-expanded", appState.pacePanelOpen ? "true" : "false");
+    dom.pacePanelToggle.textContent = appState.pacePanelOpen ? "Hide" : "Show";
+    dom.pacePanelToggle.title = appState.pacePanelOpen ? "Hide Pace controls" : "Show Pace controls";
+  }
+  if (dom.debugPanelBody && dom.debugPanelToggle) {
+    dom.debugPanelBody.classList.toggle("hidden", !appState.debugPanelOpen);
+    dom.debugPanelToggle.setAttribute("aria-expanded", appState.debugPanelOpen ? "true" : "false");
+    dom.debugPanelToggle.textContent = appState.debugPanelOpen ? "Hide" : "Show";
+    dom.debugPanelToggle.title = appState.debugPanelOpen ? "Hide Bot Debug" : "Show Bot Debug";
+  }
+}
+
+function setPacePanelOpen(isOpen) {
+  appState.pacePanelOpen = Boolean(isOpen);
+  updateCollapsiblePanels();
+}
+
+function setDebugPanelOpen(isOpen) {
+  appState.debugPanelOpen = Boolean(isOpen);
+  updateCollapsiblePanels();
+}
+
+function togglePacePanel() {
+  setPacePanelOpen(!appState.pacePanelOpen);
+}
+
+function toggleDebugPanel() {
+  setDebugPanelOpen(!appState.debugPanelOpen);
 }
 
 function applySnapshot(snapshot) {
@@ -1426,6 +1465,7 @@ function render(snapshot = appState.snapshot) {
     appState.hasRenderedSnapshot = false;
     updatePaceControls(null);
     renderDebugPanels(null);
+    updateCollapsiblePanels();
     return;
   }
 
@@ -1485,6 +1525,7 @@ function render(snapshot = appState.snapshot) {
   renderBeginHandButton(snapshot);
   renderDebugPanels(snapshot);
   updatePaceControls(snapshot);
+  updateCollapsiblePanels();
   appState.hasRenderedSnapshot = true;
   scheduleAutoAdvance(snapshot);
 }
@@ -1498,6 +1539,12 @@ function wireEvents() {
   dom.beginHandBtn.addEventListener("click", beginHand);
   dom.autoplayBtn.addEventListener("click", toggleAutoplay);
   dom.stepBtn.addEventListener("click", requestStepAdvance);
+  if (dom.pacePanelToggle) {
+    dom.pacePanelToggle.addEventListener("click", togglePacePanel);
+  }
+  if (dom.debugPanelToggle) {
+    dom.debugPanelToggle.addEventListener("click", toggleDebugPanel);
+  }
   dom.paceRange.addEventListener("input", () => {
     const parsed = Number(dom.paceRange.value);
     if (!Number.isFinite(parsed)) {
@@ -1556,6 +1603,7 @@ function boot() {
   setConnectionStatus("offline", false);
   wireEvents();
   updatePaceControls(null);
+  updateCollapsiblePanels();
   render();
 }
 

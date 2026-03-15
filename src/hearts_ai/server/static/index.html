@@ -98,30 +98,58 @@
 
       <section id="tableSection" class="panel table hidden">
         <article class="card pace-card">
-          <h3>Pace</h3>
-          <div class="pace-grid">
-            <label for="paceRange">Speed</label>
-            <input id="paceRange" type="range" min="200" max="2000" step="50" value="900" />
-            <p id="paceValue" class="mono">900ms</p>
-            <label class="toggle-row" for="fastForwardToggle">
-              <input id="fastForwardToggle" type="checkbox" />
-              <span>Fast-forward to my turn</span>
-            </label>
+          <div class="card-head">
+            <h3>Pace</h3>
+            <button
+              id="pacePanelToggle"
+              class="ghost panel-toggle"
+              type="button"
+              aria-expanded="false"
+              aria-controls="pacePanelBody"
+              title="Show Pace controls"
+            >
+              Show
+            </button>
+          </div>
+          <div id="pacePanelBody" class="panel-body hidden">
+            <div class="pace-grid">
+              <label for="paceRange">Speed</label>
+              <input id="paceRange" type="range" min="200" max="2000" step="50" value="900" />
+              <p id="paceValue" class="mono">900ms</p>
+              <label class="toggle-row" for="fastForwardToggle">
+                <input id="fastForwardToggle" type="checkbox" />
+                <span>Fast-forward to my turn</span>
+              </label>
+            </div>
           </div>
         </article>
 
         <article class="card debug-card">
-          <h3>Bot Debug</h3>
-          <label class="toggle-row" for="debugOpponentToggle">
-            <input id="debugOpponentToggle" type="checkbox" />
-            <span>Show latest bot explanation</span>
-          </label>
-          <pre id="debugOpponentContent" class="mono debug-reason">Enable to inspect the latest bot decision.</pre>
-          <label class="toggle-row" for="debugViewerToggle">
-            <input id="debugViewerToggle" type="checkbox" />
-            <span>Show my recommendation (top Bot Type)</span>
-          </label>
-          <pre id="debugViewerContent" class="mono debug-reason">Enable to inspect recommendation for your own move.</pre>
+          <div class="card-head">
+            <h3>Bot Debug</h3>
+            <button
+              id="debugPanelToggle"
+              class="ghost panel-toggle"
+              type="button"
+              aria-expanded="false"
+              aria-controls="debugPanelBody"
+              title="Show Bot Debug"
+            >
+              Show
+            </button>
+          </div>
+          <div id="debugPanelBody" class="panel-body hidden">
+            <label class="toggle-row" for="debugOpponentToggle">
+              <input id="debugOpponentToggle" type="checkbox" />
+              <span>Show latest bot explanation</span>
+            </label>
+            <pre id="debugOpponentContent" class="mono debug-reason">Enable to inspect the latest bot decision.</pre>
+            <label class="toggle-row" for="debugViewerToggle">
+              <input id="debugViewerToggle" type="checkbox" />
+              <span>Show my recommendation (top Bot Type)</span>
+            </label>
+            <pre id="debugViewerContent" class="mono debug-reason">Enable to inspect recommendation for your own move.</pre>
+          </div>
         </article>
 
         <article class="card table-card">
@@ -153,6 +181,6 @@
       </section>
     </main>
 
-    <script src="/static/app.js?v=27" defer></script>
+    <script src="/static/app.js?v=28" defer></script>
   </body>
 </html>
