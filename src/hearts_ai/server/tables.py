@@ -195,7 +195,13 @@ class Table:
         player_id = self._require_seated_human(player_secret)
         if player_id in self.pending_passes:
             raise InvalidTableActionError("Pass already submitted for this hand.")
-        self.pending_passes[player_id] = [_card_from_code(code) for code in cards]
+        selected_cards = [_card_from_code(code) for code in cards]
+        self.bot_runtime_session.record_pass_selection(
+            player_id=player_id,
+            state=self.state,
+            selected_cards=selected_cards,
+        )
+        self.pending_passes[player_id] = selected_cards
         self.version += 1
         self._maybe_auto_advance()
 
@@ -406,6 +412,11 @@ class Table:
                     hand=self.state.hands[player_id],
                     state=self.state,
                     rng=self.rng,
+                )
+                self.bot_runtime_session.record_pass_selection(
+                    player_id=player_id,
+                    state=self.state,
+                    selected_cards=self.pending_passes[player_id],
                 )
                 self._capture_bot_debug_decision(player_id=player_id, bot=bot, decision_kind="pass")
                 self.version += 1

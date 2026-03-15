@@ -2,6 +2,7 @@
 
 from hearts_ai.search.candidates import RootMoveCandidate, SearchPlayMode, build_root_move_candidates
 from hearts_ai.search.knowledge import build_public_knowledge
+from hearts_ai.search.memory import SeatPrivateMemory
 from hearts_ai.search.models import (
     PublicKnowledge,
     SearchPlayerView,
@@ -17,6 +18,7 @@ __all__ = [
     "RootMoveCandidate",
     "SearchPlayerView",
     "SearchPlayMode",
+    "SeatPrivateMemory",
     "SeatPrivateKnowledge",
     "build_public_knowledge",
     "VisibleTakenTricks",

@@ -390,6 +390,28 @@ def test_snapshot_marks_bot_with_missing_reason_after_action_as_error(
     assert recommendation["message"] == "Recommendation bot did not expose a reason payload."
 
 
+def test_table_records_human_pass_memory_in_runtime_session() -> None:
+    manager = TableManager()
+    table, player_secret = manager.create_table(display_name="Human", target_score=50, seed=7)
+    manager.claim_seat(table.table_code, player_secret=player_secret, seat=0)
+    manager.add_bot(table.table_code, seat=1, bot_name="random")
+    manager.add_bot(table.table_code, seat=2, bot_name="random")
+    manager.add_bot(table.table_code, seat=3, bot_name="random")
+
+    current = manager.get_table(table.table_code)
+    chosen_cards = list(sorted(current.state.hands[PlayerId(0)])[: current.config.pass_count])
+    manager.submit_pass(
+        table.table_code,
+        player_secret=player_secret,
+        cards=[str(card) for card in chosen_cards],
+    )
+
+    updated = manager.get_table(table.table_code)
+    private_knowledge = updated.bot_runtime_session.private_knowledge_for_player(PlayerId(0))
+
+    assert private_knowledge.cards_passed_to(PlayerId(1)) == tuple(sorted(chosen_cards))
+
+
 def test_add_bot_rejects_unknown_bot_type() -> None:
     manager = TableManager()
     table, _ = manager.create_table(display_name="Host", target_score=50, seed=7)

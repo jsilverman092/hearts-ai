@@ -266,6 +266,7 @@ def _play_hand(
             )
             for player_id in PLAYER_IDS
         }
+        runtime_session.record_pass_map(state=state, pass_map=pass_map)
         apply_pass(state=state, pass_map=pass_map)
         if recorder is not None:
             recorder.record_pass_applied(hand_index=state.hand_number, pass_map=pass_map)

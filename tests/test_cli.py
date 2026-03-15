@@ -1,8 +1,9 @@
 import pytest
 
 import hearts_ai.cli as cli_module
+from hearts_ai.engine.cards import Card, Rank, Suit
 from hearts_ai.engine.state import GameState
-from hearts_ai.engine.types import PLAYER_IDS
+from hearts_ai.engine.types import PLAYER_IDS, PlayerId
 from hearts_ai.cli import benchmark_games, main, simulate_games
 
 
@@ -200,3 +201,66 @@ def test_simulate_games_creates_fresh_runtime_session_per_game(
 
     assert len(created_sessions) == 2
     assert [session.events for session in created_sessions] == [["game", "hand:1"], ["game", "hand:1"]]
+
+
+def test_play_hand_records_pass_map_into_runtime_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _SpyBot:
+        def __init__(self, player_id: int) -> None:
+            self.player_id = player_id
+
+        def choose_pass(self, hand, state, rng):
+            del state, rng
+            return list(sorted(hand)[:3])
+
+        def choose_play(self, state, rng):  # pragma: no cover - should not be reached in this test
+            raise AssertionError(f"choose_play should not be called for player {self.player_id!r}")
+
+    class _SpyRuntimeSession:
+        def __init__(self) -> None:
+            self.recorded_pass_map = None
+
+        def bot_for_player(self, player_id):
+            return _SpyBot(int(player_id))
+
+        def record_pass_map(self, *, state, pass_map) -> None:
+            del state
+            self.recorded_pass_map = {player_id: tuple(cards) for player_id, cards in pass_map.items()}
+
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [
+            Card(Suit.CLUBS, Rank.TWO),
+            Card(Suit.CLUBS, Rank.THREE),
+            Card(Suit.CLUBS, Rank.FOUR),
+        ],
+        PlayerId(1): [
+            Card(Suit.DIAMONDS, Rank.TWO),
+            Card(Suit.DIAMONDS, Rank.THREE),
+            Card(Suit.DIAMONDS, Rank.FOUR),
+        ],
+        PlayerId(2): [
+            Card(Suit.HEARTS, Rank.TWO),
+            Card(Suit.HEARTS, Rank.THREE),
+            Card(Suit.HEARTS, Rank.FOUR),
+        ],
+        PlayerId(3): [
+            Card(Suit.SPADES, Rank.TWO),
+            Card(Suit.SPADES, Rank.THREE),
+            Card(Suit.SPADES, Rank.FOUR),
+        ],
+    }
+    runtime_session = _SpyRuntimeSession()
+
+    monkeypatch.setattr(cli_module, "apply_pass", lambda *, state, pass_map: setattr(state, "pass_applied", True))
+    monkeypatch.setattr(cli_module, "is_hand_over", lambda state: True)
+
+    cli_module._play_hand(state=state, runtime_session=runtime_session, rng=cli_module.random.Random(1))
+
+    assert runtime_session.recorded_pass_map is not None
+    assert runtime_session.recorded_pass_map[PlayerId(0)] == (
+        Card(Suit.CLUBS, Rank.TWO),
+        Card(Suit.CLUBS, Rank.THREE),
+        Card(Suit.CLUBS, Rank.FOUR),
+    )

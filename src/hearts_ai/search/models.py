@@ -16,11 +16,25 @@ VisibleTakenTricks: TypeAlias = Mapping[PlayerId, tuple[VisibleTrick, ...]]
 class SeatPrivateKnowledge:
     """Seat-private facts that are safe for search to use.
 
-    This starts intentionally small. Later phases can add explicit memory such as
-    exact own-pass knowledge without changing the SearchPlayerView boundary.
+    This remains read-only. Mutable seat memory lives in `search.memory` and is
+    snapshotted into this search-facing boundary object.
     """
 
     passed_cards_by_recipient: Mapping[PlayerId, tuple[Card, ...]] = field(default_factory=dict)
+
+    def cards_passed_to(self, recipient: PlayerId) -> tuple[Card, ...]:
+        return self.passed_cards_by_recipient.get(recipient, ())
+
+    def recipient_for_passed_card(self, card: Card) -> PlayerId | None:
+        for recipient, cards in self.passed_cards_by_recipient.items():
+            if card in cards:
+                return recipient
+        return None
+
+    def has_passed_card(self, *, card: Card, recipient: PlayerId | None = None) -> bool:
+        if recipient is not None:
+            return card in self.passed_cards_by_recipient.get(recipient, ())
+        return self.recipient_for_passed_card(card) is not None
 
 
 @dataclass(slots=True, frozen=True)
