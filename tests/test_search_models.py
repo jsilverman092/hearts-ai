@@ -116,3 +116,65 @@ def test_build_search_player_view_keeps_supplied_private_knowledge() -> None:
     view = build_search_player_view(state=state, player_id=PlayerId(0), private_knowledge=private)
 
     assert view.private_knowledge is private
+
+
+def test_search_view_surface_does_not_expose_hidden_hand_fields() -> None:
+    view_fields = set(SearchPlayerView.__dataclass_fields__)
+    public_fields = set(PublicKnowledge.__dataclass_fields__)
+    private_fields = set(SeatPrivateKnowledge.__dataclass_fields__)
+
+    assert "state" not in view_fields
+    assert "hands" not in view_fields
+    assert "opponent_hands" not in view_fields
+    assert "hidden_hands" not in view_fields
+
+    assert "hands" not in public_fields
+    assert "opponent_hands" not in public_fields
+    assert "hidden_hands" not in public_fields
+
+    assert "opponent_hands" not in private_fields
+    assert "hidden_hands" not in private_fields
+
+
+def test_build_search_player_view_is_invariant_to_hidden_opponent_assignment() -> None:
+    def build_state(
+        *,
+        p1_hand: list[Card],
+        p2_hand: list[Card],
+        p3_hand: list[Card],
+    ) -> GameState:
+        state = GameState()
+        state.hands = {
+            PlayerId(0): [
+                Card(Suit.CLUBS, Rank.THREE),
+                Card(Suit.HEARTS, Rank.NINE),
+            ],
+            PlayerId(1): p1_hand,
+            PlayerId(2): p2_hand,
+            PlayerId(3): p3_hand,
+        }
+        state.taken_tricks = {player_id: [] for player_id in PLAYER_IDS}
+        state.scores = {player_id: 0 for player_id in PLAYER_IDS}
+        state.hearts_broken = False
+        state.turn = PlayerId(0)
+        state.trick_number = 2
+        state.hand_number = 1
+        state.pass_direction = "left"
+        state.pass_applied = True
+        return state
+
+    state_a = build_state(
+        p1_hand=[Card(Suit.DIAMONDS, Rank.FOUR), Card(Suit.SPADES, Rank.FIVE)],
+        p2_hand=[Card(Suit.CLUBS, Rank.SIX), Card(Suit.DIAMONDS, Rank.SEVEN)],
+        p3_hand=[Card(Suit.HEARTS, Rank.TEN), Card(Suit.SPADES, Rank.JACK)],
+    )
+    state_b = build_state(
+        p1_hand=[Card(Suit.HEARTS, Rank.TEN), Card(Suit.SPADES, Rank.JACK)],
+        p2_hand=[Card(Suit.DIAMONDS, Rank.FOUR), Card(Suit.SPADES, Rank.FIVE)],
+        p3_hand=[Card(Suit.CLUBS, Rank.SIX), Card(Suit.DIAMONDS, Rank.SEVEN)],
+    )
+
+    view_a = build_search_player_view(state=state_a, player_id=PlayerId(0))
+    view_b = build_search_player_view(state=state_b, player_id=PlayerId(0))
+
+    assert view_a == view_b
