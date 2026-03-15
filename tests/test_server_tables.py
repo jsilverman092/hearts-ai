@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+import hearts_ai.bots.runtime as bot_runtime_module
 from hearts_ai.engine.game import is_hand_over
 from hearts_ai.engine.record import replay_jsonl
 from hearts_ai.engine.rules import legal_moves
@@ -172,6 +173,33 @@ def test_add_bot_updates_existing_bot_type() -> None:
 
     current = manager.get_table(table.table_code)
     assert current.bot_name_for_seat(1) == "heuristic"
+
+
+def test_server_table_reuses_persistent_bot_instances_across_actions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    created: list[tuple[str, int]] = []
+    real_create_bot = bot_runtime_module.create_bot
+
+    def _counting_create_bot(bot_name, player_id):
+        created.append((bot_name, int(player_id)))
+        return real_create_bot(bot_name, player_id=player_id)
+
+    monkeypatch.setattr(bot_runtime_module, "create_bot", _counting_create_bot)
+
+    manager = TableManager()
+    table, host_secret = manager.create_table(display_name="Host", target_score=20, seed=19)
+    manager.add_bot(table.table_code, seat=0, bot_name="random")
+    manager.add_bot(table.table_code, seat=1, bot_name="random")
+    manager.add_bot(table.table_code, seat=2, bot_name="random")
+    manager.add_bot(table.table_code, seat=3, bot_name="random")
+
+    assert sorted(created) == [("random", 0), ("random", 1), ("random", 2), ("random", 3)]
+
+    for _ in range(20):
+        manager.advance_one_action(table.table_code, player_secret=host_secret)
+
+    assert sorted(created) == [("random", 0), ("random", 1), ("random", 2), ("random", 3)]
 
 
 def test_add_bot_rejects_configuration_after_game_start() -> None:

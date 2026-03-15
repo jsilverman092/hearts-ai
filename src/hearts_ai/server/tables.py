@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from hearts_ai.bots.factory import create_bot, normalize_bot_name
+from hearts_ai.bots.runtime import BotRuntimeSession
 from hearts_ai.engine.cards import Card, Rank, Suit
 from hearts_ai.engine.game import apply_pass, deal, is_game_over, is_hand_over, new_game, play_card
 from hearts_ai.engine.record import GameRecorder
@@ -100,6 +101,10 @@ def _empty_viewer_advisory_bot_types() -> dict[str, str]:
     return {}
 
 
+def _empty_bot_runtime_session() -> BotRuntimeSession:
+    return BotRuntimeSession(bot_names={})
+
+
 @dataclass(slots=True)
 class Table:
     table_code: str
@@ -113,6 +118,7 @@ class Table:
     bot_seats: set[PlayerId] = field(default_factory=set)
     bot_seat_types: dict[PlayerId, str] = field(default_factory=_empty_bot_seat_types)
     viewer_advisory_bot_types: dict[str, str] = field(default_factory=_empty_viewer_advisory_bot_types)
+    bot_runtime_session: BotRuntimeSession = field(default_factory=_empty_bot_runtime_session, repr=False)
     pending_passes: dict[PlayerId, list[Card]] = field(default_factory=dict)
     version: int = 0
     recorder: GameRecorder | None = None
@@ -169,6 +175,7 @@ class Table:
             raise InvalidTableActionError(str(exc)) from exc
         self.bot_seats.add(player_id)
         self.bot_seat_types[player_id] = normalized_bot_name
+        self._reset_bot_runtime_session()
         self.version += 1
         self._maybe_start_game()
 
@@ -355,6 +362,9 @@ class Table:
         if any(self.seat_secrets[player_id] is None and player_id not in self.bot_seats for player_id in PLAYER_IDS):
             return
 
+        self._reset_bot_runtime_session()
+        self.bot_runtime_session.notify_new_game()
+        self.bot_runtime_session.notify_new_hand(self.state)
         self.phase = "playing" if self.state.pass_applied else "passing"
         self.pending_passes.clear()
         self.version += 1
@@ -430,6 +440,7 @@ class Table:
             self.last_trick = None
             self.phase = "playing" if self.state.pass_applied else "passing"
             self.hand_score_start = dict(self.state.scores)
+            self.bot_runtime_session.notify_new_hand(self.state)
             self.version += 1
             return "next_hand_dealt"
 
@@ -510,7 +521,12 @@ class Table:
         return self.bot_seat_types.get(player_id, "random")
 
     def _bot_for_player(self, player_id: PlayerId):
-        return create_bot(self.bot_name_for_seat(player_id), player_id=player_id)
+        if player_id not in self.bot_seats:
+            raise InvalidTableActionError(f"Seat {int(player_id)} is not configured as a bot seat.")
+        return self.bot_runtime_session.bot_for_player(player_id)
+
+    def _reset_bot_runtime_session(self) -> None:
+        self.bot_runtime_session = BotRuntimeSession(bot_names=dict(self.bot_seat_types))
 
     def _capture_bot_debug_decision(self, *, player_id: PlayerId, bot: Any, decision_kind: str) -> None:
         bot_name = self.bot_name_for_seat(player_id)
