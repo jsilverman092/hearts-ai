@@ -132,6 +132,14 @@ Likely direction:
 - 1-ply or limited-depth move evaluation using heuristic scoring as a prior.
 - Better move comparison over multiple plausible hidden-card worlds.
 
+Important implementation note:
+- For the first search bot, it is acceptable to use `heuristic_v3` as a bootstrap rollout / continuation policy after the root move.
+- That does not mean `heuristic_v3` should remain the long-term internal search policy.
+- Over time, the project should separate:
+  - `heuristic_v3` as the frozen handcrafted baseline for comparison and UI/debug context
+  - a dedicated rollout policy used to project future play inside search
+- That separation matters because otherwise changes to the baseline also change the search bot's internal evaluation behavior.
+
 Why this comes before RL:
 - Easier to validate.
 - Easier to debug.
