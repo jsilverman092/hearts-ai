@@ -606,7 +606,16 @@ function updatePaceControls(snapshot = appState.snapshot) {
   dom.paceRange.disabled = !canControl;
   dom.fastForwardToggle.disabled = !canControl;
 
-  dom.autoplayBtn.textContent = appState.autoplayEnabled ? "Pause" : "Play";
+  const autoplayTitle = appState.autoplayEnabled ? "Pause autoplay (Space)" : "Resume autoplay (Space)";
+  const autoplayIcon = dom.autoplayBtn.querySelector(".icon-glyph");
+  if (autoplayIcon) {
+    autoplayIcon.textContent = appState.autoplayEnabled ? "❚❚" : "▶";
+  }
+  dom.autoplayBtn.setAttribute("aria-label", autoplayTitle);
+  dom.autoplayBtn.setAttribute("aria-pressed", appState.autoplayEnabled ? "true" : "false");
+  dom.autoplayBtn.title = autoplayTitle;
+  dom.stepBtn.setAttribute("aria-label", "Advance one action (N)");
+  dom.stepBtn.title = "Advance one action (N)";
   dom.paceRange.value = String(appState.paceMs);
   dom.fastForwardToggle.checked = appState.fastForwardToMyTurn;
   dom.paceValue.textContent = `${appState.paceMs}ms`;
@@ -614,6 +623,60 @@ function updatePaceControls(snapshot = appState.snapshot) {
 
 function canControlPace(snapshot) {
   return Boolean(snapshot && snapshot.viewer_can_control_pace);
+}
+
+function setAutoplayEnabled(enabled) {
+  appState.autoplayEnabled = Boolean(enabled);
+  updatePaceControls();
+  scheduleAutoAdvance();
+}
+
+function toggleAutoplay() {
+  if (!dom.autoplayBtn || dom.autoplayBtn.disabled) {
+    return;
+  }
+  setAutoplayEnabled(!appState.autoplayEnabled);
+}
+
+function requestStepAdvance() {
+  if (!dom.stepBtn || dom.stepBtn.disabled) {
+    return;
+  }
+  void advanceOneAction();
+}
+
+function isEditableKeyTarget(target) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  if (target.isContentEditable) {
+    return true;
+  }
+  return target.closest("input, textarea, select, button, [contenteditable='true']") !== null;
+}
+
+function handleGlobalKeydown(event) {
+  if (event.defaultPrevented || event.repeat || event.altKey || event.ctrlKey || event.metaKey) {
+    return;
+  }
+  if (isEditableKeyTarget(event.target)) {
+    return;
+  }
+
+  if (event.code === "Space") {
+    if (dom.autoplayBtn && !dom.autoplayBtn.disabled) {
+      event.preventDefault();
+      toggleAutoplay();
+    }
+    return;
+  }
+
+  if (typeof event.key === "string" && event.key.toLowerCase() === "n") {
+    if (dom.stepBtn && !dom.stepBtn.disabled) {
+      event.preventDefault();
+      requestStepAdvance();
+    }
+  }
 }
 
 function shouldAutoAdvance(snapshot) {
@@ -1433,14 +1496,8 @@ function wireEvents() {
   dom.reconnectBtn.addEventListener("click", reconnectSession);
   dom.submitPassBtn.addEventListener("click", submitPass);
   dom.beginHandBtn.addEventListener("click", beginHand);
-  dom.autoplayBtn.addEventListener("click", () => {
-    appState.autoplayEnabled = !appState.autoplayEnabled;
-    updatePaceControls();
-    scheduleAutoAdvance();
-  });
-  dom.stepBtn.addEventListener("click", () => {
-    void advanceOneAction();
-  });
+  dom.autoplayBtn.addEventListener("click", toggleAutoplay);
+  dom.stepBtn.addEventListener("click", requestStepAdvance);
   dom.paceRange.addEventListener("input", () => {
     const parsed = Number(dom.paceRange.value);
     if (!Number.isFinite(parsed)) {
@@ -1478,6 +1535,7 @@ function wireEvents() {
       renderDebugPanels();
     });
   }
+  document.addEventListener("keydown", handleGlobalKeydown);
 }
 
 function boot() {

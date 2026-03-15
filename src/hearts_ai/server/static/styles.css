@@ -204,6 +204,38 @@ button:focus-visible {
   padding-left: 0.62rem;
 }
 
+.status-controls-cell {
+  display: grid;
+  gap: 0.36rem;
+  align-content: center;
+}
+
+.status-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.42rem;
+}
+
+.icon-control {
+  width: 2.4rem;
+  height: 2.4rem;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+}
+
+.icon-glyph {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.shortcut-hint {
+  font-size: 0.74rem;
+  color: var(--ink-soft);
+}
+
 .label {
   font-size: 0.84rem;
   color: var(--ink-soft);
@@ -632,7 +664,7 @@ button:focus-visible {
   margin-top: 0.52rem;
   display: grid;
   gap: 0.48rem;
-  grid-template-columns: repeat(2, minmax(140px, 1fr));
+  grid-template-columns: auto minmax(160px, 1fr) auto;
   align-items: center;
 }
 
@@ -647,6 +679,10 @@ button:focus-visible {
 .pace-grid input[type="range"] {
   padding: 0;
   accent-color: var(--accent);
+}
+
+.pace-grid .toggle-row {
+  grid-column: 1 / -1;
 }
 
 .toggle-row {

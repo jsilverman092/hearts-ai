@@ -67,14 +67,39 @@
           <span class="label">Phase</span>
           <span id="phaseValue" class="mono">-</span>
         </div>
+        <div class="status-controls-cell">
+          <span class="label">Controls</span>
+          <div class="status-controls" role="toolbar" aria-label="Live controls">
+            <button
+              id="autoplayBtn"
+              class="icon-control action alt"
+              type="button"
+              aria-label="Pause autoplay (Space)"
+              aria-keyshortcuts="Space"
+              aria-pressed="true"
+              title="Pause autoplay (Space)"
+            >
+              <span class="icon-glyph" aria-hidden="true">❚❚</span>
+            </button>
+            <button
+              id="stepBtn"
+              class="icon-control ghost"
+              type="button"
+              aria-label="Advance one action (N)"
+              aria-keyshortcuts="N"
+              title="Advance one action (N)"
+            >
+              <span class="icon-glyph" aria-hidden="true">→</span>
+            </button>
+          </div>
+          <span class="mono shortcut-hint">Space / N</span>
+        </div>
       </section>
 
       <section id="tableSection" class="panel table hidden">
         <article class="card pace-card">
           <h3>Pace</h3>
           <div class="pace-grid">
-            <button id="autoplayBtn" class="action alt">Pause</button>
-            <button id="stepBtn" class="ghost">Step</button>
             <label for="paceRange">Speed</label>
             <input id="paceRange" type="range" min="200" max="2000" step="50" value="900" />
             <p id="paceValue" class="mono">900ms</p>
@@ -128,6 +153,6 @@
       </section>
     </main>
 
-    <script src="/static/app.js?v=26" defer></script>
+    <script src="/static/app.js?v=27" defer></script>
   </body>
 </html>
