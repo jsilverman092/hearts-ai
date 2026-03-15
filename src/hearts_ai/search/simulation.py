@@ -5,9 +5,8 @@ from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import dataclass, field
 from types import MappingProxyType
+from typing import TYPE_CHECKING
 
-from hearts_ai.bots.base import Bot
-from hearts_ai.bots.heuristic import HeuristicBotV3
 from hearts_ai.engine.cards import Card
 from hearts_ai.engine.errors import InvalidStateError
 from hearts_ai.engine.game import is_hand_over, play_card
@@ -16,6 +15,9 @@ from hearts_ai.engine.state import GameState
 from hearts_ai.engine.types import PLAYER_IDS, PlayerId
 from hearts_ai.search.candidates import RootMoveCandidate
 from hearts_ai.search.worlds import DeterminizedWorld
+
+if TYPE_CHECKING:
+    from hearts_ai.bots.base import Bot
 
 
 @dataclass(slots=True, frozen=True)
@@ -60,6 +62,8 @@ def build_deterministic_playout_bots(
     config: HeuristicPlayoutConfig | None = None,
 ) -> dict[PlayerId, Bot]:
     """Create one low-noise heuristic-v3 playout bot per seat."""
+
+    from hearts_ai.bots.heuristic import HeuristicBotV3
 
     active_config = config or HeuristicPlayoutConfig()
     return {

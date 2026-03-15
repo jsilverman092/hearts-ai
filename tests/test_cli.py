@@ -92,7 +92,12 @@ def test_benchmark_games_supports_heuristic_v3_bot_name() -> None:
     )
 
 
-def test_benchmark_games_supports_search_v1_bot_name() -> None:
+def test_benchmark_games_supports_search_v1_bot_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(cli_module, "_play_hand", lambda *, state, runtime_session, rng, recorder=None: None)
+    monkeypatch.setattr(cli_module, "is_game_over", lambda state: True)
+
     lines = benchmark_games(seed=2, games=3, target_score=30, bot_spec="search_v1")
     assert lines[0] == (
         "BENCHMARK GAMES 3 SEED_START 2 TARGET 30 "

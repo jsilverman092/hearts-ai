@@ -1,6 +1,12 @@
 """Search-side types and view helpers."""
 
 from hearts_ai.search.candidates import RootMoveCandidate, SearchPlayMode, build_root_move_candidates
+from hearts_ai.search.evaluate import (
+    RootCandidateEvaluation,
+    RootMoveEvaluationSet,
+    evaluate_root_candidate,
+    evaluate_root_candidates,
+)
 from hearts_ai.search.knowledge import build_public_knowledge
 from hearts_ai.search.memory import SeatPrivateMemory
 from hearts_ai.search.models import (
@@ -37,6 +43,8 @@ __all__ = [
     "ImpossibleWorldError",
     "PublicKnowledge",
     "RootMoveCandidate",
+    "RootCandidateEvaluation",
+    "RootMoveEvaluationSet",
     "SampledHiddenHands",
     "SearchRolloutResult",
     "SearchRolloutSummary",
@@ -52,6 +60,8 @@ __all__ = [
     "build_root_move_candidates",
     "build_search_player_view",
     "clone_determinized_state",
+    "evaluate_root_candidate",
+    "evaluate_root_candidates",
     "sample_determinized_world",
     "sample_determinized_worlds",
     "simulate_root_candidate",
