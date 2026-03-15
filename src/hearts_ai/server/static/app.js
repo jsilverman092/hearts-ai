@@ -1385,7 +1385,6 @@ function renderPassPanel(snapshot) {
   }
 
   const orderedHand = sortCardsForHand(snapshot.viewer_hand || []);
-  dom.passCards.style.setProperty("--card-count", String(Math.max(orderedHand.length, 1)));
   for (const card of orderedHand) {
     const button = document.createElement("button");
     button.className = "card-btn";
@@ -1412,8 +1411,6 @@ function renderHand(snapshot) {
   const beginPending = isBeginHandPending(snapshot);
   const canPlay = !beginPending && snapshot.phase === "playing" && snapshot.turn === snapshot.viewer_seat;
   const orderedHand = sortCardsForHand(snapshot.viewer_hand || []);
-  dom.handGrid.style.setProperty("--card-count", String(Math.max(orderedHand.length, 1)));
-
   for (const card of orderedHand) {
     const button = document.createElement("button");
     button.className = "card-btn";

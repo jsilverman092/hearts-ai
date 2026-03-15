@@ -750,7 +750,7 @@ button:focus-visible {
   #passPanel .hand-grid,
   .hand-card .hand-grid {
     display: grid;
-    grid-template-columns: repeat(var(--card-count, 13), minmax(0, 1fr));
+    grid-template-columns: repeat(13, minmax(0, 1fr));
     gap: 0.24rem;
   }
 
