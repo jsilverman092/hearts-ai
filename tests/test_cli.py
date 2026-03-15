@@ -92,6 +92,14 @@ def test_benchmark_games_supports_heuristic_v3_bot_name() -> None:
     )
 
 
+def test_benchmark_games_supports_search_v1_bot_name() -> None:
+    lines = benchmark_games(seed=2, games=3, target_score=30, bot_spec="search_v1")
+    assert lines[0] == (
+        "BENCHMARK GAMES 3 SEED_START 2 TARGET 30 "
+        "BOTS search_v1,search_v1,search_v1,search_v1"
+    )
+
+
 def test_simulate_games_notifies_runtime_session_for_initial_and_dealt_hands(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

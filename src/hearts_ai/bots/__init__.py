@@ -10,6 +10,7 @@ from hearts_ai.bots.factory import (
 )
 from hearts_ai.bots.heuristic_bot import HeuristicBot, HeuristicBotV2, HeuristicBotV3
 from hearts_ai.bots.random_bot import RandomBot
+from hearts_ai.bots.search import SearchBotConfig, SearchBotV1
 from hearts_ai.bots.reasons import (
     DecisionKind,
     DecisionReasonSerializer,
@@ -32,6 +33,8 @@ __all__ = [
     "HeuristicBotV2",
     "HeuristicBotV3",
     "RandomBot",
+    "SearchBotConfig",
+    "SearchBotV1",
     "SerializedReasonPayload",
     "SupportsDecisionReasonPeek",
     "available_bot_names",
