@@ -208,7 +208,37 @@ function formatDebugScore(value) {
   if (!Number.isFinite(numeric)) {
     return String(value);
   }
-  return numeric.toFixed(3);
+  return numeric.toFixed(2);
+}
+
+function formatSignedDebugScore(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return String(value);
+  }
+  return `${numeric >= 0 ? "+" : ""}${numeric.toFixed(3)}`;
+}
+
+function formatSearchSelectionSource(source) {
+  switch (source) {
+    case "search":
+      return "search";
+    case "heuristic_fallback_impossible_world":
+      return "fb-impossible";
+    case "heuristic_fallback_empty_world_set":
+      return "fb-empty";
+    default:
+      return source || "-";
+  }
+}
+
+function isSearchPlayDecisionPayload(payload) {
+  return Boolean(
+    payload &&
+    typeof payload === "object" &&
+    payload.selection_policy &&
+    payload.chosen
+  );
 }
 
 function renderPassDecisionLines(decision) {
@@ -253,7 +283,6 @@ function renderHeuristicPlayDecisionLines(payload) {
 
 function renderSearchPlayDecisionLines(payload) {
   const lines = [];
-  const chosen = payload.chosen && typeof payload.chosen === "object" ? payload.chosen : null;
   const comparison =
     payload.baseline_comparison && typeof payload.baseline_comparison === "object"
       ? payload.baseline_comparison
@@ -263,96 +292,54 @@ function renderSearchPlayDecisionLines(payload) {
       ? comparison.baseline
       : null;
 
-  lines.push(`Mode: ${payload.mode || "-"}`);
-  lines.push(`Chosen: ${payload.chosen_card || "-"}`);
-  lines.push(`Source: ${payload.selection_source || "-"}`);
-  lines.push(`Worlds: ${payload.world_count ?? "-"} / ${payload.requested_world_count ?? "-"}`);
-  lines.push(`Candidates: ${payload.evaluated_candidate_count ?? "-"} eval / ${payload.legal_move_count ?? "-"} legal`);
-  if (payload.current_trick_size || payload.led_suit) {
-    lines.push(`Trick context: size=${payload.current_trick_size ?? 0} led=${payload.led_suit || "-"}`);
-  }
-
-  if (chosen) {
-    const chosenFacts = [];
-    if (chosen.follows_led_suit) {
-      chosenFacts.push("follow");
-    }
-    if (chosen.is_point_card) {
-      chosenFacts.push("point");
-    }
-    if (Number(chosen.trick_points_so_far || 0) > 0) {
-      chosenFacts.push(`trick=${chosen.trick_points_so_far}`);
-    }
-    if (chosen.average_projected_score_delta !== null && chosen.average_projected_score_delta !== undefined) {
-      lines.push(
-        `Chosen eval: delta=${formatDebugScore(chosen.average_projected_score_delta)} ` +
-        `hand=${formatDebugScore(chosen.average_projected_hand_points)} ` +
-        `total=${formatDebugScore(chosen.average_projected_total_score)} ` +
-        `util=${formatDebugScore(chosen.average_root_utility)}`
-      );
-    }
-    if (chosenFacts.length > 0) {
-      lines.push(`Chosen facts: ${chosenFacts.join(", ")}`);
-    }
-  }
-
-  if (comparison) {
-    const agreement = comparison.agrees_with_search ? "agree" : "disagree";
-    lines.push(
-      `Baseline ${comparison.baseline_bot_name || "heuristic_v3"}: ${baseline?.card || "-"} ` +
-      `(${agreement}, rank ${baseline?.selection_rank ?? "-"})`
-    );
-    lines.push(
-      `Vs baseline: delta=${formatDebugScore(comparison.mean_projected_score_delta_advantage)} ` +
-      `util=${formatDebugScore(comparison.mean_root_utility_gain)}`
-    );
-    lines.push(
-      `Worlds: win ${comparison.worlds_search_better ?? 0} ` +
-      `tie ${comparison.worlds_tied ?? 0} ` +
-      `lose ${comparison.worlds_baseline_better ?? 0}`
-    );
-    lines.push(
-      `Range: best +${formatDebugScore(comparison.best_case_root_utility_gain)} ` +
-      `worst -${formatDebugScore(comparison.worst_case_root_utility_loss)}`
-    );
-  }
-
-  if (payload.fallback_message) {
-    lines.push(`Fallback: ${payload.fallback_message}`);
-  }
+  lines.push(
+    `Chosen: ${payload.chosen_card || "-"}   ` +
+    `Src: ${formatSearchSelectionSource(payload.selection_source)}`
+  );
+  lines.push(
+    `Cand: ${payload.evaluated_candidate_count ?? "-"}E/${payload.legal_move_count ?? "-"}L   ` +
+    `Worlds: ${payload.world_count ?? "-"}/${payload.requested_world_count ?? "-"}`
+  );
+  lines.push("");
 
   const candidates = Array.isArray(payload.candidates) ? payload.candidates : [];
   if (candidates.length > 0) {
-    lines.push("Top search candidates:");
+    lines.push("Top:");
     for (const candidate of candidates.slice(0, 3)) {
       const flags = [];
       if (candidate.selected) {
-        flags.push("selected");
+        flags.push("sel");
       }
       if (
         baseline &&
         baseline.card === candidate.card &&
         baseline.candidate_index === candidate.candidate_index
       ) {
-        flags.push("baseline");
-      }
-      if (candidate.is_point_card) {
-        flags.push("point");
-      }
-      if (candidate.follows_led_suit) {
-        flags.push("follow");
-      }
-      if (Number(candidate.trick_points_so_far || 0) > 0) {
-        flags.push(`trick=${candidate.trick_points_so_far}`);
+        flags.push("base");
       }
       const suffix = flags.length > 0 ? ` [${flags.join(", ")}]` : "";
-      lines.push(
-        `- #${candidate.selection_rank} ${candidate.card} ` +
-        `delta=${formatDebugScore(candidate.average_projected_score_delta)} ` +
-        `hand=${formatDebugScore(candidate.average_projected_hand_points)} ` +
-        `util=${formatDebugScore(candidate.average_root_utility)}${suffix}`
-      );
+      lines.push(`- ${candidate.card} d=${formatDebugScore(candidate.average_projected_score_delta)}${suffix}`);
     }
+    lines.push("");
+  }
+
+  const baselineCard = baseline?.card || payload.chosen_card || "-";
+  lines.push(`Base: ${baselineCard}`);
+
+  if (comparison) {
+    lines.push(`Vs: ${formatSignedDebugScore(comparison.mean_projected_score_delta_advantage)}d`);
+    lines.push(
+      `W/T/L: ${comparison.worlds_search_better ?? 0}/${comparison.worlds_tied ?? 0}/` +
+      `${comparison.worlds_baseline_better ?? 0}`
+    );
+    lines.push(
+      `Range: ${formatSignedDebugScore(comparison.best_case_root_utility_gain)}/` +
+      `${formatSignedDebugScore(-Number(comparison.worst_case_root_utility_loss ?? 0))}`
+    );
+  } else {
+    lines.push("Vs: -");
+    lines.push("W/T/L: -");
+    lines.push("Range: -");
   }
 
   return lines;
@@ -375,13 +362,24 @@ function renderGenericPlayDecisionLines(payload) {
 
 function renderPlayDecisionLines(decision) {
   const payload = decision.payload || {};
-  if (payload.selection_policy && payload.chosen) {
+  if (isSearchPlayDecisionPayload(payload)) {
     return renderSearchPlayDecisionLines(payload);
   }
   if (Object.prototype.hasOwnProperty.call(payload, "moon_defense_target")) {
     return renderHeuristicPlayDecisionLines(payload);
   }
   return renderGenericPlayDecisionLines(payload);
+}
+
+function renderDecisionHeaderLines(decision) {
+  const payload = decision.payload || {};
+  const lines = [`Seat P${decision.seat} (${decision.bot_name})`];
+  if (!isSearchPlayDecisionPayload(payload)) {
+    lines.push(
+      `Kind ${decision.decision_kind}  Hand ${decision.hand_number}  Trick ${decision.trick_number}`
+    );
+  }
+  return lines;
 }
 
 function renderViewerRecommendation(snapshot = appState.snapshot) {
@@ -410,10 +408,7 @@ function renderViewerRecommendation(snapshot = appState.snapshot) {
     return;
   }
 
-  const lines = [
-    `Seat P${recommendation.seat} (${recommendation.bot_name})`,
-    `Kind ${recommendation.decision_kind}  Hand ${recommendation.hand_number}  Trick ${recommendation.trick_number}`,
-  ];
+  const lines = renderDecisionHeaderLines(recommendation);
   if (recommendation.decision_kind === "pass") {
     lines.push(...renderPassDecisionLines(recommendation));
   } else if (recommendation.decision_kind === "play") {
@@ -438,10 +433,7 @@ function renderOpponentReason(snapshot = appState.snapshot) {
   }
 
   const decision = snapshot.debug_last_bot_decision;
-  const lines = [
-    `Seat P${decision.seat} (${decision.bot_name})`,
-    `Kind ${decision.decision_kind}  Hand ${decision.hand_number}  Trick ${decision.trick_number}`,
-  ];
+  const lines = renderDecisionHeaderLines(decision);
   if (decision.decision_kind === "pass") {
     lines.push(...renderPassDecisionLines(decision));
   } else if (decision.decision_kind === "play") {
