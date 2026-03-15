@@ -776,6 +776,26 @@ Do not bake runtime thresholds into CI immediately.
 3. Add deterministic integration tests.
 4. Add codified mixed-field benchmark runner or CLI extension.
 
+### UI Follow-Up: Live Table Layout and Controls
+
+This should stay scoped as a focused UX cleanup, not a redesign of the whole app.
+
+1. Compact always-visible live controls.
+   - Sub-step 1: replace the large `Play/Pause` and `Step` buttons with compact icon controls
+   - Sub-step 2: add keyboard shortcuts for `Step` and `Play/Pause`
+   - Sub-step 3: keep tooltips and accessible labels so icon-only controls remain clear
+2. Collapse secondary controls behind toggles or drawers.
+   - Sub-step 1: make `Pace` collapsible by default during normal play
+   - Sub-step 2: make `Bot Debug` collapsible by default but easy to reopen and pin
+   - Sub-step 3: avoid modal popups; prefer inline disclosure, drawer, or side-panel behavior
+3. Reorganize desktop layout to use horizontal space better.
+   - Sub-step 1: keep the table and hand/pass area as the primary visual focus
+   - Sub-step 2: move secondary controls/debug into side or auxiliary regions on wider screens
+   - Sub-step 3: reduce the need to zoom out just to see the live table and hand together
+4. Preserve the current table score/point presentation.
+   - Sub-step 1: keep seat totals and current hand points where they already work well
+   - Sub-step 2: do not move that scoring information into a separate meta panel unless there is a clear gain
+
 ## Acceptance Criteria For This Phase
 
 This phase should count as complete when all of the following are true:
