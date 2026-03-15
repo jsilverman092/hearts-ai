@@ -7,6 +7,11 @@ from hearts_ai.bots.heuristic.models import (
     PlayCandidateReason,
     PlayDecisionReason,
 )
+from hearts_ai.bots.heuristic.reasons import (
+    register_heuristic_reason_serializers,
+    serialize_pass_decision_reason,
+    serialize_play_decision_reason,
+)
 
 __all__ = [
     "HeuristicBot",
@@ -16,4 +21,7 @@ __all__ = [
     "PassDecisionReason",
     "PlayCandidateReason",
     "PlayDecisionReason",
+    "register_heuristic_reason_serializers",
+    "serialize_pass_decision_reason",
+    "serialize_play_decision_reason",
 ]

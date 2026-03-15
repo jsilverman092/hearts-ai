@@ -4,6 +4,7 @@ import random
 from dataclasses import dataclass, field
 from typing import Literal
 
+from hearts_ai.bots.reasons import DecisionKind
 from hearts_ai.bots.heuristic.models import (
     PassCandidateReason,
     PassDecisionReason,
@@ -83,7 +84,14 @@ class _HeuristicScoringBotBase:
         self._last_play_reason = play_reason
         return chosen_card
 
-    # Internal hooks for future debug UI integration.
+    def peek_last_decision_reason(self, decision_kind: DecisionKind) -> object | None:
+        if decision_kind == "pass":
+            return self._last_pass_reason
+        if decision_kind == "play":
+            return self._last_play_reason
+        raise ValueError(f"Unsupported decision kind: {decision_kind!r}")
+
+    # Backward-compatible hooks for the existing heuristic debug tests/UI path.
     def _peek_last_pass_reason(self) -> PassDecisionReason | None:
         return self._last_pass_reason
 

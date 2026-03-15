@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass
 
 import pytest
 
+from hearts_ai.bots.heuristic_bot import HeuristicBotV2, HeuristicBotV3
 from hearts_ai.bots.reasons import (
     DecisionReasonSerializerRegistry,
     peek_bot_decision_reason,
     serialize_bot_decision_reason,
     serialize_decision_reason,
 )
+from hearts_ai.engine.game import new_game
+from hearts_ai.engine.types import PlayerId
 
 
 @dataclass(frozen=True)
@@ -33,6 +37,37 @@ class _FakeReasonBot:
         if decision_kind == "play":
             return self._play_reason
         raise AssertionError(f"Unexpected decision kind: {decision_kind}")
+
+
+def _expected_pass_payload(reason) -> dict[str, object]:
+    return {
+        "selected_cards": [str(card) for card in reason.selected_cards],
+        "candidates": [
+            {
+                "card": str(candidate.card),
+                "score": [int(value) for value in candidate.score],
+            }
+            for candidate in reason.candidates
+        ],
+    }
+
+
+def _expected_play_payload(reason) -> dict[str, object]:
+    return {
+        "mode": str(reason.mode),
+        "chosen_card": str(reason.chosen_card),
+        "moon_defense_target": int(reason.moon_defense_target) if reason.moon_defense_target is not None else None,
+        "candidates": [
+            {
+                "card": str(candidate.card),
+                "base_score": float(candidate.base_score),
+                "rollout_score": float(candidate.rollout_score),
+                "total_score": float(candidate.total_score),
+                "tags": [str(tag) for tag in candidate.tags],
+            }
+            for candidate in reason.candidates
+        ],
+    }
 
 
 def test_reason_serializer_registry_serializes_exact_registered_type() -> None:
@@ -87,3 +122,31 @@ def test_serialize_decision_reason_returns_none_for_unregistered_reason_type() -
     payload = serialize_decision_reason(_BaseReason(label="standalone"), registry=DecisionReasonSerializerRegistry())
 
     assert payload is None
+
+
+def test_heuristic_v3_pass_reason_uses_generic_boundary_without_payload_change() -> None:
+    state = new_game(rng=random.Random(17))
+    bot = HeuristicBotV3(player_id=PlayerId(0), rollout_samples=0)
+
+    passed = bot.choose_pass(hand=state.hands[PlayerId(0)], state=state, rng=random.Random(23))
+    legacy_reason = bot._peek_last_pass_reason()
+
+    assert legacy_reason is not None
+    assert peek_bot_decision_reason(bot, "pass") is legacy_reason
+    assert serialize_bot_decision_reason(bot, "pass") == _expected_pass_payload(legacy_reason)
+    assert _expected_pass_payload(legacy_reason)["selected_cards"] == [str(card) for card in passed]
+
+
+def test_heuristic_v2_play_reason_uses_generic_boundary_without_payload_change() -> None:
+    state = new_game(rng=random.Random(19))
+    state.pass_applied = True
+    assert state.turn is not None
+    bot = HeuristicBotV2(player_id=state.turn, rollout_samples=0)
+
+    chosen_card = bot.choose_play(state=state, rng=random.Random(29))
+    legacy_reason = bot._peek_last_play_reason()
+
+    assert legacy_reason is not None
+    assert peek_bot_decision_reason(bot, "play") is legacy_reason
+    assert serialize_bot_decision_reason(bot, "play") == _expected_play_payload(legacy_reason)
+    assert _expected_play_payload(legacy_reason)["chosen_card"] == str(chosen_card)
