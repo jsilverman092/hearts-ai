@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import random
 from collections.abc import Sequence
+from copy import deepcopy
 from dataclasses import dataclass, field
+from statistics import fmean
 
 from hearts_ai.bots.reasons import DecisionKind
 from hearts_ai.bots.heuristic import HeuristicBotV3
 from hearts_ai.bots.search.models import (
     SearchBotConfig,
+    SearchBaselineComparisonReason,
     SearchChosenMoveReason,
+    SearchComparedMoveReason,
     SearchPlayCandidateReason,
     SearchPlayDecisionReason,
 )
@@ -17,6 +21,7 @@ from hearts_ai.engine.state import GameState
 from hearts_ai.engine.types import Hand, PlayerId
 from hearts_ai.search import (
     RootCandidateEvaluation,
+    RootMoveEvaluationSet,
     RootMoveCandidate,
     SELECTION_POLICY,
     SeatPrivateMemory,
@@ -115,6 +120,11 @@ class SearchBotV1:
 
         ranked = rank_root_candidate_evaluations(evaluation)
         selected = ranked[0]
+        baseline_card = _choose_baseline_heuristic_card(
+            state=state,
+            player_id=self.player_id,
+            seed=decision_seed,
+        )
         self._last_play_reason = SearchPlayDecisionReason(
             chosen_card=selected.candidate.card,
             mode=selected.candidate.mode,
@@ -130,6 +140,12 @@ class SearchBotV1:
             selection_policy=SELECTION_POLICY,
             selection_source="search",
             fallback_message=None,
+            baseline_comparison=_baseline_comparison_for_card(
+                evaluation=evaluation,
+                selected=selected,
+                ranked=ranked,
+                baseline_card=baseline_card,
+            ),
             candidates=tuple(
                 SearchPlayCandidateReason(
                     card=candidate_evaluation.candidate.card,
@@ -185,6 +201,7 @@ class SearchBotV1:
             selection_policy=SELECTION_POLICY,
             selection_source=selection_source,
             fallback_message=fallback_message,
+            baseline_comparison=None,
             candidates=(),
         )
         return chosen_card
@@ -231,6 +248,96 @@ def _chosen_move_reason_from_candidate(
         average_projected_score_delta=None,
         average_projected_total_score=None,
         average_root_utility=None,
+    )
+
+
+def _choose_baseline_heuristic_card(
+    *,
+    state: GameState,
+    player_id: PlayerId,
+    seed: int,
+) -> Card:
+    bot = HeuristicBotV3(player_id=player_id)
+    return bot.choose_play(state=deepcopy(state), rng=random.Random(seed))
+
+
+def _baseline_comparison_for_card(
+    *,
+    evaluation: RootMoveEvaluationSet,
+    selected: RootCandidateEvaluation,
+    ranked: tuple[RootCandidateEvaluation, ...],
+    baseline_card: Card,
+) -> SearchBaselineComparisonReason:
+    rank_by_candidate_index = {
+        candidate_evaluation.candidate_index: selection_rank
+        for selection_rank, candidate_evaluation in enumerate(ranked, start=1)
+    }
+    baseline_evaluation = _candidate_evaluation_for_card(
+        evaluation=evaluation,
+        card=baseline_card,
+    )
+    root_player_id = evaluation.root_player_id
+    root_utility_gains = tuple(
+        selected_summary.root_utility - baseline_summary.root_utility
+        for selected_summary, baseline_summary in zip(
+            selected.rollout_summaries,
+            baseline_evaluation.rollout_summaries,
+        )
+    )
+    score_delta_advantages = tuple(
+        float(baseline_summary.projected_score_deltas[root_player_id])
+        - float(selected_summary.projected_score_deltas[root_player_id])
+        for selected_summary, baseline_summary in zip(
+            selected.rollout_summaries,
+            baseline_evaluation.rollout_summaries,
+        )
+    )
+    return SearchBaselineComparisonReason(
+        baseline_bot_name="heuristic_v3",
+        agrees_with_search=baseline_evaluation.candidate.card == selected.candidate.card,
+        baseline=_compared_move_reason_from_evaluation(
+            evaluation=baseline_evaluation,
+            selection_rank=rank_by_candidate_index[baseline_evaluation.candidate_index],
+        ),
+        mean_projected_score_delta_advantage=fmean(score_delta_advantages),
+        mean_root_utility_gain=fmean(root_utility_gains),
+        worlds_search_better=sum(gain > 0.0 for gain in root_utility_gains),
+        worlds_tied=sum(gain == 0.0 for gain in root_utility_gains),
+        worlds_baseline_better=sum(gain < 0.0 for gain in root_utility_gains),
+        worst_case_root_utility_loss=max((-gain for gain in root_utility_gains if gain < 0.0), default=0.0),
+        best_case_root_utility_gain=max((gain for gain in root_utility_gains if gain > 0.0), default=0.0),
+    )
+
+
+def _candidate_evaluation_for_card(
+    *,
+    evaluation: RootMoveEvaluationSet,
+    card: Card,
+) -> RootCandidateEvaluation:
+    for candidate_evaluation in evaluation.candidate_evaluations:
+        if candidate_evaluation.candidate.card == card:
+            return candidate_evaluation
+    raise ValueError(f"Baseline card {card} was not present in root candidate evaluations.")
+
+
+def _compared_move_reason_from_evaluation(
+    *,
+    evaluation: RootCandidateEvaluation,
+    selection_rank: int,
+) -> SearchComparedMoveReason:
+    candidate = evaluation.candidate
+    return SearchComparedMoveReason(
+        card=candidate.card,
+        mode=candidate.mode,
+        candidate_index=evaluation.candidate_index,
+        selection_rank=selection_rank,
+        follows_led_suit=candidate.follows_led_suit,
+        is_point_card=candidate.is_point_card,
+        trick_points_so_far=candidate.trick_points_so_far,
+        average_projected_hand_points=evaluation.average_projected_hand_points,
+        average_projected_score_delta=evaluation.average_projected_score_delta,
+        average_projected_total_score=evaluation.average_projected_total_score,
+        average_root_utility=evaluation.average_root_utility,
     )
 
 

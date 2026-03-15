@@ -3,6 +3,8 @@ from __future__ import annotations
 from hearts_ai.bots.search.bots import SearchBotV1
 from hearts_ai.bots.search.models import (
     SearchBotConfig,
+    SearchBaselineComparisonReason,
+    SearchComparedMoveReason,
     SearchPlayCandidateReason,
     SearchChosenMoveReason,
     SearchPlayDecisionReason,
@@ -16,6 +18,8 @@ from hearts_ai.bots.search.reasons import (
 
 __all__ = [
     "SearchBotConfig",
+    "SearchBaselineComparisonReason",
+    "SearchComparedMoveReason",
     "SearchPlayCandidateReason",
     "SearchChosenMoveReason",
     "SearchPlayDecisionReason",

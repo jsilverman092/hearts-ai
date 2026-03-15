@@ -76,6 +76,39 @@ class SearchChosenMoveReason:
 
 
 @dataclass(slots=True, frozen=True)
+class SearchComparedMoveReason:
+    """Compact summary of a non-selected move compared against the search choice."""
+
+    card: Card
+    mode: SearchPlayMode
+    candidate_index: int
+    selection_rank: int
+    follows_led_suit: bool
+    is_point_card: bool
+    trick_points_so_far: int
+    average_projected_hand_points: float
+    average_projected_score_delta: float
+    average_projected_total_score: float
+    average_root_utility: float
+
+
+@dataclass(slots=True, frozen=True)
+class SearchBaselineComparisonReason:
+    """Shared-world comparison between the search choice and heuristic_v3."""
+
+    baseline_bot_name: str
+    agrees_with_search: bool
+    baseline: SearchComparedMoveReason
+    mean_projected_score_delta_advantage: float
+    mean_root_utility_gain: float
+    worlds_search_better: int
+    worlds_tied: int
+    worlds_baseline_better: int
+    worst_case_root_utility_loss: float
+    best_case_root_utility_gain: float
+
+
+@dataclass(slots=True, frozen=True)
 class SearchPlayDecisionReason:
     chosen_card: Card
     mode: SearchPlayMode
@@ -91,11 +124,14 @@ class SearchPlayDecisionReason:
     selection_policy: tuple[SearchSelectionMetric, ...]
     selection_source: SearchSelectionSource
     fallback_message: str | None
+    baseline_comparison: SearchBaselineComparisonReason | None
     candidates: tuple[SearchPlayCandidateReason, ...]
 
 
 __all__ = [
     "SearchBotConfig",
+    "SearchBaselineComparisonReason",
+    "SearchComparedMoveReason",
     "SearchPlayCandidateReason",
     "SearchChosenMoveReason",
     "SearchPlayDecisionReason",

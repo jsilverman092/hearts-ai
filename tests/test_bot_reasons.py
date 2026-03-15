@@ -175,6 +175,16 @@ def test_search_v1_play_reason_uses_generic_boundary() -> None:
     assert payload["world_count"] == 2
     assert payload["selection_source"] == "search"
     assert payload["fallback_message"] is None
+    assert payload["baseline_comparison"] is not None
+    assert payload["baseline_comparison"]["baseline_bot_name"] == "heuristic_v3"
+    assert payload["baseline_comparison"]["agrees_with_search"] is True
+    assert payload["baseline_comparison"]["baseline"]["card"] == str(chosen_card)
+    assert payload["baseline_comparison"]["baseline"]["selection_rank"] == 1
+    assert payload["baseline_comparison"]["mean_projected_score_delta_advantage"] == 0.0
+    assert payload["baseline_comparison"]["mean_root_utility_gain"] == 0.0
+    assert payload["baseline_comparison"]["worlds_search_better"] == 0
+    assert payload["baseline_comparison"]["worlds_tied"] == 2
+    assert payload["baseline_comparison"]["worlds_baseline_better"] == 0
     assert payload["chosen"]["card"] == str(chosen_card)
     assert payload["chosen"]["mode"] == "lead"
     assert payload["chosen"]["candidate_index"] == payload["candidates"][0]["candidate_index"]
