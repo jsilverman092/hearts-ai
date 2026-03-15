@@ -11,9 +11,12 @@ def serialize_search_play_decision_reason(reason: SearchPlayDecisionReason) -> S
         "chosen_card": str(reason.chosen_card),
         "mode": str(reason.mode),
         "trick_number": int(reason.trick_number),
+        "requested_world_count": int(reason.requested_world_count),
         "world_count": int(reason.world_count),
         "world_base_seed": int(reason.world_base_seed),
         "selection_policy": [str(metric) for metric in reason.selection_policy],
+        "selection_source": str(reason.selection_source),
+        "fallback_message": None if reason.fallback_message is None else str(reason.fallback_message),
         "candidates": [
             {
                 "card": str(candidate.card),

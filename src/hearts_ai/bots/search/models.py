@@ -4,8 +4,8 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from hearts_ai.engine.cards import Card
-from hearts_ai.search.simulation import HeuristicPlayoutConfig
 from hearts_ai.search.candidates import SearchPlayMode
+from hearts_ai.search.simulation import HeuristicPlayoutConfig
 
 SearchSelectionMetric = Literal[
     "average_projected_score_delta",
@@ -13,13 +13,22 @@ SearchSelectionMetric = Literal[
     "average_projected_total_score",
     "candidate_index",
 ]
+SearchSelectionSource = Literal[
+    "search",
+    "heuristic_fallback_impossible_world",
+    "heuristic_fallback_empty_world_set",
+]
 
 
 @dataclass(slots=True, frozen=True)
 class SearchBotConfig:
-    """Configuration surface for the first search bot."""
+    """Configuration surface for the first search bot.
 
-    world_count: int = 12
+    Defaults stay intentionally conservative so the bot remains usable in CLI
+    play and benchmark flows while the search stack is still shallow.
+    """
+
+    world_count: int = 1
     playout_seed_offset: int = 1_000_003
     fallback_to_heuristic_v3_on_impossible_world: bool = True
     fallback_to_heuristic_v3_on_empty_world_set: bool = True
@@ -55,9 +64,12 @@ class SearchPlayDecisionReason:
     chosen_card: Card
     mode: SearchPlayMode
     trick_number: int
+    requested_world_count: int
     world_count: int
     world_base_seed: int
     selection_policy: tuple[SearchSelectionMetric, ...]
+    selection_source: SearchSelectionSource
+    fallback_message: str | None
     candidates: tuple[SearchPlayCandidateReason, ...]
 
 
@@ -66,4 +78,5 @@ __all__ = [
     "SearchPlayCandidateReason",
     "SearchPlayDecisionReason",
     "SearchSelectionMetric",
+    "SearchSelectionSource",
 ]

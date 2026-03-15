@@ -12,6 +12,7 @@ from hearts_ai.engine.state import GameState
 from hearts_ai.engine.types import PLAYER_IDS, PlayerId
 from hearts_ai.search import RootCandidateEvaluation, RootMoveEvaluationSet, build_root_move_candidates
 from hearts_ai.search.worlds import DeterminizedWorldSet
+from hearts_ai.search.worlds import ImpossibleWorldError
 
 
 def test_search_bot_config_rejects_invalid_values() -> None:
@@ -20,6 +21,11 @@ def test_search_bot_config_rejects_invalid_values() -> None:
 
     with pytest.raises(ValueError):
         SearchBotConfig(playout_seed_offset=-1)
+
+    defaults = SearchBotConfig()
+    assert defaults.world_count == 1
+    assert defaults.fallback_to_heuristic_v3_on_impossible_world is True
+    assert defaults.fallback_to_heuristic_v3_on_empty_world_set is True
 
 
 def test_search_bot_v1_choose_pass_matches_heuristic_v3() -> None:
@@ -107,7 +113,7 @@ def test_search_bot_v1_choose_play_uses_search_evaluation_and_private_memory(
             world_set=DeterminizedWorldSet(
                 root_player_id=view.player_id,
                 base_seed=seed,
-                worlds=(),
+                worlds=(object(),),
             ),
             candidate_evaluations=(
                 RootCandidateEvaluation(
@@ -154,6 +160,10 @@ def test_search_bot_v1_choose_play_uses_search_evaluation_and_private_memory(
     reason = bot.peek_last_decision_reason("play")
     assert isinstance(reason, SearchPlayDecisionReason)
     assert reason.chosen_card == Card(Suit.SPADES, Rank.ACE)
+    assert reason.requested_world_count == 5
+    assert reason.world_count == 1
+    assert reason.selection_source == "search"
+    assert reason.fallback_message is None
     assert reason.candidates[0].selected is True
     assert reason.candidates[0].card == Card(Suit.SPADES, Rank.ACE)
     assert reason.candidates[0].selection_rank == 1
@@ -184,6 +194,145 @@ def test_search_bot_v1_choose_play_is_invariant_to_hidden_live_assignment() -> N
 
     assert first_card == second_card
     assert first_bot.peek_last_decision_reason("play") == second_bot.peek_last_decision_reason("play")
+
+
+def test_search_bot_v1_falls_back_to_heuristic_v3_on_impossible_world() -> None:
+    state = _full_state_with_rotating_hidden_hands(rotation=0)
+    impossible_card = state.hands[PlayerId(0)][0]
+
+    search_bot = SearchBotV1(player_id=PlayerId(0), config=SearchBotConfig(world_count=2))
+    heuristic_bot = HeuristicBotV3(player_id=PlayerId(0), rollout_samples=0, rollout_weight=0.0)
+    search_bot.on_new_hand(state)
+    search_bot.on_own_pass_selected(
+        state=state,
+        selected_cards=(impossible_card,),
+        recipient=PlayerId(1),
+    )
+
+    search_card = search_bot.choose_play(state=deepcopy(state), rng=random.Random(401))
+    heuristic_card = heuristic_bot.choose_play(state=deepcopy(state), rng=random.Random(401))
+
+    assert search_card == heuristic_card
+    reason = search_bot.peek_last_decision_reason("play")
+    assert isinstance(reason, SearchPlayDecisionReason)
+    assert reason.selection_source == "heuristic_fallback_impossible_world"
+    assert reason.world_count == 0
+    assert reason.requested_world_count == 2
+    assert reason.candidates == ()
+    assert "cannot still be in the root hand" in (reason.fallback_message or "")
+
+
+def test_search_bot_v1_raises_on_impossible_world_when_fallback_disabled() -> None:
+    state = _full_state_with_rotating_hidden_hands(rotation=0)
+    impossible_card = state.hands[PlayerId(0)][0]
+
+    bot = SearchBotV1(
+        player_id=PlayerId(0),
+        config=SearchBotConfig(
+            world_count=2,
+            fallback_to_heuristic_v3_on_impossible_world=False,
+        ),
+    )
+    bot.on_new_hand(state)
+    bot.on_own_pass_selected(
+        state=state,
+        selected_cards=(impossible_card,),
+        recipient=PlayerId(1),
+    )
+
+    with pytest.raises(ImpossibleWorldError):
+        bot.choose_play(state=deepcopy(state), rng=random.Random(409))
+
+
+def test_search_bot_v1_falls_back_to_heuristic_v3_on_empty_world_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [Card(Suit.CLUBS, Rank.FIVE), Card(Suit.SPADES, Rank.ACE)],
+        PlayerId(1): [Card(Suit.CLUBS, Rank.TWO)],
+        PlayerId(2): [Card(Suit.CLUBS, Rank.THREE)],
+        PlayerId(3): [Card(Suit.CLUBS, Rank.FOUR)],
+    }
+    state.trick_in_progress = []
+    state.hearts_broken = True
+    state.turn = PlayerId(0)
+    state.trick_number = 3
+    state.pass_direction = "left"
+    state.pass_applied = True
+
+    monkeypatch.setattr(
+        search_bot_module,
+        "evaluate_root_candidates",
+        lambda **kwargs: RootMoveEvaluationSet(
+            root_player_id=kwargs["view"].player_id,
+            base_seed=kwargs["seed"],
+            world_set=DeterminizedWorldSet(
+                root_player_id=kwargs["view"].player_id,
+                base_seed=kwargs["seed"],
+                worlds=(),
+            ),
+            candidate_evaluations=(),
+        ),
+    )
+
+    search_bot = SearchBotV1(player_id=PlayerId(0), config=SearchBotConfig(world_count=4))
+    heuristic_bot = HeuristicBotV3(player_id=PlayerId(0), rollout_samples=0, rollout_weight=0.0)
+
+    search_card = search_bot.choose_play(state=deepcopy(state), rng=random.Random(419))
+    heuristic_card = heuristic_bot.choose_play(state=deepcopy(state), rng=random.Random(419))
+
+    assert search_card == heuristic_card
+    reason = search_bot.peek_last_decision_reason("play")
+    assert isinstance(reason, SearchPlayDecisionReason)
+    assert reason.selection_source == "heuristic_fallback_empty_world_set"
+    assert reason.requested_world_count == 4
+    assert reason.world_count == 0
+    assert reason.candidates == ()
+
+
+def test_search_bot_v1_raises_on_empty_world_set_when_fallback_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state = GameState()
+    state.hands = {
+        PlayerId(0): [Card(Suit.CLUBS, Rank.FIVE), Card(Suit.SPADES, Rank.ACE)],
+        PlayerId(1): [Card(Suit.CLUBS, Rank.TWO)],
+        PlayerId(2): [Card(Suit.CLUBS, Rank.THREE)],
+        PlayerId(3): [Card(Suit.CLUBS, Rank.FOUR)],
+    }
+    state.trick_in_progress = []
+    state.hearts_broken = True
+    state.turn = PlayerId(0)
+    state.trick_number = 3
+    state.pass_direction = "left"
+    state.pass_applied = True
+
+    monkeypatch.setattr(
+        search_bot_module,
+        "evaluate_root_candidates",
+        lambda **kwargs: RootMoveEvaluationSet(
+            root_player_id=kwargs["view"].player_id,
+            base_seed=kwargs["seed"],
+            world_set=DeterminizedWorldSet(
+                root_player_id=kwargs["view"].player_id,
+                base_seed=kwargs["seed"],
+                worlds=(),
+            ),
+            candidate_evaluations=(),
+        ),
+    )
+
+    bot = SearchBotV1(
+        player_id=PlayerId(0),
+        config=SearchBotConfig(
+            world_count=4,
+            fallback_to_heuristic_v3_on_empty_world_set=False,
+        ),
+    )
+
+    with pytest.raises(ValueError, match="no sampled worlds"):
+        bot.choose_play(state=deepcopy(state), rng=random.Random(421))
 
 
 def _full_state_with_rotating_hidden_hands(*, rotation: int) -> GameState:

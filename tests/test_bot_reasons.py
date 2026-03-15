@@ -167,7 +167,10 @@ def test_search_v1_play_reason_uses_generic_boundary() -> None:
     assert payload is not None
     assert payload["chosen_card"] == str(chosen_card)
     assert payload["mode"] == "lead"
+    assert payload["requested_world_count"] == 2
     assert payload["world_count"] == 2
+    assert payload["selection_source"] == "search"
+    assert payload["fallback_message"] is None
     assert payload["selection_policy"] == [
         "average_projected_score_delta",
         "average_projected_hand_points",

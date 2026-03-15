@@ -17,10 +17,12 @@ from hearts_ai.engine.types import Hand, PlayerId
 from hearts_ai.search import (
     SELECTION_POLICY,
     SeatPrivateMemory,
+    build_root_move_candidates,
     build_search_player_view,
     evaluate_root_candidates,
     rank_root_candidate_evaluations,
 )
+from hearts_ai.search.worlds import ImpossibleWorldError
 
 _MAX_DECISION_SEED = 2**63 - 1
 
@@ -67,27 +69,59 @@ class SearchBotV1:
 
     def choose_play(self, state: GameState, rng: random.Random) -> Card:
         self._last_play_reason = None
+        rng_state_before_search = rng.getstate()
         view = build_search_player_view(
             state=state,
             player_id=self.player_id,
             private_knowledge=self._private_memory.snapshot(),
         )
-        evaluation = evaluate_root_candidates(
-            view=view,
-            seed=rng.randrange(0, _MAX_DECISION_SEED + 1),
-            world_count=self.config.world_count,
-            playout_seed_offset=self.config.playout_seed_offset,
-            playout_config=self.config.playout,
-        )
+        decision_seed = rng.randrange(0, _MAX_DECISION_SEED + 1)
+        try:
+            evaluation = evaluate_root_candidates(
+                view=view,
+                seed=decision_seed,
+                world_count=self.config.world_count,
+                playout_seed_offset=self.config.playout_seed_offset,
+                playout_config=self.config.playout,
+            )
+        except ImpossibleWorldError as exc:
+            if not self.config.fallback_to_heuristic_v3_on_impossible_world:
+                raise
+            rng.setstate(rng_state_before_search)
+            return self._choose_play_via_heuristic_fallback(
+                state=state,
+                rng=rng,
+                view=view,
+                world_base_seed=decision_seed,
+                selection_source="heuristic_fallback_impossible_world",
+                fallback_message=str(exc),
+            )
+
+        if not evaluation.world_set.worlds or not evaluation.candidate_evaluations:
+            if not self.config.fallback_to_heuristic_v3_on_empty_world_set:
+                raise ValueError("Search evaluation produced no sampled worlds to rank.")
+            rng.setstate(rng_state_before_search)
+            return self._choose_play_via_heuristic_fallback(
+                state=state,
+                rng=rng,
+                view=view,
+                world_base_seed=decision_seed,
+                selection_source="heuristic_fallback_empty_world_set",
+                fallback_message="Search evaluation produced no sampled worlds to rank.",
+            )
+
         ranked = rank_root_candidate_evaluations(evaluation)
         selected = ranked[0]
         self._last_play_reason = SearchPlayDecisionReason(
             chosen_card=selected.candidate.card,
             mode=selected.candidate.mode,
             trick_number=state.trick_number,
+            requested_world_count=self.config.world_count,
             world_count=len(evaluation.world_set.worlds),
             world_base_seed=evaluation.base_seed,
             selection_policy=SELECTION_POLICY,
+            selection_source="search",
+            fallback_message=None,
             candidates=tuple(
                 SearchPlayCandidateReason(
                     card=candidate_evaluation.candidate.card,
@@ -112,6 +146,39 @@ class SearchBotV1:
         if decision_kind == "play":
             return self._last_play_reason
         return self._heuristic_delegate.peek_last_decision_reason(decision_kind)
+
+    def _choose_play_via_heuristic_fallback(
+        self,
+        *,
+        state: GameState,
+        rng: random.Random,
+        view,
+        world_base_seed: int,
+        selection_source: str,
+        fallback_message: str,
+    ) -> Card:
+        chosen_card = self._heuristic_delegate.choose_play(state=state, rng=rng)
+        fallback_candidate = _candidate_for_card(view=view, card=chosen_card)
+        self._last_play_reason = SearchPlayDecisionReason(
+            chosen_card=chosen_card,
+            mode=fallback_candidate.mode,
+            trick_number=state.trick_number,
+            requested_world_count=self.config.world_count,
+            world_count=0,
+            world_base_seed=world_base_seed,
+            selection_policy=SELECTION_POLICY,
+            selection_source=selection_source,
+            fallback_message=fallback_message,
+            candidates=(),
+        )
+        return chosen_card
+
+
+def _candidate_for_card(*, view, card: Card):
+    for candidate in build_root_move_candidates(view):
+        if candidate.card == card:
+            return candidate
+    raise ValueError(f"Chosen card {card} was not present in root move candidates.")
 
 
 __all__ = ["SearchBotV1"]
