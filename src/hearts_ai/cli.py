@@ -5,8 +5,8 @@ import random
 from pathlib import Path
 from typing import Sequence
 
-from hearts_ai.bots.base import Bot
-from hearts_ai.bots.factory import create_bots, resolve_bot_names
+from hearts_ai.bots.factory import resolve_bot_names
+from hearts_ai.bots.runtime import BotRuntimeSession
 from hearts_ai.engine.errors import InvalidStateError
 from hearts_ai.engine.game import apply_pass, deal, is_game_over, is_hand_over, new_game, play_card
 from hearts_ai.engine.record import GameRecorder, replay_jsonl
@@ -37,7 +37,9 @@ def simulate_games(
     for game_index in range(1, games + 1):
         config = GameConfig(target_score=target_score)
         state = new_game(rng=rng, config=config)
-        bots = create_bots(bot_names)
+        runtime_session = BotRuntimeSession.from_bot_names(bot_names)
+        runtime_session.notify_new_game()
+        runtime_session.notify_new_hand(state)
         recorder = (
             GameRecorder(path=record_file, game_id=f"game-{game_index}") if record_file is not None else None
         )
@@ -49,7 +51,7 @@ def simulate_games(
             hand_number = state.hand_number
             pass_direction = state.pass_direction
             score_before = dict(state.scores)
-            _play_hand(state=state, bots=bots, rng=rng, recorder=recorder)
+            _play_hand(state=state, runtime_session=runtime_session, rng=rng, recorder=recorder)
             hand_delta = {player_id: state.scores[player_id] - score_before[player_id] for player_id in PLAYER_IDS}
             if recorder is not None:
                 recorder.record_hand_scored(
@@ -73,6 +75,7 @@ def simulate_games(
                 break
 
             deal(state=state, rng=rng)
+            runtime_session.notify_new_hand(state)
             if recorder is not None:
                 recorder.record_hand_dealt(state)
 
@@ -98,13 +101,16 @@ def benchmark_games(
     for offset in range(games):
         rng = random.Random(seed + offset)
         state = new_game(rng=rng, config=GameConfig(target_score=target_score))
-        bots = create_bots(bot_names)
+        runtime_session = BotRuntimeSession.from_bot_names(bot_names)
+        runtime_session.notify_new_game()
+        runtime_session.notify_new_hand(state)
 
         while True:
-            _play_hand(state=state, bots=bots, rng=rng)
+            _play_hand(state=state, runtime_session=runtime_session, rng=rng)
             if is_game_over(state):
                 break
             deal(state=state, rng=rng)
+            runtime_session.notify_new_hand(state)
 
         winners = _winner_ids(state.scores)
         winner_share = 1.0 / len(winners)
@@ -247,13 +253,17 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 def _play_hand(
     state: GameState,
-    bots: dict[PlayerId, Bot],
+    runtime_session: BotRuntimeSession,
     rng: random.Random,
     recorder: GameRecorder | None = None,
 ) -> None:
     if not state.pass_applied:
         pass_map = {
-            player_id: bots[player_id].choose_pass(hand=state.hands[player_id], state=state, rng=rng)
+            player_id: runtime_session.bot_for_player(player_id).choose_pass(
+                hand=state.hands[player_id],
+                state=state,
+                rng=rng,
+            )
             for player_id in PLAYER_IDS
         }
         apply_pass(state=state, pass_map=pass_map)
@@ -264,7 +274,7 @@ def _play_hand(
         player_id = state.turn
         if player_id is None:
             raise InvalidStateError("State turn is unset during active hand.")
-        card = bots[player_id].choose_play(state=state, rng=rng)
+        card = runtime_session.bot_for_player(player_id).choose_play(state=state, rng=rng)
         play_card(state=state, player_id=player_id, card=card)
         if recorder is not None:
             recorder.record_card_played(hand_index=state.hand_number, player_id=player_id, card=card)

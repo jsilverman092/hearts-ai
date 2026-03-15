@@ -1,5 +1,8 @@
 import pytest
 
+import hearts_ai.cli as cli_module
+from hearts_ai.engine.state import GameState
+from hearts_ai.engine.types import PLAYER_IDS
 from hearts_ai.cli import benchmark_games, main, simulate_games
 
 
@@ -86,3 +89,64 @@ def test_benchmark_games_supports_heuristic_v3_bot_name() -> None:
         "BENCHMARK GAMES 3 SEED_START 2 TARGET 30 "
         "BOTS heuristic_v3,heuristic_v3,heuristic_v3,heuristic_v3"
     )
+
+
+def test_simulate_games_notifies_runtime_session_for_initial_and_dealt_hands(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _SpyRuntimeSession:
+        def __init__(self) -> None:
+            self.events: list[str] = []
+
+        def notify_new_game(self) -> None:
+            self.events.append("game")
+
+        def notify_new_hand(self, state: GameState) -> None:
+            self.events.append(f"hand:{state.hand_number}")
+
+        def bot_for_player(self, player_id):  # pragma: no cover - should not be reached in this test
+            raise AssertionError(f"bot_for_player should not be called for player {player_id!r}")
+
+    spy = _SpyRuntimeSession()
+
+    class _SpyRuntimeFactory:
+        @classmethod
+        def from_bot_names(cls, bot_names):
+            assert tuple(bot_names) == ("random", "random", "random", "random")
+            return spy
+
+    def _fake_new_game(*, rng, config):
+        del rng
+        state = GameState(config=config)
+        state.hand_number = 1
+        state.pass_direction = "left"
+        state.pass_applied = True
+        state.scores = {player_id: 0 for player_id in PLAYER_IDS}
+        return state
+
+    def _fake_play_hand(*, state, runtime_session, rng, recorder=None):
+        del state, runtime_session, rng, recorder
+
+    game_over_calls = {"count": 0}
+
+    def _fake_is_game_over(state):
+        del state
+        game_over_calls["count"] += 1
+        return game_over_calls["count"] >= 2
+
+    def _fake_deal(*, state, rng):
+        del rng
+        state.hand_number += 1
+        state.pass_direction = "right"
+        state.pass_applied = True
+
+    monkeypatch.setattr(cli_module, "BotRuntimeSession", _SpyRuntimeFactory)
+    monkeypatch.setattr(cli_module, "resolve_bot_names", lambda bot_spec: ("random",) * 4)
+    monkeypatch.setattr(cli_module, "new_game", _fake_new_game)
+    monkeypatch.setattr(cli_module, "_play_hand", _fake_play_hand)
+    monkeypatch.setattr(cli_module, "is_game_over", _fake_is_game_over)
+    monkeypatch.setattr(cli_module, "deal", _fake_deal)
+
+    simulate_games(seed=1, games=1, target_score=50)
+
+    assert spy.events == ["game", "hand:1", "hand:2"]
