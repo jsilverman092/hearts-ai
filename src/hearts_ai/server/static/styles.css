@@ -273,6 +273,14 @@ button:focus-visible {
   gap: 0.78rem;
 }
 
+.table-main-column,
+.table-side-column {
+  display: grid;
+  gap: 0.78rem;
+  align-content: start;
+  min-width: 0;
+}
+
 .card {
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -723,49 +731,20 @@ button:focus-visible {
 
   .table {
     grid-template-columns: minmax(0, 2.45fr) minmax(220px, 0.6fr);
-    grid-template-areas:
-      "table pace"
-      "table debug"
-      "pass meta"
-      "hand meta";
     align-items: start;
     gap: 0.65rem;
   }
 
-  .table-card {
-    grid-area: table;
-    width: 100%;
-    max-width: none;
-    margin: 0;
-  }
-
-  .pace-card {
-    grid-area: pace;
-    width: 100%;
-  }
-
-  .debug-card {
-    grid-area: debug;
-    width: 100%;
-  }
-
-  #passPanel {
-    grid-area: pass;
-    width: 100%;
-  }
-
-  .hand-card {
-    grid-area: hand;
-    width: 100%;
-  }
-
-  .meta-card {
-    grid-area: meta;
-    width: 100%;
+  .table-main-column,
+  .table-side-column {
+    gap: 0.65rem;
   }
 
   .table-card {
     min-height: 100%;
+    width: 100%;
+    max-width: none;
+    margin: 0;
   }
 
   #passPanel .hand-grid,
