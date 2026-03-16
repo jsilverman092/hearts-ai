@@ -846,23 +846,38 @@ This should stay scoped as a focused UX cleanup, not a redesign of the whole app
 With Phase 4 tooling in place, the next work should be disciplined benchmark execution rather than more implementation churn.
 
 1. Run codified `benchmark-search` sweeps.
-   - run `mixed_search_field`
-   - run `all_search_v1`
+   - make the primary preset `search_v1` vs `3x heuristic_v3`
+   - make the secondary preset `search_v1,heuristic_v3,heuristic_v2,heuristic`
+   - do not prioritize `all_search_v1` for this round
    - start with `world_count = 1, 2, 4, 8`
-   - optionally add `16` as a slower comparison point if needed
-2. Summarize runtime and strength tradeoffs.
-   - compare win rate, average points, and average rank
-   - compare runtime cost per sweep setting
-   - look for diminishing returns past the lower world counts
-3. Decide whether to raise the default `search_v1.world_count`.
+   - include `16` as the slower comparison point
+   - keep `target_score = 50` for comparability with prior benchmark work
+2. Record both strength and runtime.
+   - benchmark output should include elapsed runtime per `world_count` block
+   - the report should compare win rate, average points, average rank, and time cost
+   - runtime is part of the evaluation, not an afterthought
+3. Handle seat bias explicitly.
+   - ideally rotate which seat gets `search_v1`
+   - if rotation is not added yet, call out that limitation in the report
+   - do not over-interpret a single fixed-seat benchmark
+   - for the secondary preset, simple cyclic seat rotation is not enough because relative opponent positions also matter
+   - use the full 24 lineup permutations for `search_v1,heuristic_v3,heuristic_v2,heuristic`
+4. Use a staged sample-size approach.
+   - first pass: enough games to see the shape of the cost/strength curve
+   - second pass: larger sample on the narrowed likely-contender `world_count` values
+   - avoid treating tiny sample sizes as real strength evidence
+   - first concrete run: secondary preset, `world_count = 1`, `target_score = 50`, `120` games
+   - interpret that run as `5` games for each of the `24` lineup permutations
+5. Decide whether to raise the default `search_v1.world_count`.
+   - frame this as choosing a current operating point, not final optimization
    - prefer a benchmark-backed change, not an intuition-only change
-   - keep usability/runtime in view alongside strength
-4. Write results to a dedicated benchmark report.
+   - keep live usability/runtime in view alongside strength
+6. Write results to a dedicated benchmark report.
    - create `AGENTS_V4_BENCHMARK_REPORT.md`
-   - include benchmark matrix, outputs, observations, and recommendation
-5. Only after the benchmark report, decide whether follow-up tuning is warranted.
+   - include benchmark matrix, outputs, observations, runtime notes, and recommendation
+7. Only after the benchmark report, decide whether follow-up tuning is warranted.
    - if needed, add 1-2 more scenario fixtures for behaviors exposed by the benchmark runs
-   - avoid tuning multiple secondary knobs at once unless the report justifies it
+   - if current `world_count` tradeoffs are poor, prioritize search-performance work before tuning secondary knobs
 
 ## Acceptance Criteria For This Phase
 
