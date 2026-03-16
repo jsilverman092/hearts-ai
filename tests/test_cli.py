@@ -72,14 +72,12 @@ def test_cli_main_benchmark_prints_expected_lines(capsys: pytest.CaptureFixture[
     assert captured == expected
 
 
-def test_cli_main_benchmark_search_prints_expected_lines(capsys: pytest.CaptureFixture[str]) -> None:
-    expected = benchmark_search_world_counts(
-        seed=11,
-        games=1,
-        target_score=15,
-        preset="mixed_search_field",
-        world_counts_spec="1,2",
-    )
+def test_cli_main_benchmark_search_prints_expected_lines(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected = ["SEARCH BENCHMARK", "BOT search_v1 OCCURRENCES 1"]
+    monkeypatch.setattr(cli_module, "run_search_world_count_benchmark", lambda **kwargs: expected)
     exit_code = main(
         [
             "benchmark-search",

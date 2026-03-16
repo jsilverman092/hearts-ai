@@ -25,13 +25,19 @@ Run deterministic benchmarks:
 
 ```bash
 python -m hearts_ai benchmark --seed 1 --games 20 --target-score 30 --bots heuristic_v3
-python -m hearts_ai benchmark-search --seed 1 --games 10 --target-score 30 --preset mixed_search_field --world-counts 1,2,4,8
+python -m hearts_ai benchmark-search --seed 1 --games 120 --target-score 50 --preset mixed_search_field --world-counts 1
 ```
 
 Default `benchmark-search` presets:
 
-- `mixed_search_field`: `search_v1,heuristic_v3,heuristic_v2,random`
+- `search_vs_heuristic_v3_field`: `search_v1,heuristic_v3,heuristic_v3,heuristic_v3`
+- `mixed_search_field`: `search_v1,heuristic_v3,heuristic_v2,heuristic`
 - `all_search_v1`: `search_v1,search_v1,search_v1,search_v1`
+
+`benchmark-search` rotates through unique seat assignments automatically:
+
+- `search_vs_heuristic_v3_field`: 4 unique lineups
+- `mixed_search_field`: 24 unique lineups
 
 Record and replay:
 
